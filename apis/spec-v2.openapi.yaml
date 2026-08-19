@@ -1,0 +1,340 @@
+openapi: 3.1.0
+info:
+  title: Stark Bank API
+  version: 0.1.0
+  description: |
+    Stark Bank API — SDK Automation POC
+    Centralized OpenAPI specification for generating SDKs across 9 languages.
+
+    **Version**: v0.1.0 (3 resources, 9 operations)
+    **Last Updated**: 2026-08-19
+
+servers:
+  - url: https://api.starkbank.com/v2
+    description: Production
+  - url: https://sandbox.api.starkbank.com/v2
+    description: Sandbox
+
+paths:
+  # ============================================
+  # Transaction Operations
+  # ============================================
+  /transaction:
+    post:
+      operationId: createTransaction
+      tags:
+        - Transactions
+      summary: Create transactions
+      description: Create a list of new transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransactionCreate'
+      responses:
+        '201':
+          description: Transactions created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+    get:
+      operationId: queryTransaction
+      tags:
+        - Transactions
+      summary: List transactions
+      description: Retrieve a list of transactions with pagination
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results (default 100)
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - name: after
+          in: query
+          description: Cursor for pagination
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+  /transaction/{id}:
+    get:
+      operationId: getTransaction
+      tags:
+        - Transactions
+      summary: Get transaction
+      description: Retrieve a single transaction by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transaction ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transaction not found
+        '500':
+          description: Server error
+
+  # ============================================
+  # Invoice Operations
+  # ============================================
+  /invoice:
+    post:
+      operationId: createInvoice
+      tags:
+        - Invoices
+      summary: Create invoices
+      description: Create a list of new invoices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/InvoiceCreate'
+      responses:
+        '201':
+          description: Invoices created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+    get:
+      operationId: queryInvoice
+      tags:
+        - Invoices
+      summary: List invoices
+      description: Retrieve a list of invoices with pagination
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results (default 100)
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - name: after
+          in: query
+          description: Cursor for pagination
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+  /invoice/{id}:
+    get:
+      operationId: getInvoice
+      tags:
+        - Invoices
+      summary: Get invoice
+      description: Retrieve a single invoice by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Invoice ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Invoice not found
+        '500':
+          description: Server error
+
+  # ============================================
+  # Transfer Operations
+  # ============================================
+  /transfer:
+    post:
+      operationId: createTransfer
+      tags:
+        - Transfers
+      summary: Create transfers
+      description: Create a list of new transfers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransferCreate'
+      responses:
+        '201':
+          description: Transfers created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transfer'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+    get:
+      operationId: queryTransfer
+      tags:
+        - Transfers
+      summary: List transfers
+      description: Retrieve a list of transfers with pagination
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results (default 100)
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - name: after
+          in: query
+          description: Cursor for pagination
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transfers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transfer'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+  /transfer/{id}:
+    get:
+      operationId: getTransfer
+      tags:
+        - Transfers
+      summary: Get transfer
+      description: Retrieve a single transfer by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transfer ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transfer'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transfer not found
+        '500':
+          description: Server error
+
+components:
+  schemas:
+    # ============================================
+    # Transaction Schemas (External Reference)
+    # ============================================
+    Transaction:
+      $ref: './schemas/transaction.yaml#/components/schemas/Transaction'
+    TransactionCreate:
+      $ref: './schemas/transaction.yaml#/components/schemas/TransactionCreate'
+
+    # ============================================
+    # Invoice Schemas (External Reference)
+    # ============================================
+    Invoice:
+      $ref: './schemas/invoice.yaml#/components/schemas/Invoice'
+    InvoiceCreate:
+      $ref: './schemas/invoice.yaml#/components/schemas/InvoiceCreate'
+
+    # ============================================
+    # Transfer Schemas (External Reference)
+    # ============================================
+    Transfer:
+      $ref: './schemas/transfer.yaml#/components/schemas/Transfer'
+    TransferCreate:
+      $ref: './schemas/transfer.yaml#/components/schemas/TransferCreate'

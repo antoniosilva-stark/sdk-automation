@@ -1,0 +1,26 @@
+{
+  "name": "sdk-automation",
+  "version": "0.1.0",
+  "description": "SDK Automation POC - Generate and publish SDKs across 7 languages",
+  "private": true,
+  "scripts": {
+    "validate-spec": "openapi-spec-validator apis/spec-v2.openapi.yaml",
+    "check-breaking-changes": "python3 tools/breaking-change-detector.py",
+    "generate-sdks": "echo 'SDK generation ready for Semana 3 (install OpenAPI Generator v7.0.1)' && exit 0",
+    "start": "npm run check-breaking-changes"
+  },
+  "keywords": [
+    "sdk",
+    "automation",
+    "openapi",
+    "code-generation"
+  ],
+  "author": "Antonio Silva",
+  "license": "MIT",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

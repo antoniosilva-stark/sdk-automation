@@ -1,0 +1,8 @@
+# SDK Automation POC - Python Requirements
+# Used for OpenAPI spec validation in CI/CD
+
+# OpenAPI validation (oficial validator)
+openapi-spec-validator>=0.7.0
+
+# YAML parsing
+pyyaml>=6.0
