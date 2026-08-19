@@ -1,0 +1,43 @@
+name: Validate Spec & Detect Breaking Changes
+
+on:
+  pull_request:
+    paths:
+      - 'apis/spec-v2.openapi.yaml'
+      - 'apis/schemas/**'
+      - 'tools/breaking-change-detector.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pyyaml openapi-spec-validator && npm ci
+
+      - name: Validate OpenAPI spec
+        run: openapi-spec-validator apis/spec-v2.openapi.yaml
+
+      - name: Detect breaking changes
+        run: python3 tools/breaking-change-detector.py
+        continue-on-error: false
+
+      - name: Comment on PR (if BC detected)
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ Breaking changes detected! Please review and discuss with Tech-Lead (@elias) before proceeding.'
+            })

@@ -1,0 +1,35 @@
+# Generated SDKs (local testing)
+generated/
+sdk-*-temp/
+
+# Local references (cloned via make setup)
+_references/
+
+# Dependencies
+node_modules/
+target/
+vendor/
+dist/
+build/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.env
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+.npm/
+
+# Environment
+.env
+.env.local
+.env.*.local
