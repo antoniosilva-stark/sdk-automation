@@ -1,0 +1,102 @@
+# {{appName}} SDK for Node.js
+
+Stark Bank API SDK — Auto-generated from OpenAPI specification.
+
+**Version**: {{packageVersion}}
+**Package**: `{{packageName}}`
+
+## Installation
+
+```bash
+npm install {{packageName}}
+```
+
+## Quick Start
+
+### Import SDK
+
+```typescript
+import { TransactionAPI } from '{{packageName}}';
+
+const api = new TransactionAPI({
+  apiKey: 'your-api-key',
+  environment: 'production'
+});
+```
+
+### Create Transaction
+
+```typescript
+const transactions = await api.create([
+  {
+    amount: 100,
+    description: 'Payment for services',
+    externalId: 'ext-123'
+  }
+]);
+
+console.log(transactions);
+```
+
+### Query Transactions
+
+```typescript
+const result = await api.query({
+  limit: 10,
+  after: null
+});
+
+console.log(result.transactions);
+```
+
+### Get Transaction by ID
+
+```typescript
+const transaction = await api.get('transaction-id-here');
+console.log(transaction);
+```
+
+## Available APIs
+
+This SDK includes {{resourceCount}} auto-generated resource APIs:
+
+{{#resources}}
+- `{{name}}API` — {{description}}
+{{/resources}}
+
+## Authentication
+
+All requests require authentication via:
+- **API Key**: Bearer token in Authorization header
+- **Environment**: Production or Sandbox
+
+```typescript
+const api = new TransactionAPI({
+  apiKey: process.env.STARK_BANK_API_KEY,
+  environment: process.env.NODE_ENV === 'production' ? 'production' : 'sandbox'
+});
+```
+
+## Error Handling
+
+```typescript
+try {
+  const tx = await api.create([...]);
+} catch (error) {
+  if (error.status === 401) {
+    console.error('Unauthorized — check your API key');
+  } else if (error.status === 422) {
+    console.error('Validation error:', error.details);
+  }
+}
+```
+
+## Testing
+
+```bash
+npm test
+```
+
+## License
+
+MIT

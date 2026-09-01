@@ -1,0 +1,10 @@
+generatorName: go
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-go-temp
+packageName: sdk
+packageVersion: 0.3.0
+additionalProperties:
+  packageVersion: "0.3.0"
+  gitUserId: "starkbank"
+  gitRepoId: "sdk-go"
+  moduleName: "github.com/starkbank/sdk-go"

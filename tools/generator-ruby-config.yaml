@@ -1,0 +1,9 @@
+generatorName: ruby
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-ruby-temp
+packageName: starkbank
+packageVersion: 0.3.0
+additionalProperties:
+  gemName: "starkbank"
+  gemVersion: "0.3.0"
+  gemHomepage: "https://github.com/starkbank/sdk-ruby"

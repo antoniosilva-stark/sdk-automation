@@ -1,0 +1,30 @@
+/**
+ * {{appName}} SDK for Node.js
+ * Auto-generated from OpenAPI specification
+ */
+
+// Export all models
+export * from './models';
+
+// Export all APIs
+export * from './api';
+
+// Export types
+export interface APIConfig {
+  apiKey: string;
+  environment: 'production' | 'sandbox';
+  basePath?: string;
+  timeout?: number;
+}
+
+export interface ListResponse<T> {
+  data: T[];
+  cursor?: string;
+}
+
+export interface ErrorResponse {
+  status: number;
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}

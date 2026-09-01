@@ -1,0 +1,37 @@
+## {{npmName}}@{{npmVersion}}
+
+Stark Bank Node.js SDK — auto-generated from the OpenAPI 3.1 spec via [OpenAPI Generator](https://openapi-generator.tech) (`typescript-axios`). The generated client uses [axios](https://github.com/axios/axios) and can run in Node.js, Webpack or Browserify, in both CommonJS and ES6 module systems.
+
+### Building
+
+```
+npm install
+npm run build
+```
+
+### Publishing
+
+Build the package, then run `npm publish`.
+
+### Consuming
+
+```
+npm install {{npmName}}@{{npmVersion}} --save
+```
+
+### Usage
+
+```typescript
+import { Configuration, TransactionsApi } from "{{npmName}}";
+
+const configuration = new Configuration({
+  basePath: "https://api.starkbank.com",
+});
+
+const transactionsApi = new TransactionsApi(configuration);
+
+const { data } = await transactionsApi.queryTransaction(10);
+console.log(data);
+```
+
+Every resource in the spec (Transaction, Invoice, Transfer, ...) has a matching `*Api` class in `api/` and model types in `models/`, generated 1:1 from the OpenAPI paths and schemas — see `index.ts` for the full export list.

@@ -1,0 +1,9 @@
+generatorName: python
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-python-temp
+packageName: starkbank_sdk
+packageVersion: 0.3.0
+additionalProperties:
+  packageVersion: "0.3.0"
+  projectName: "starkbank-sdk"
+  projectUrl: "https://github.com/starkbank/sdk-python"

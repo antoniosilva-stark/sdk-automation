@@ -8,7 +8,7 @@
 
 ## Breaking-Change Policy
 
-- Detected automatically: `breaking-change-detector.js` (Node.js) in CI
+- Detected automatically: `breaking-change-detector.py` (Python) in CI
 - CI blocks merge if BC found
 - Requires Tech-Lead approval to merge BC changes
 - SLA: 1-2h for approval
@@ -17,8 +17,7 @@ BC = removes operation, removes schema, removes required param, type changes, re
 
 ## Spec Owner
 
-**Primary**: Antonio Silva (@antonio.silva)  
-**Backup**: Nicolas Almeida (@nicolas.almeida)
+**Primary**: Antonio Silva (@antonio.silva) ou Nicolas Almeida (@nicolas.almeida)
 
 Responsibilities:
 - Keep spec.yaml in sync with Python SDK
@@ -26,9 +25,16 @@ Responsibilities:
 - Approve version bumps
 - Validate BC changes
 
+## Stack (Hybrid: Python + Node.js)
+
+Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo seu ponto forte:
+
+- **Python 3.9+** — validação de spec (`openapi-spec-validator`, validador oficial OpenAPI) e detecção de breaking changes (`breaking-change-detector.py`)
+- **Node.js 18+** — geração de SDKs (OpenAPI Generator CLI, templates Mustache) e testes (Jest)
+
 ## Tool Versions (Fixed)
 
-- OpenAPI Generator: v7.0.1 (upgrade with Tech-Lead approval)
+- OpenAPI Generator (core/JAR): v7.0.1 — pinado via `openapitools.json` (upgrade com aprovação do Tech-Lead)
 - OpenAPI Spec: 3.1
 - Python SDK Reference: v0.28.0
 
@@ -45,12 +51,12 @@ Responsibilities:
 
 ## Escalation
 
-| Role       | Name            | Escalation           |
-|------------|-----------------|----------------------|
-| Spec Owner | Antonio Silva   | → Backup             |
-| Backup     | Nicolas Almeida | → Tech-Lead (Elias)  |
+| Role       | Name            | Escalation             |
+|------------|-----------------|------------------------|
+| Spec Owner | Antonio Silva   | → Spec Owner           |
+| Spec Owner | Nicolas Almeida | → Tech-Lead (Elias)    |
 | Tech-Lead  | Elias           | → Head of Integrations |
-| Head       | Thiago Simon    | →                    |
+| Head       | Thiago Simon    | →                      |
 
 ---
 
