@@ -1,31 +1,27 @@
 openapi: 3.1.0
 info:
   title: Stark Bank API
-  version: 0.1.0
-  description: |
-    Stark Bank API — SDK Automation POC
+  version: 0.2.0
+  description: 'Stark Bank API — SDK Automation POC
+
     Centralized OpenAPI specification for generating SDKs across 9 languages.
 
-    **Version**: v0.1.0 (3 resources, 9 operations)
-    **Last Updated**: 2026-08-19
 
+    **Version**: v0.2.0 (60 resources, 180 operations)
+
+    **Last Updated**: 2026-08-20'
 servers:
-  - url: https://api.starkbank.com/v2
-    description: Production
-  - url: https://sandbox.api.starkbank.com/v2
-    description: Sandbox
-
+- url: https://api.starkbank.com/v2
+  description: Production
+- url: https://sandbox.api.starkbank.com/v2
+  description: Sandbox
 paths:
-  # ============================================
-  # Transaction Operations
-  # ============================================
   /transaction:
     post:
       operationId: createTransaction
       tags:
-        - Transactions
+      - Transactions
       summary: Create transactions
-      description: Create a list of new transactions
       requestBody:
         required: true
         content:
@@ -49,27 +45,23 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
     get:
       operationId: queryTransaction
       tags:
-        - Transactions
+      - Transactions
       summary: List transactions
-      description: Retrieve a list of transactions with pagination
       parameters:
-        - name: limit
-          in: query
-          description: Maximum number of results (default 100)
-          schema:
-            type: integer
-            default: 100
-            minimum: 1
-            maximum: 1000
-        - name: after
-          in: query
-          description: Cursor for pagination
-          schema:
-            type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -86,21 +78,18 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
   /transaction/{id}:
     get:
       operationId: getTransaction
       tags:
-        - Transactions
+      - Transactions
       summary: Get transaction
-      description: Retrieve a single transaction by ID
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: Transaction ID
-          schema:
-            type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -114,17 +103,12 @@ paths:
           description: Transaction not found
         '500':
           description: Server error
-
-  # ============================================
-  # Invoice Operations
-  # ============================================
   /invoice:
     post:
       operationId: createInvoice
       tags:
-        - Invoices
+      - Invoices
       summary: Create invoices
-      description: Create a list of new invoices
       requestBody:
         required: true
         content:
@@ -148,27 +132,23 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
     get:
       operationId: queryInvoice
       tags:
-        - Invoices
+      - Invoices
       summary: List invoices
-      description: Retrieve a list of invoices with pagination
       parameters:
-        - name: limit
-          in: query
-          description: Maximum number of results (default 100)
-          schema:
-            type: integer
-            default: 100
-            minimum: 1
-            maximum: 1000
-        - name: after
-          in: query
-          description: Cursor for pagination
-          schema:
-            type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -185,21 +165,18 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
   /invoice/{id}:
     get:
       operationId: getInvoice
       tags:
-        - Invoices
+      - Invoices
       summary: Get invoice
-      description: Retrieve a single invoice by ID
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: Invoice ID
-          schema:
-            type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -213,17 +190,12 @@ paths:
           description: Invoice not found
         '500':
           description: Server error
-
-  # ============================================
-  # Transfer Operations
-  # ============================================
   /transfer:
     post:
       operationId: createTransfer
       tags:
-        - Transfers
+      - Transfers
       summary: Create transfers
-      description: Create a list of new transfers
       requestBody:
         required: true
         content:
@@ -247,27 +219,23 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
     get:
       operationId: queryTransfer
       tags:
-        - Transfers
+      - Transfers
       summary: List transfers
-      description: Retrieve a list of transfers with pagination
       parameters:
-        - name: limit
-          in: query
-          description: Maximum number of results (default 100)
-          schema:
-            type: integer
-            default: 100
-            minimum: 1
-            maximum: 1000
-        - name: after
-          in: query
-          description: Cursor for pagination
-          schema:
-            type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -284,21 +252,18 @@ paths:
           description: Unauthorized
         '500':
           description: Server error
-
   /transfer/{id}:
     get:
       operationId: getTransfer
       tags:
-        - Transfers
+      - Transfers
       summary: Get transfer
-      description: Retrieve a single transfer by ID
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: Transfer ID
-          schema:
-            type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: Success
@@ -312,29 +277,6002 @@ paths:
           description: Transfer not found
         '500':
           description: Server error
-
+  /balance:
+    post:
+      operationId: createBalance
+      tags:
+      - Balances
+      summary: Create balances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BalanceCreate'
+      responses:
+        '201':
+          description: Balances created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Balance'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBalance
+      tags:
+      - Balances
+      summary: List balances
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balances:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Balance'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /balance/{id}:
+    get:
+      operationId: getBalance
+      tags:
+      - Balances
+      summary: Get balance
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Balance not found
+        '500':
+          description: Server error
+  /boleto:
+    post:
+      operationId: createBoleto
+      tags:
+      - Boletos
+      summary: Create boletos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BoletoCreate'
+      responses:
+        '201':
+          description: Boletos created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Boleto'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBoleto
+      tags:
+      - Boletos
+      summary: List boletos
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boletos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Boleto'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto/{id}:
+    get:
+      operationId: getBoleto
+      tags:
+      - Boletos
+      summary: Get boleto
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Boleto'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Boleto not found
+        '500':
+          description: Server error
+  /boleto_payment:
+    post:
+      operationId: createBoletoPayment
+      tags:
+      - BoletoPayments
+      summary: Create boleto_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BoletoPaymentCreate'
+      responses:
+        '201':
+          description: BoletoPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BoletoPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBoletoPayment
+      tags:
+      - BoletoPayments
+      summary: List boleto_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boleto_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BoletoPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto_payment/{id}:
+    get:
+      operationId: getBoletoPayment
+      tags:
+      - BoletoPayments
+      summary: Get boleto_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: BoletoPayment not found
+        '500':
+          description: Server error
+  /dict_account:
+    post:
+      operationId: createDictAccount
+      tags:
+      - DictAccounts
+      summary: Create dict_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DictAccountCreate'
+      responses:
+        '201':
+          description: DictAccounts created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DictAccount'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDictAccount
+      tags:
+      - DictAccounts
+      summary: List dict_accounts
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dict_accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DictAccount'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /dict_account/{id}:
+    get:
+      operationId: getDictAccount
+      tags:
+      - DictAccounts
+      summary: Get dict_account
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictAccount'
+        '401':
+          description: Unauthorized
+        '404':
+          description: DictAccount not found
+        '500':
+          description: Server error
+  /dict_key:
+    post:
+      operationId: createDictKey
+      tags:
+      - DictKeys
+      summary: Create dict_keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DictKeyCreate'
+      responses:
+        '201':
+          description: DictKeys created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DictKey'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDictKey
+      tags:
+      - DictKeys
+      summary: List dict_keys
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dict_keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DictKey'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /dict_key/{id}:
+    get:
+      operationId: getDictKey
+      tags:
+      - DictKeys
+      summary: Get dict_key
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictKey'
+        '401':
+          description: Unauthorized
+        '404':
+          description: DictKey not found
+        '500':
+          description: Server error
+  /webhook:
+    post:
+      operationId: createWebhook
+      tags:
+      - Webhooks
+      summary: Create webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '201':
+          description: Webhooks created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryWebhook
+      tags:
+      - Webhooks
+      summary: List webhooks
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /webhook/{id}:
+    get:
+      operationId: getWebhook
+      tags:
+      - Webhooks
+      summary: Get webhook
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Webhook not found
+        '500':
+          description: Server error
+  /event:
+    post:
+      operationId: createEvent
+      tags:
+      - Events
+      summary: Create events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventCreate'
+      responses:
+        '201':
+          description: Events created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryEvent
+      tags:
+      - Events
+      summary: List events
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /event/{id}:
+    get:
+      operationId: getEvent
+      tags:
+      - Events
+      summary: Get event
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Event not found
+        '500':
+          description: Server error
+  /p_i_x_payment:
+    post:
+      operationId: createPIXPayment
+      tags:
+      - PIXPayments
+      summary: Create p_i_x_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PIXPaymentCreate'
+      responses:
+        '201':
+          description: PIXPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PIXPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPIXPayment
+      tags:
+      - PIXPayments
+      summary: List p_i_x_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  p_i_x_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PIXPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /p_i_x_payment/{id}:
+    get:
+      operationId: getPIXPayment
+      tags:
+      - PIXPayments
+      summary: Get p_i_x_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PIXPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PIXPayment not found
+        '500':
+          description: Server error
+  /p_i_x_chargeback:
+    post:
+      operationId: createPIXChargeback
+      tags:
+      - PIXChargebacks
+      summary: Create p_i_x_chargebacks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PIXChargebackCreate'
+      responses:
+        '201':
+          description: PIXChargebacks created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PIXChargeback'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPIXChargeback
+      tags:
+      - PIXChargebacks
+      summary: List p_i_x_chargebacks
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  p_i_x_chargebacks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PIXChargeback'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /p_i_x_chargeback/{id}:
+    get:
+      operationId: getPIXChargeback
+      tags:
+      - PIXChargebacks
+      summary: Get p_i_x_chargeback
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PIXChargeback'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PIXChargeback not found
+        '500':
+          description: Server error
+  /p_i_x_reversal:
+    post:
+      operationId: createPIXReversal
+      tags:
+      - PIXReversals
+      summary: Create p_i_x_reversals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PIXReversalCreate'
+      responses:
+        '201':
+          description: PIXReversals created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PIXReversal'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPIXReversal
+      tags:
+      - PIXReversals
+      summary: List p_i_x_reversals
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  p_i_x_reversals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PIXReversal'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /p_i_x_reversal/{id}:
+    get:
+      operationId: getPIXReversal
+      tags:
+      - PIXReversals
+      summary: Get p_i_x_reversal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PIXReversal'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PIXReversal not found
+        '500':
+          description: Server error
+  /ted_payment:
+    post:
+      operationId: createTedPayment
+      tags:
+      - TedPayments
+      summary: Create ted_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TedPaymentCreate'
+      responses:
+        '201':
+          description: TedPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TedPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTedPayment
+      tags:
+      - TedPayments
+      summary: List ted_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ted_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TedPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /ted_payment/{id}:
+    get:
+      operationId: getTedPayment
+      tags:
+      - TedPayments
+      summary: Get ted_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TedPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: TedPayment not found
+        '500':
+          description: Server error
+  /ted_reversal:
+    post:
+      operationId: createTedReversal
+      tags:
+      - TedReversals
+      summary: Create ted_reversals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TedReversalCreate'
+      responses:
+        '201':
+          description: TedReversals created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TedReversal'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTedReversal
+      tags:
+      - TedReversals
+      summary: List ted_reversals
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ted_reversals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TedReversal'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /ted_reversal/{id}:
+    get:
+      operationId: getTedReversal
+      tags:
+      - TedReversals
+      summary: Get ted_reversal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TedReversal'
+        '401':
+          description: Unauthorized
+        '404':
+          description: TedReversal not found
+        '500':
+          description: Server error
+  /br_code_payment:
+    post:
+      operationId: createBrCodePayment
+      tags:
+      - BrCodePayments
+      summary: Create br_code_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BrCodePaymentCreate'
+      responses:
+        '201':
+          description: BrCodePayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BrCodePayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBrCodePayment
+      tags:
+      - BrCodePayments
+      summary: List br_code_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  br_code_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BrCodePayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /br_code_payment/{id}:
+    get:
+      operationId: getBrCodePayment
+      tags:
+      - BrCodePayments
+      summary: Get br_code_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrCodePayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: BrCodePayment not found
+        '500':
+          description: Server error
+  /corporate_balance:
+    post:
+      operationId: createCorporateBalance
+      tags:
+      - CorporateBalances
+      summary: Create corporate_balances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateBalanceCreate'
+      responses:
+        '201':
+          description: CorporateBalances created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateBalance'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateBalance
+      tags:
+      - CorporateBalances
+      summary: List corporate_balances
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_balances:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateBalance'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_balance/{id}:
+    get:
+      operationId: getCorporateBalance
+      tags:
+      - CorporateBalances
+      summary: Get corporate_balance
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateBalance'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateBalance not found
+        '500':
+          description: Server error
+  /corporate_card:
+    post:
+      operationId: createCorporateCard
+      tags:
+      - CorporateCards
+      summary: Create corporate_cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateCardCreate'
+      responses:
+        '201':
+          description: CorporateCards created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateCard'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateCard
+      tags:
+      - CorporateCards
+      summary: List corporate_cards
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_cards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateCard'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_card/{id}:
+    get:
+      operationId: getCorporateCard
+      tags:
+      - CorporateCards
+      summary: Get corporate_card
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateCard'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateCard not found
+        '500':
+          description: Server error
+  /corporate_holder:
+    post:
+      operationId: createCorporateHolder
+      tags:
+      - CorporateHolders
+      summary: Create corporate_holders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateHolderCreate'
+      responses:
+        '201':
+          description: CorporateHolders created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateHolder'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateHolder
+      tags:
+      - CorporateHolders
+      summary: List corporate_holders
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_holders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateHolder'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_holder/{id}:
+    get:
+      operationId: getCorporateHolder
+      tags:
+      - CorporateHolders
+      summary: Get corporate_holder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateHolder'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateHolder not found
+        '500':
+          description: Server error
+  /corporate_purchase:
+    post:
+      operationId: createCorporatePurchase
+      tags:
+      - CorporatePurchases
+      summary: Create corporate_purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporatePurchaseCreate'
+      responses:
+        '201':
+          description: CorporatePurchases created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporatePurchase'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporatePurchase
+      tags:
+      - CorporatePurchases
+      summary: List corporate_purchases
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_purchases:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporatePurchase'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_purchase/{id}:
+    get:
+      operationId: getCorporatePurchase
+      tags:
+      - CorporatePurchases
+      summary: Get corporate_purchase
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporatePurchase'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporatePurchase not found
+        '500':
+          description: Server error
+  /corporate_rule:
+    post:
+      operationId: createCorporateRule
+      tags:
+      - CorporateRules
+      summary: Create corporate_rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateRuleCreate'
+      responses:
+        '201':
+          description: CorporateRules created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateRule'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateRule
+      tags:
+      - CorporateRules
+      summary: List corporate_rules
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateRule'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_rule/{id}:
+    get:
+      operationId: getCorporateRule
+      tags:
+      - CorporateRules
+      summary: Get corporate_rule
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateRule'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateRule not found
+        '500':
+          description: Server error
+  /corporate_transaction:
+    post:
+      operationId: createCorporateTransaction
+      tags:
+      - CorporateTransactions
+      summary: Create corporate_transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateTransactionCreate'
+      responses:
+        '201':
+          description: CorporateTransactions created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateTransaction'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateTransaction
+      tags:
+      - CorporateTransactions
+      summary: List corporate_transactions
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateTransaction'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_transaction/{id}:
+    get:
+      operationId: getCorporateTransaction
+      tags:
+      - CorporateTransactions
+      summary: Get corporate_transaction
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateTransaction'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateTransaction not found
+        '500':
+          description: Server error
+  /corporate_withdrawal:
+    post:
+      operationId: createCorporateWithdrawal
+      tags:
+      - CorporateWithdrawals
+      summary: Create corporate_withdrawals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateWithdrawalCreate'
+      responses:
+        '201':
+          description: CorporateWithdrawals created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateWithdrawal'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateWithdrawal
+      tags:
+      - CorporateWithdrawals
+      summary: List corporate_withdrawals
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_withdrawals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateWithdrawal'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_withdrawal/{id}:
+    get:
+      operationId: getCorporateWithdrawal
+      tags:
+      - CorporateWithdrawals
+      summary: Get corporate_withdrawal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateWithdrawal'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateWithdrawal not found
+        '500':
+          description: Server error
+  /corporate_invoice:
+    post:
+      operationId: createCorporateInvoice
+      tags:
+      - CorporateInvoices
+      summary: Create corporate_invoices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateInvoiceCreate'
+      responses:
+        '201':
+          description: CorporateInvoices created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateInvoice'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateInvoice
+      tags:
+      - CorporateInvoices
+      summary: List corporate_invoices
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateInvoice'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_invoice/{id}:
+    get:
+      operationId: getCorporateInvoice
+      tags:
+      - CorporateInvoices
+      summary: Get corporate_invoice
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateInvoice'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateInvoice not found
+        '500':
+          description: Server error
+  /document:
+    post:
+      operationId: createDocument
+      tags:
+      - Documents
+      summary: Create documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DocumentCreate'
+      responses:
+        '201':
+          description: Documents created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDocument
+      tags:
+      - Documents
+      summary: List documents
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /document/{id}:
+    get:
+      operationId: getDocument
+      tags:
+      - Documents
+      summary: Get document
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Document not found
+        '500':
+          description: Server error
+  /document_log:
+    post:
+      operationId: createDocumentLog
+      tags:
+      - DocumentLogs
+      summary: Create document_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DocumentLogCreate'
+      responses:
+        '201':
+          description: DocumentLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDocumentLog
+      tags:
+      - DocumentLogs
+      summary: List document_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /document_log/{id}:
+    get:
+      operationId: getDocumentLog
+      tags:
+      - DocumentLogs
+      summary: Get document_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: DocumentLog not found
+        '500':
+          description: Server error
+  /request:
+    post:
+      operationId: createRequest
+      tags:
+      - Requests
+      summary: Create requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/RequestCreate'
+      responses:
+        '201':
+          description: Requests created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Request'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryRequest
+      tags:
+      - Requests
+      summary: List requests
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Request'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /request/{id}:
+    get:
+      operationId: getRequest
+      tags:
+      - Requests
+      summary: Get request
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Request not found
+        '500':
+          description: Server error
+  /workspace:
+    post:
+      operationId: createWorkspace
+      tags:
+      - Workspaces
+      summary: Create workspaces
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkspaceCreate'
+      responses:
+        '201':
+          description: Workspaces created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workspace'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryWorkspace
+      tags:
+      - Workspaces
+      summary: List workspaces
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspaces:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workspace'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /workspace/{id}:
+    get:
+      operationId: getWorkspace
+      tags:
+      - Workspaces
+      summary: Get workspace
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Workspace not found
+        '500':
+          description: Server error
+  /split_profile:
+    post:
+      operationId: createSplitProfile
+      tags:
+      - SplitProfiles
+      summary: Create split_profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SplitProfileCreate'
+      responses:
+        '201':
+          description: SplitProfiles created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SplitProfile'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: querySplitProfile
+      tags:
+      - SplitProfiles
+      summary: List split_profiles
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  split_profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SplitProfile'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split_profile/{id}:
+    get:
+      operationId: getSplitProfile
+      tags:
+      - SplitProfiles
+      summary: Get split_profile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitProfile'
+        '401':
+          description: Unauthorized
+        '404':
+          description: SplitProfile not found
+        '500':
+          description: Server error
+  /darf_payment:
+    post:
+      operationId: createDarfPayment
+      tags:
+      - DarfPayments
+      summary: Create darf_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DarfPaymentCreate'
+      responses:
+        '201':
+          description: DarfPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DarfPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDarfPayment
+      tags:
+      - DarfPayments
+      summary: List darf_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  darf_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DarfPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /darf_payment/{id}:
+    get:
+      operationId: getDarfPayment
+      tags:
+      - DarfPayments
+      summary: Get darf_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DarfPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: DarfPayment not found
+        '500':
+          description: Server error
+  /card_method:
+    post:
+      operationId: createCardMethod
+      tags:
+      - CardMethods
+      summary: Create card_methods
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CardMethodCreate'
+      responses:
+        '201':
+          description: CardMethods created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardMethod'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCardMethod
+      tags:
+      - CardMethods
+      summary: List card_methods
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card_methods:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CardMethod'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /card_method/{id}:
+    get:
+      operationId: getCardMethod
+      tags:
+      - CardMethods
+      summary: Get card_method
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardMethod'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CardMethod not found
+        '500':
+          description: Server error
+  /limit:
+    post:
+      operationId: createLimit
+      tags:
+      - Limits
+      summary: Create limits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/LimitCreate'
+      responses:
+        '201':
+          description: Limits created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Limit'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryLimit
+      tags:
+      - Limits
+      summary: List limits
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  limits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Limit'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /limit/{id}:
+    get:
+      operationId: getLimit
+      tags:
+      - Limits
+      summary: Get limit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Limit'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Limit not found
+        '500':
+          description: Server error
+  /static_brcode:
+    post:
+      operationId: createStaticBrcode
+      tags:
+      - StaticBrcodes
+      summary: Create static_brcodes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/StaticBrcodeCreate'
+      responses:
+        '201':
+          description: StaticBrcodes created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaticBrcode'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryStaticBrcode
+      tags:
+      - StaticBrcodes
+      summary: List static_brcodes
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  static_brcodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaticBrcode'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /static_brcode/{id}:
+    get:
+      operationId: getStaticBrcode
+      tags:
+      - StaticBrcodes
+      summary: Get static_brcode
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaticBrcode'
+        '401':
+          description: Unauthorized
+        '404':
+          description: StaticBrcode not found
+        '500':
+          description: Server error
+  /deposit:
+    post:
+      operationId: createDeposit
+      tags:
+      - Deposits
+      summary: Create deposits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DepositCreate'
+      responses:
+        '201':
+          description: Deposits created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deposit'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDeposit
+      tags:
+      - Deposits
+      summary: List deposits
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deposits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deposit'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /deposit/{id}:
+    get:
+      operationId: getDeposit
+      tags:
+      - Deposits
+      summary: Get deposit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deposit'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deposit not found
+        '500':
+          description: Server error
+  /payment_preview:
+    post:
+      operationId: createPaymentPreview
+      tags:
+      - PaymentPreviews
+      summary: Create payment_previews
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentPreviewCreate'
+      responses:
+        '201':
+          description: PaymentPreviews created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentPreview'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPaymentPreview
+      tags:
+      - PaymentPreviews
+      summary: List payment_previews
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_previews:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentPreview'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /payment_preview/{id}:
+    get:
+      operationId: getPaymentPreview
+      tags:
+      - PaymentPreviews
+      summary: Get payment_preview
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPreview'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PaymentPreview not found
+        '500':
+          description: Server error
+  /account_number:
+    post:
+      operationId: createAccountNumber
+      tags:
+      - AccountNumbers
+      summary: Create account_numbers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountNumberCreate'
+      responses:
+        '201':
+          description: AccountNumbers created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountNumber'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryAccountNumber
+      tags:
+      - AccountNumbers
+      summary: List account_numbers
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_numbers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountNumber'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /account_number/{id}:
+    get:
+      operationId: getAccountNumber
+      tags:
+      - AccountNumbers
+      summary: Get account_number
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountNumber'
+        '401':
+          description: Unauthorized
+        '404':
+          description: AccountNumber not found
+        '500':
+          description: Server error
+  /account:
+    post:
+      operationId: createAccount
+      tags:
+      - Accounts
+      summary: Create accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Accounts created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryAccount
+      tags:
+      - Accounts
+      summary: List accounts
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /account/{id}:
+    get:
+      operationId: getAccount
+      tags:
+      - Accounts
+      summary: Get account
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Account not found
+        '500':
+          description: Server error
+  /tax_payment:
+    post:
+      operationId: createTaxPayment
+      tags:
+      - TaxPayments
+      summary: Create tax_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TaxPaymentCreate'
+      responses:
+        '201':
+          description: TaxPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTaxPayment
+      tags:
+      - TaxPayments
+      summary: List tax_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tax_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaxPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /tax_payment/{id}:
+    get:
+      operationId: getTaxPayment
+      tags:
+      - TaxPayments
+      summary: Get tax_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: TaxPayment not found
+        '500':
+          description: Server error
+  /installment_payment:
+    post:
+      operationId: createInstallmentPayment
+      tags:
+      - InstallmentPayments
+      summary: Create installment_payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/InstallmentPaymentCreate'
+      responses:
+        '201':
+          description: InstallmentPayments created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InstallmentPayment'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryInstallmentPayment
+      tags:
+      - InstallmentPayments
+      summary: List installment_payments
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  installment_payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InstallmentPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /installment_payment/{id}:
+    get:
+      operationId: getInstallmentPayment
+      tags:
+      - InstallmentPayments
+      summary: Get installment_payment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallmentPayment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: InstallmentPayment not found
+        '500':
+          description: Server error
+  /boleto_log:
+    post:
+      operationId: createBoletoLog
+      tags:
+      - BoletoLogs
+      summary: Create boleto_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BoletoLogCreate'
+      responses:
+        '201':
+          description: BoletoLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BoletoLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBoletoLog
+      tags:
+      - BoletoLogs
+      summary: List boleto_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boleto_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BoletoLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto_log/{id}:
+    get:
+      operationId: getBoletoLog
+      tags:
+      - BoletoLogs
+      summary: Get boleto_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: BoletoLog not found
+        '500':
+          description: Server error
+  /pix_chargeback:
+    post:
+      operationId: createPixChargeback
+      tags:
+      - PixChargebacks
+      summary: Create pix_chargebacks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PixChargebackCreate'
+      responses:
+        '201':
+          description: PixChargebacks created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PixChargeback'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPixChargeback
+      tags:
+      - PixChargebacks
+      summary: List pix_chargebacks
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pix_chargebacks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PixChargeback'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /pix_chargeback/{id}:
+    get:
+      operationId: getPixChargeback
+      tags:
+      - PixChargebacks
+      summary: Get pix_chargeback
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PixChargeback'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PixChargeback not found
+        '500':
+          description: Server error
+  /pix_refund:
+    post:
+      operationId: createPixRefund
+      tags:
+      - PixRefunds
+      summary: Create pix_refunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PixRefundCreate'
+      responses:
+        '201':
+          description: PixRefunds created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PixRefund'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPixRefund
+      tags:
+      - PixRefunds
+      summary: List pix_refunds
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pix_refunds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PixRefund'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /pix_refund/{id}:
+    get:
+      operationId: getPixRefund
+      tags:
+      - PixRefunds
+      summary: Get pix_refund
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PixRefund'
+        '401':
+          description: Unauthorized
+        '404':
+          description: PixRefund not found
+        '500':
+          description: Server error
+  /credit_note:
+    post:
+      operationId: createCreditNote
+      tags:
+      - CreditNotes
+      summary: Create credit_notes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreditNoteCreate'
+      responses:
+        '201':
+          description: CreditNotes created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CreditNote'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCreditNote
+      tags:
+      - CreditNotes
+      summary: List credit_notes
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credit_notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreditNote'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /credit_note/{id}:
+    get:
+      operationId: getCreditNote
+      tags:
+      - CreditNotes
+      summary: Get credit_note
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CreditNote not found
+        '500':
+          description: Server error
+  /account_holder:
+    post:
+      operationId: createAccountHolder
+      tags:
+      - AccountHolders
+      summary: Create account_holders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountHolderCreate'
+      responses:
+        '201':
+          description: AccountHolders created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountHolder'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryAccountHolder
+      tags:
+      - AccountHolders
+      summary: List account_holders
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_holders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountHolder'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /account_holder/{id}:
+    get:
+      operationId: getAccountHolder
+      tags:
+      - AccountHolders
+      summary: Get account_holder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountHolder'
+        '401':
+          description: Unauthorized
+        '404':
+          description: AccountHolder not found
+        '500':
+          description: Server error
+  /account_access:
+    post:
+      operationId: createAccountAccess
+      tags:
+      - AccountAccesses
+      summary: Create account_accesss
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountAccessCreate'
+      responses:
+        '201':
+          description: AccountAccesses created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountAccess'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryAccountAccess
+      tags:
+      - AccountAccesses
+      summary: List account_accesss
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_accesss:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountAccess'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /account_access/{id}:
+    get:
+      operationId: getAccountAccess
+      tags:
+      - AccountAccesses
+      summary: Get account_access
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAccess'
+        '401':
+          description: Unauthorized
+        '404':
+          description: AccountAccess not found
+        '500':
+          description: Server error
+  /corporate_status:
+    post:
+      operationId: createCorporateStatus
+      tags:
+      - CorporateStatuss
+      summary: Create corporate_statuss
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateStatusCreate'
+      responses:
+        '201':
+          description: CorporateStatuss created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateStatus'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateStatus
+      tags:
+      - CorporateStatuss
+      summary: List corporate_statuss
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_statuss:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateStatus'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_status/{id}:
+    get:
+      operationId: getCorporateStatus
+      tags:
+      - CorporateStatuss
+      summary: Get corporate_status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateStatus'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateStatus not found
+        '500':
+          description: Server error
+  /corporate_log:
+    post:
+      operationId: createCorporateLog
+      tags:
+      - CorporateLogs
+      summary: Create corporate_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CorporateLogCreate'
+      responses:
+        '201':
+          description: CorporateLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CorporateLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryCorporateLog
+      tags:
+      - CorporateLogs
+      summary: List corporate_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  corporate_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorporateLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /corporate_log/{id}:
+    get:
+      operationId: getCorporateLog
+      tags:
+      - CorporateLogs
+      summary: Get corporate_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorporateLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: CorporateLog not found
+        '500':
+          description: Server error
+  /ted_log:
+    post:
+      operationId: createTedLog
+      tags:
+      - TedLogs
+      summary: Create ted_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TedLogCreate'
+      responses:
+        '201':
+          description: TedLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TedLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTedLog
+      tags:
+      - TedLogs
+      summary: List ted_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ted_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TedLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /ted_log/{id}:
+    get:
+      operationId: getTedLog
+      tags:
+      - TedLogs
+      summary: Get ted_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TedLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: TedLog not found
+        '500':
+          description: Server error
+  /dict_log:
+    post:
+      operationId: createDictLog
+      tags:
+      - DictLogs
+      summary: Create dict_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DictLogCreate'
+      responses:
+        '201':
+          description: DictLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DictLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDictLog
+      tags:
+      - DictLogs
+      summary: List dict_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dict_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DictLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /dict_log/{id}:
+    get:
+      operationId: getDictLog
+      tags:
+      - DictLogs
+      summary: Get dict_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: DictLog not found
+        '500':
+          description: Server error
+  /key_log:
+    post:
+      operationId: createKeyLog
+      tags:
+      - KeyLogs
+      summary: Create key_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/KeyLogCreate'
+      responses:
+        '201':
+          description: KeyLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KeyLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryKeyLog
+      tags:
+      - KeyLogs
+      summary: List key_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KeyLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /key_log/{id}:
+    get:
+      operationId: getKeyLog
+      tags:
+      - KeyLogs
+      summary: Get key_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: KeyLog not found
+        '500':
+          description: Server error
+  /boleto_refund:
+    post:
+      operationId: createBoletoRefund
+      tags:
+      - BoletoRefunds
+      summary: Create boleto_refunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BoletoRefundCreate'
+      responses:
+        '201':
+          description: BoletoRefunds created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BoletoRefund'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBoletoRefund
+      tags:
+      - BoletoRefunds
+      summary: List boleto_refunds
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boleto_refunds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BoletoRefund'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto_refund/{id}:
+    get:
+      operationId: getBoletoRefund
+      tags:
+      - BoletoRefunds
+      summary: Get boleto_refund
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoRefund'
+        '401':
+          description: Unauthorized
+        '404':
+          description: BoletoRefund not found
+        '500':
+          description: Server error
+  /split_recipient:
+    post:
+      operationId: createSplitRecipient
+      tags:
+      - SplitRecipients
+      summary: Create split_recipients
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SplitRecipientCreate'
+      responses:
+        '201':
+          description: SplitRecipients created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SplitRecipient'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: querySplitRecipient
+      tags:
+      - SplitRecipients
+      summary: List split_recipients
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  split_recipients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SplitRecipient'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split_recipient/{id}:
+    get:
+      operationId: getSplitRecipient
+      tags:
+      - SplitRecipients
+      summary: Get split_recipient
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitRecipient'
+        '401':
+          description: Unauthorized
+        '404':
+          description: SplitRecipient not found
+        '500':
+          description: Server error
+  /split_log:
+    post:
+      operationId: createSplitLog
+      tags:
+      - SplitLogs
+      summary: Create split_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SplitLogCreate'
+      responses:
+        '201':
+          description: SplitLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SplitLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: querySplitLog
+      tags:
+      - SplitLogs
+      summary: List split_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  split_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SplitLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split_log/{id}:
+    get:
+      operationId: getSplitLog
+      tags:
+      - SplitLogs
+      summary: Get split_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: SplitLog not found
+        '500':
+          description: Server error
+  /webhook_log:
+    post:
+      operationId: createWebhookLog
+      tags:
+      - WebhookLogs
+      summary: Create webhook_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WebhookLogCreate'
+      responses:
+        '201':
+          description: WebhookLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryWebhookLog
+      tags:
+      - WebhookLogs
+      summary: List webhook_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /webhook_log/{id}:
+    get:
+      operationId: getWebhookLog
+      tags:
+      - WebhookLogs
+      summary: Get webhook_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: WebhookLog not found
+        '500':
+          description: Server error
+  /event_log:
+    post:
+      operationId: createEventLog
+      tags:
+      - EventLogs
+      summary: Create event_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventLogCreate'
+      responses:
+        '201':
+          description: EventLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryEventLog
+      tags:
+      - EventLogs
+      summary: List event_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /event_log/{id}:
+    get:
+      operationId: getEventLog
+      tags:
+      - EventLogs
+      summary: Get event_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: EventLog not found
+        '500':
+          description: Server error
+  /template:
+    post:
+      operationId: createTemplate
+      tags:
+      - Templates
+      summary: Create templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TemplateCreate'
+      responses:
+        '201':
+          description: Templates created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTemplate
+      tags:
+      - Templates
+      summary: List templates
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Template'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /template/{id}:
+    get:
+      operationId: getTemplate
+      tags:
+      - Templates
+      summary: Get template
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Template not found
+        '500':
+          description: Server error
+  /template_log:
+    post:
+      operationId: createTemplateLog
+      tags:
+      - TemplateLogs
+      summary: Create template_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TemplateLogCreate'
+      responses:
+        '201':
+          description: TemplateLogs created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TemplateLog'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryTemplateLog
+      tags:
+      - TemplateLogs
+      summary: List template_logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TemplateLog'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /template_log/{id}:
+    get:
+      operationId: getTemplateLog
+      tags:
+      - TemplateLogs
+      summary: Get template_log
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateLog'
+        '401':
+          description: Unauthorized
+        '404':
+          description: TemplateLog not found
+        '500':
+          description: Server error
+  /refund:
+    post:
+      operationId: createRefund
+      tags:
+      - Refunds
+      summary: Create refunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/RefundCreate'
+      responses:
+        '201':
+          description: Refunds created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Refund'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryRefund
+      tags:
+      - Refunds
+      summary: List refunds
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refunds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Refund'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /refund/{id}:
+    get:
+      operationId: getRefund
+      tags:
+      - Refunds
+      summary: Get refund
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Refund not found
+        '500':
+          description: Server error
+  /reversal:
+    post:
+      operationId: createReversal
+      tags:
+      - Reversals
+      summary: Create reversals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReversalCreate'
+      responses:
+        '201':
+          description: Reversals created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reversal'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryReversal
+      tags:
+      - Reversals
+      summary: List reversals
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reversals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reversal'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /reversal/{id}:
+    get:
+      operationId: getReversal
+      tags:
+      - Reversals
+      summary: Get reversal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reversal'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Reversal not found
+        '500':
+          description: Server error
+  /fee:
+    post:
+      operationId: createFee
+      tags:
+      - Fees
+      summary: Create fees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeCreate'
+      responses:
+        '201':
+          description: Fees created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Fee'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryFee
+      tags:
+      - Fees
+      summary: List fees
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - name: after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fees:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Fee'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /fee/{id}:
+    get:
+      operationId: getFee
+      tags:
+      - Fees
+      summary: Get fee
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fee'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Fee not found
+        '500':
+          description: Server error
 components:
   schemas:
-    # ============================================
-    # Transaction Schemas (External Reference)
-    # ============================================
     Transaction:
-      $ref: './schemas/transaction.yaml#/components/schemas/Transaction'
+      $ref: ./schemas/transaction.yaml#/components/schemas/Transaction
     TransactionCreate:
-      $ref: './schemas/transaction.yaml#/components/schemas/TransactionCreate'
-
-    # ============================================
-    # Invoice Schemas (External Reference)
-    # ============================================
+      $ref: ./schemas/transaction.yaml#/components/schemas/TransactionCreate
     Invoice:
-      $ref: './schemas/invoice.yaml#/components/schemas/Invoice'
+      $ref: ./schemas/invoice.yaml#/components/schemas/Invoice
     InvoiceCreate:
-      $ref: './schemas/invoice.yaml#/components/schemas/InvoiceCreate'
-
-    # ============================================
-    # Transfer Schemas (External Reference)
-    # ============================================
+      $ref: ./schemas/invoice.yaml#/components/schemas/InvoiceCreate
     Transfer:
-      $ref: './schemas/transfer.yaml#/components/schemas/Transfer'
+      $ref: ./schemas/transfer.yaml#/components/schemas/Transfer
     TransferCreate:
-      $ref: './schemas/transfer.yaml#/components/schemas/TransferCreate'
+      $ref: ./schemas/transfer.yaml#/components/schemas/TransferCreate
+    Balance:
+      type: object
+      description: A Balance resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BalanceCreate:
+      type: object
+      description: Balance creation request
+      properties: {}
+    Boleto:
+      type: object
+      description: A Boleto resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BoletoCreate:
+      type: object
+      description: Boleto creation request
+      properties: {}
+    BoletoPayment:
+      type: object
+      description: A BoletoPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BoletoPaymentCreate:
+      type: object
+      description: BoletoPayment creation request
+      properties: {}
+    DictAccount:
+      type: object
+      description: A DictAccount resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DictAccountCreate:
+      type: object
+      description: DictAccount creation request
+      properties: {}
+    DictKey:
+      type: object
+      description: A DictKey resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DictKeyCreate:
+      type: object
+      description: DictKey creation request
+      properties: {}
+    Webhook:
+      type: object
+      description: A Webhook resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    WebhookCreate:
+      type: object
+      description: Webhook creation request
+      properties: {}
+    Event:
+      type: object
+      description: A Event resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    EventCreate:
+      type: object
+      description: Event creation request
+      properties: {}
+    PIXPayment:
+      type: object
+      description: A PIXPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PIXPaymentCreate:
+      type: object
+      description: PIXPayment creation request
+      properties: {}
+    PIXChargeback:
+      type: object
+      description: A PIXChargeback resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PIXChargebackCreate:
+      type: object
+      description: PIXChargeback creation request
+      properties: {}
+    PIXReversal:
+      type: object
+      description: A PIXReversal resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PIXReversalCreate:
+      type: object
+      description: PIXReversal creation request
+      properties: {}
+    TedPayment:
+      type: object
+      description: A TedPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TedPaymentCreate:
+      type: object
+      description: TedPayment creation request
+      properties: {}
+    TedReversal:
+      type: object
+      description: A TedReversal resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TedReversalCreate:
+      type: object
+      description: TedReversal creation request
+      properties: {}
+    BrCodePayment:
+      type: object
+      description: A BrCodePayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BrCodePaymentCreate:
+      type: object
+      description: BrCodePayment creation request
+      properties: {}
+    CorporateBalance:
+      type: object
+      description: A CorporateBalance resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateBalanceCreate:
+      type: object
+      description: CorporateBalance creation request
+      properties: {}
+    CorporateCard:
+      type: object
+      description: A CorporateCard resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateCardCreate:
+      type: object
+      description: CorporateCard creation request
+      properties: {}
+    CorporateHolder:
+      type: object
+      description: A CorporateHolder resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateHolderCreate:
+      type: object
+      description: CorporateHolder creation request
+      properties: {}
+    CorporatePurchase:
+      type: object
+      description: A CorporatePurchase resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporatePurchaseCreate:
+      type: object
+      description: CorporatePurchase creation request
+      properties: {}
+    CorporateRule:
+      type: object
+      description: A CorporateRule resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateRuleCreate:
+      type: object
+      description: CorporateRule creation request
+      properties: {}
+    CorporateTransaction:
+      type: object
+      description: A CorporateTransaction resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateTransactionCreate:
+      type: object
+      description: CorporateTransaction creation request
+      properties: {}
+    CorporateWithdrawal:
+      type: object
+      description: A CorporateWithdrawal resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateWithdrawalCreate:
+      type: object
+      description: CorporateWithdrawal creation request
+      properties: {}
+    CorporateInvoice:
+      type: object
+      description: A CorporateInvoice resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateInvoiceCreate:
+      type: object
+      description: CorporateInvoice creation request
+      properties: {}
+    Document:
+      type: object
+      description: A Document resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DocumentCreate:
+      type: object
+      description: Document creation request
+      properties: {}
+    DocumentLog:
+      type: object
+      description: A DocumentLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DocumentLogCreate:
+      type: object
+      description: DocumentLog creation request
+      properties: {}
+    Request:
+      type: object
+      description: A Request resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    RequestCreate:
+      type: object
+      description: Request creation request
+      properties: {}
+    Workspace:
+      type: object
+      description: A Workspace resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    WorkspaceCreate:
+      type: object
+      description: Workspace creation request
+      properties: {}
+    SplitProfile:
+      type: object
+      description: A SplitProfile resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    SplitProfileCreate:
+      type: object
+      description: SplitProfile creation request
+      properties: {}
+    DarfPayment:
+      type: object
+      description: A DarfPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DarfPaymentCreate:
+      type: object
+      description: DarfPayment creation request
+      properties: {}
+    CardMethod:
+      type: object
+      description: A CardMethod resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CardMethodCreate:
+      type: object
+      description: CardMethod creation request
+      properties: {}
+    Limit:
+      type: object
+      description: A Limit resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    LimitCreate:
+      type: object
+      description: Limit creation request
+      properties: {}
+    StaticBrcode:
+      type: object
+      description: A StaticBrcode resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    StaticBrcodeCreate:
+      type: object
+      description: StaticBrcode creation request
+      properties: {}
+    Deposit:
+      type: object
+      description: A Deposit resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DepositCreate:
+      type: object
+      description: Deposit creation request
+      properties: {}
+    PaymentPreview:
+      type: object
+      description: A PaymentPreview resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PaymentPreviewCreate:
+      type: object
+      description: PaymentPreview creation request
+      properties: {}
+    AccountNumber:
+      type: object
+      description: A AccountNumber resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    AccountNumberCreate:
+      type: object
+      description: AccountNumber creation request
+      properties: {}
+    Account:
+      type: object
+      description: A Account resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    AccountCreate:
+      type: object
+      description: Account creation request
+      properties: {}
+    TaxPayment:
+      type: object
+      description: A TaxPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TaxPaymentCreate:
+      type: object
+      description: TaxPayment creation request
+      properties: {}
+    InstallmentPayment:
+      type: object
+      description: A InstallmentPayment resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    InstallmentPaymentCreate:
+      type: object
+      description: InstallmentPayment creation request
+      properties: {}
+    BoletoLog:
+      type: object
+      description: A BoletoLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BoletoLogCreate:
+      type: object
+      description: BoletoLog creation request
+      properties: {}
+    PixChargeback:
+      type: object
+      description: A PixChargeback resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PixChargebackCreate:
+      type: object
+      description: PixChargeback creation request
+      properties: {}
+    PixRefund:
+      type: object
+      description: A PixRefund resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    PixRefundCreate:
+      type: object
+      description: PixRefund creation request
+      properties: {}
+    CreditNote:
+      type: object
+      description: A CreditNote resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CreditNoteCreate:
+      type: object
+      description: CreditNote creation request
+      properties: {}
+    AccountHolder:
+      type: object
+      description: A AccountHolder resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    AccountHolderCreate:
+      type: object
+      description: AccountHolder creation request
+      properties: {}
+    AccountAccess:
+      type: object
+      description: A AccountAccess resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    AccountAccessCreate:
+      type: object
+      description: AccountAccess creation request
+      properties: {}
+    CorporateStatus:
+      type: object
+      description: A CorporateStatus resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateStatusCreate:
+      type: object
+      description: CorporateStatus creation request
+      properties: {}
+    CorporateLog:
+      type: object
+      description: A CorporateLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    CorporateLogCreate:
+      type: object
+      description: CorporateLog creation request
+      properties: {}
+    TedLog:
+      type: object
+      description: A TedLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TedLogCreate:
+      type: object
+      description: TedLog creation request
+      properties: {}
+    DictLog:
+      type: object
+      description: A DictLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    DictLogCreate:
+      type: object
+      description: DictLog creation request
+      properties: {}
+    KeyLog:
+      type: object
+      description: A KeyLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    KeyLogCreate:
+      type: object
+      description: KeyLog creation request
+      properties: {}
+    BoletoRefund:
+      type: object
+      description: A BoletoRefund resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    BoletoRefundCreate:
+      type: object
+      description: BoletoRefund creation request
+      properties: {}
+    SplitRecipient:
+      type: object
+      description: A SplitRecipient resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    SplitRecipientCreate:
+      type: object
+      description: SplitRecipient creation request
+      properties: {}
+    SplitLog:
+      type: object
+      description: A SplitLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    SplitLogCreate:
+      type: object
+      description: SplitLog creation request
+      properties: {}
+    WebhookLog:
+      type: object
+      description: A WebhookLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    WebhookLogCreate:
+      type: object
+      description: WebhookLog creation request
+      properties: {}
+    EventLog:
+      type: object
+      description: A EventLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    EventLogCreate:
+      type: object
+      description: EventLog creation request
+      properties: {}
+    Template:
+      type: object
+      description: A Template resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TemplateCreate:
+      type: object
+      description: Template creation request
+      properties: {}
+    TemplateLog:
+      type: object
+      description: A TemplateLog resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    TemplateLogCreate:
+      type: object
+      description: TemplateLog creation request
+      properties: {}
+    Refund:
+      type: object
+      description: A Refund resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    RefundCreate:
+      type: object
+      description: Refund creation request
+      properties: {}
+    Reversal:
+      type: object
+      description: A Reversal resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    ReversalCreate:
+      type: object
+      description: Reversal creation request
+      properties: {}
+    Fee:
+      type: object
+      description: A Fee resource
+      properties:
+        id:
+          type: string
+          description: Unique ID
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - id
+      - created
+    FeeCreate:
+      type: object
+      description: Fee creation request
+      properties: {}

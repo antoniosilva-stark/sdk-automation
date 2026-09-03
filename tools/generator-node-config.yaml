@@ -1,0 +1,16 @@
+generatorName: typescript-axios
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-node-temp
+templateDir: templates/nodejs-axios
+packageName: "@starkbank/sdk-node"
+packageVersion: 0.3.0
+gitUserId: "starkbank"
+gitRepoId: "sdk-node"
+gitHost: "github.com"
+additionalProperties:
+  npmName: "@starkbank/sdk-node"
+  npmVersion: "0.3.0"
+  npmRepository: "https://registry.npmjs.org"
+  withSeparateModelsAndApi: true
+  apiPackage: api
+  modelPackage: models

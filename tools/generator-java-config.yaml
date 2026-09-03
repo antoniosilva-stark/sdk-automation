@@ -1,0 +1,9 @@
+generatorName: java
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-java-temp
+packageName: com.starkbank.sdk
+packageVersion: 0.3.0
+additionalProperties:
+  groupId: "com.starkbank"
+  artifactId: "sdk-java"
+  artifactVersion: "0.3.0"

@@ -1,0 +1,10 @@
+generatorName: csharp-netcore
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-dotnet-temp
+packageName: StarkBank.SDK
+packageVersion: 0.3.0
+additionalProperties:
+  packageTitle: "Stark Bank SDK"
+  packageId: "StarkBank.SDK"
+  packageVersion: "0.3.0"
+  targetFramework: "net6.0"

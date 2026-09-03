@@ -1,0 +1,38 @@
+{
+  "name": "{{npmName}}",
+  "version": "{{npmVersion}}",
+  "description": "Stark Bank SDK for Node.js — Auto-generated from OpenAPI spec",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://{{gitHost}}/{{gitUserId}}/{{gitRepoId}}.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "stark-bank",
+    "sdk",
+    "api",
+    "client"
+  ],
+  "author": "Stark Bank",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }{{#npmRepository}},
+  "publishConfig": {
+    "registry": "{{npmRepository}}"
+  }{{/npmRepository}}
+}

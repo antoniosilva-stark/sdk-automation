@@ -1,0 +1,9 @@
+generatorName: php
+inputSpec: apis/spec-v2.openapi.yaml
+outputDir: generated/sdk-php-temp
+packageName: starkbank/sdk
+packageVersion: 0.3.0
+additionalProperties:
+  composerPackageName: "starkbank/sdk"
+  composerVendorName: "starkbank"
+  invokerPackage: "StarkBank\\SDK"
