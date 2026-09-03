@@ -1,0 +1,139 @@
+name: SDK Sync — SplitProfile Pilot (Java)
+
+# Manual trigger: open-pr pushes to a real external repo (starkbank/sdk-java).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pyyaml openapi-spec-validator && npm ci
+
+      - name: Validate OpenAPI spec
+        run: openapi-spec-validator apis/spec-v2.openapi.yaml
+
+      - name: Detect breaking changes
+        run: python3 tools/breaking-change-detector.py
+
+  generate:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - run: npm ci
+
+      - name: Generate SplitProfile.java (piloto, escopo reduzido)
+        run: |
+          npx openapi-generator-cli generate \
+            -i apis/spec-v2.openapi.yaml \
+            -g java \
+            --template-dir templates/java \
+            --model-package com.starkbank \
+            --api-package com.starkbank \
+            --invoker-package com.starkbank \
+            -o generated/sdk-java-temp \
+            --global-property models=SplitProfile,supportingFiles=false,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: split-profile-java
+          path: generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java
+
+  test:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: split-profile-java
+          path: generated/sdk-java-temp/src/main/java/com/starkbank
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - run: npm ci
+      - run: npm test
+
+  open-pr:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: split-profile-java
+          path: generated/sdk-java-temp/src/main/java/com/starkbank
+
+      - name: Check SDK_REPOS_TOKEN is configured
+        id: check-token
+        run: |
+          if [ -z "${{ secrets.SDK_REPOS_TOKEN }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip — SDK_REPOS_TOKEN not configured
+        if: steps.check-token.outputs.configured == 'false'
+        run: |
+          echo "SDK_REPOS_TOKEN não está configurado neste repo — pulando abertura de PR."
+          echo "Ver docs/SECRETS_MANAGEMENT.md para como criar e cadastrar o token."
+
+      - name: Checkout starkbank/sdk-java
+        if: steps.check-token.outputs.configured == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: starkbank/sdk-java
+          token: ${{ secrets.SDK_REPOS_TOKEN }}
+          path: sdk-java-target
+
+      - name: Commit SplitProfile and push branch
+        if: steps.check-token.outputs.configured == 'true'
+        working-directory: sdk-java-target
+        run: |
+          cp ../generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java src/main/java/com/starkbank/SplitProfile.java
+          git config user.name "sdk-automation-bot"
+          git config user.email "sdk-automation@starkbank.com"
+          git checkout -b sdk-automation/split-profile-pilot
+          git add src/main/java/com/starkbank/SplitProfile.java
+          git commit -m "feat: add SplitProfile resource (pilot, Card 944 sdk-automation)"
+          git push origin sdk-automation/split-profile-pilot --force-with-lease
+
+      - name: Open PR on starkbank/sdk-java
+        if: steps.check-token.outputs.configured == 'true'
+        working-directory: sdk-java-target
+        env:
+          GH_TOKEN: ${{ secrets.SDK_REPOS_TOKEN }}
+        run: |
+          gh pr create \
+            --title "feat: add SplitProfile resource (pilot, Card 944 sdk-automation)" \
+            --body "Gerado automaticamente pelo sdk-automation (Card 944) a partir de apis/spec-v2.openapi.yaml. Escopo reduzido: sem overloads de conveniência, sem sub-recurso Log. **Revisar antes de merge** — Rest.put(...) é assumido, não verificado contra o starkcore real." \
+            --base main \
+            --head sdk-automation/split-profile-pilot \
+            || echo "PR já existe para essa branch — pulando criação."

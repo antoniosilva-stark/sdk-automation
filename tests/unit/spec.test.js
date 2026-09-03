@@ -23,6 +23,7 @@ describe('OpenAPI Specification Tests', () => {
       for (const path in spec.paths) {
         const pathItem = spec.paths[path];
         if (pathItem.post?.operationId) operationIds++;
+        if (pathItem.put?.operationId) operationIds++;
         if (pathItem.get?.operationId) operationIds++;
       }
       expect(operationIds).toBe(180);

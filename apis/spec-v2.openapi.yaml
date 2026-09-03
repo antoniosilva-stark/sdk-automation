@@ -2453,11 +2453,11 @@ paths:
         '500':
           description: Server error
   /split_profile:
-    post:
-      operationId: createSplitProfile
+    put:
+      operationId: putSplitProfile
       tags:
       - SplitProfiles
-      summary: Create split_profiles
+      summary: Create or update split_profiles
       requestBody:
         required: true
         content:
@@ -5702,22 +5702,62 @@ components:
       properties: {}
     SplitProfile:
       type: object
-      description: A SplitProfile resource
+      description: |
+        When you create a Split, the entity SplitProfile will be automatically created.
+        If you haven't created a Split yet, you can use put to create your SplitProfile.
       properties:
         id:
           type: string
-          description: Unique ID
+          description: Unique ID returned when the SplitProfile is created
+        interval:
+          type: string
+          enum: [day, week, month]
+          description: Frequency of transfer
+        delay:
+          type: integer
+          description: "How long the amount will stay at the workspace, in milliseconds. Example: 604800"
+        tags:
+          type: array
+          items:
+            type: string
+          description: List of strings for tagging
+        status:
+          type: string
+          description: "Current SplitProfile status. Example: 'created'"
         created:
           type: string
           format: date-time
           description: Creation timestamp
+        updated:
+          type: string
+          format: date-time
+          description: Latest update timestamp
       required:
       - id
+      - interval
+      - delay
+      - status
       - created
+      - updated
     SplitProfileCreate:
       type: object
-      description: SplitProfile creation request
-      properties: {}
+      description: SplitProfile creation/update request (put — create-or-update)
+      properties:
+        interval:
+          type: string
+          enum: [day, week, month]
+          description: Frequency of transfer
+        delay:
+          type: integer
+          description: "How long the amount will stay at the workspace, in milliseconds. Example: 604800"
+        tags:
+          type: array
+          items:
+            type: string
+          description: List of strings for tagging
+      required:
+      - interval
+      - delay
     DarfPayment:
       type: object
       description: A DarfPayment resource

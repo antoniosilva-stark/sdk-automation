@@ -113,10 +113,10 @@ npm run check-breaking-changes
 # Expected: "✅ No breaking changes detected" (on first run)
 ```
 
-### 5. Install OpenAPI Generator (Semana 3+)
+### 5. Install OpenAPI Generator (Entrega 3+)
 
 ```bash
-# Only needed for SDK generation (Semana 3)
+# Only needed for SDK generation (Entrega 3)
 npm install -g @openapitools/openapi-generator-cli@7.0.1
 
 # Verify installation
@@ -195,10 +195,10 @@ All SDKs updated ✅
 
 ## Timeline
 
-- **Semana 1**: Setup, governance, spec v0.1 (3 resources)
-- **Semana 2**: Spec expansion (60 resources), BC detector
-- **Semana 3**: Generator setup, templates, Node SDK
-- **Semana 4**: CI/CD workflow, Card 0006 pilot, publish
+- **Entrega 1**: Setup, governance, spec v0.1 (3 resources)
+- **Entrega 2**: Spec expansion (60 resources), BC detector
+- **Entrega 3**: Generator setup, templates, Node SDK
+- **Entrega 4**: CI/CD workflow, Card 0006 pilot, publish
 
 See MASTER_CONTEXT.md for detailed timeline.
 
@@ -211,5 +211,5 @@ See MASTER_CONTEXT.md for detailed timeline.
 See governance.md for escalation policy.
 
 ---
-**Status**: POC in progress (Semana 1)  
+**Status**: POC in progress (Entrega 1)  
 **Last updated**: 2026-08-19
