@@ -1,0 +1,58 @@
+# Contrato público real — referência de paridade para geração Java
+# source:    ~/workspace/sdk-java/src/main/java/com/starkbank/Invoice.java (1161 linhas)
+# extracted: 2026-09-09
+# uso:       assert-generated.sh compara o gerado contra este contrato e reporta o gap.
+#            Linhas `signature` ausentes no gerado são gap, não necessariamente erro —
+#            o gap só é erro quando a spec declara a operação correspondente.
+
+declaration public final class Invoice extends Resource
+field       static ClassData data = new ClassData(Invoice.class, "Invoice")
+
+constructor public Invoice(Number amount, String due, String taxId, ...)
+constructor public Invoice(Map<String, Object> data) throws Exception
+constructor public Invoice()
+
+signature public static List<Invoice> create(List<?> invoices)
+signature public static List<Invoice> create(List<?> invoices, User user)
+signature public static Invoice get(String id)
+signature public static Invoice get(String id, User user)
+signature public static Generator<Invoice> query()
+signature public static Generator<Invoice> query(Map<String, Object> params)
+signature public static Generator<Invoice> query(User user)
+signature public static Generator<Invoice> query(Map<String, Object> params, User user)
+signature public static Page page()
+signature public static Page page(Map<String, Object> params)
+signature public static Page page(User user)
+signature public static Page page(Map<String, Object> params, User user)
+signature public static Invoice update(String id, Map<String, Object> patchData)
+signature public static Invoice update(String id, Map<String, Object> patchData, User user)
+signature public static InputStream pdf(String id)
+signature public static InputStream pdf(String id, User user)
+signature public static InputStream qrcode(String id)
+signature public static InputStream qrcode(String id, User user)
+signature public static Payment payment(String id)
+signature public static Payment payment(String id, User user)
+
+inner public final static class Rule
+inner public final static class Discount
+inner public final static class Description
+inner public final static class Payment
+inner public final static class Page
+inner public final static class Log
+
+# Sub-recurso Log expõe o próprio conjunto
+signature public static Log Log.get(String id)
+signature public static Log Log.get(String id, User user)
+signature public static Generator<Log> Log.query()
+signature public static Generator<Log> Log.query(Map<String, Object> params)
+signature public static Generator<Log> Log.query(User user)
+signature public static Generator<Log> Log.query(Map<String, Object> params, User user)
+signature public static Log.Page Log.page()
+signature public static Log.Page Log.page(Map<String, Object> params)
+signature public static Log.Page Log.page(User user)
+signature public static Log.Page Log.page(Map<String, Object> params, User user)
+
+# --- Gap medido contra a spec atual (2026-09-09) ---
+# spec declara para Invoice: create, get, query
+# contrato exige também:     page, update, pdf, qrcode, payment, Log.*
+# => 20 assinaturas no topo + 10 em Log; spec sustenta 8 (create x2, get x2, query x4)

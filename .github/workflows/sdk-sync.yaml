@@ -122,7 +122,7 @@ jobs:
           git config user.email "sdk-automation@starkbank.com"
           git checkout -b sdk-automation/split-profile-pilot
           git add src/main/java/com/starkbank/SplitProfile.java
-          git commit -m "feat: add SplitProfile resource (pilot, Card 944 sdk-automation)"
+          git commit -m "Add SplitProfile resource (pilot)"
           git push origin sdk-automation/split-profile-pilot --force-with-lease
 
       - name: Open PR on starkbank/sdk-java
@@ -132,7 +132,7 @@ jobs:
           GH_TOKEN: ${{ secrets.SDK_REPOS_TOKEN }}
         run: |
           gh pr create \
-            --title "feat: add SplitProfile resource (pilot, Card 944 sdk-automation)" \
+            --title "Add SplitProfile resource (pilot)" \
             --body "Gerado automaticamente pelo sdk-automation (Card 944) a partir de apis/spec-v2.openapi.yaml. Escopo reduzido: sem overloads de conveniência, sem sub-recurso Log. **Revisar antes de merge** — Rest.put(...) é assumido, não verificado contra o starkcore real." \
             --base main \
             --head sdk-automation/split-profile-pilot \

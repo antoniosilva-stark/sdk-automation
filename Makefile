@@ -1,4 +1,4 @@
-.PHONY: help setup install validate check-bc generate clean
+.PHONY: help setup install validate check-bc generate clean test test-node test-python
 
 # Colors for output
 GREEN := \033[0;32m
@@ -63,10 +63,16 @@ clone-sdk-ref: ## Clone Python SDK v0.28.0 as reference
 # Tests
 # ============================================
 
-test: ## Run all unit tests (Jest)
-	@echo "$(BLUE)Running all unit tests...$(NC)"
-	npm test
+test: test-node test-python ## Run all unit tests (Jest + pytest)
 	@echo "$(GREEN)✅ All tests passed$(NC)"
+
+test-node: ## Run Node unit tests (Jest)
+	@echo "$(BLUE)Running Node tests (Jest)...$(NC)"
+	npm test
+
+test-python: ## Run Python tool tests (pytest)
+	@echo "$(BLUE)Running Python tests (pytest)...$(NC)"
+	python3 -m pytest tests/ -q
 
 test-watch: ## Run tests in watch mode (re-run on file change)
 	@echo "$(BLUE)Running tests in watch mode...$(NC)"

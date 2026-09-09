@@ -1,8 +1,15 @@
 generatorName: java
 inputSpec: apis/spec-v2.openapi.yaml
 outputDir: generated/sdk-java-temp
+modelPackage: com.starkbank
+apiPackage: com.starkbank
+invokerPackage: com.starkbank
 packageName: com.starkbank.sdk
 packageVersion: 0.3.0
+typeMappings:
+  OffsetDateTime: String
+  Date: String
+  URI: String
 additionalProperties:
   groupId: "com.starkbank"
   artifactId: "sdk-java"

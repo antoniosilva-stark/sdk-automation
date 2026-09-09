@@ -3,10 +3,15 @@ package {{package}};
 import com.starkbank.utils.Rest;
 import com.starkbank.utils.Resource;
 import com.starkbank.utils.Generator;
+import com.starkcore.utils.SubResource;
 
-import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+{{#imports}}
+import {{import}};
+{{/imports}}
 
 {{#models}}{{#model}}
 /**
@@ -17,7 +22,6 @@ import java.util.Map;
  * Parameters:
 {{#vars}} * {{name}} [{{{dataType}}}]{{^required}}, optional{{/required}}: {{{description}}}
 {{/vars}} *
- * Assumes Rest.put(...) exists mirroring Rest.post(...) — not verified against starkcore.
  */
 public class {{classname}} extends Resource {
     static ClassData data = new ClassData({{classname}}.class, "{{classname}}");
@@ -25,10 +29,86 @@ public class {{classname}} extends Resource {
 {{#vars}}{{^-first}}    public {{{dataType}}} {{name}};
 {{/-first}}{{/vars}}
 
-    public {{classname}}({{#vars}}{{{dataType}}} {{name}}{{^-last}}, {{/-last}}{{/vars}}) {
-        super(id);
+    public {{classname}}({{#vars}}{{^-first}}{{{dataType}}} {{name}}{{^-last}}, {{/-last}}{{/-first}}{{/vars}}) {
+        super(null);
 {{#vars}}{{^-first}}        this.{{name}} = {{name}};
+{{/-first}}{{/vars}}    }
+
+    @SuppressWarnings("unchecked")
+    public {{classname}}(Map<String, Object> data) throws Exception {
+        super(null);
+        HashMap<String, Object> dataCopy = new HashMap<>(data);
+{{#vars}}{{^-first}}        this.{{name}} = ({{{dataType}}}) dataCopy.remove("{{name}}");
 {{/-first}}{{/vars}}
+        if (!dataCopy.isEmpty()) {
+            throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
+        }
+    }
+
+    public {{classname}}() {
+        super(null);
+    }
+{{#vendorExtensions.x-sdk-create}}
+
+    /**
+     * Create {{classname}}s
+     * <p>
+     * Send a list of {{classname}} objects for creation in the Stark Bank API
+     * <p>
+     * Parameters:
+     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created in the API
+     * <p>
+     * Return:
+     * @return list of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
+        return {{classname}}.create({{classVarName}}s, null);
+    }
+
+    /**
+     * Create {{classname}}s
+     * <p>
+     * Send a list of {{classname}} objects for creation in the Stark Bank API
+     * <p>
+     * Parameters:
+     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created in the API
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
+     * <p>
+     * Return:
+     * @return list of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    @SuppressWarnings("unchecked")
+    public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
+        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
+        for (Object {{classVarName}} : {{classVarName}}s) {
+            if ({{classVarName}} instanceof Map)
+                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
+            else if ({{classVarName}} instanceof {{classname}})
+                {{classVarName}}List.add(({{classname}}) {{classVarName}});
+            else
+                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+        }
+        return Rest.post(data, {{classVarName}}List, user);
+    }
+{{/vendorExtensions.x-sdk-create}}
+{{#vendorExtensions.x-sdk-put}}
+
+    /**
+     * Create or update {{classname}}s
+     * <p>
+     * Send a list of {{classname}} objects for creation/update in the Stark Bank API
+     * <p>
+     * Parameters:
+     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created/updated in the API
+     * <p>
+     * Return:
+     * @return list of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    public static List<{{classname}}> put(List<?> {{classVarName}}s) throws Exception {
+        return {{classname}}.put({{classVarName}}s, null);
     }
 
     /**
@@ -37,19 +117,49 @@ public class {{classname}} extends Resource {
      * Send a list of {{classname}} objects for creation/update in the Stark Bank API
      * <p>
      * Parameters:
-     * @param profiles [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created/updated in the API
+     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created/updated in the API
      * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
      * <p>
      * Return:
      * @return list of {{classname}} objects with updated attributes
      * @throws Exception error in the request
      */
-    public static List<{{classname}}> put(List<?> profiles, User user) throws Exception {
-        return Rest.put(data, profiles, user);
+    @SuppressWarnings("unchecked")
+    public static List<{{classname}}> put(List<?> {{classVarName}}s, User user) throws Exception {
+        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
+        for (Object {{classVarName}} : {{classVarName}}s) {
+            if ({{classVarName}} instanceof Map)
+                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
+            else if ({{classVarName}} instanceof {{classname}})
+                {{classVarName}}List.add(({{classname}}) {{classVarName}});
+            else
+                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+        }
+        return Rest.put(data, {{classVarName}}List, user);
+    }
+{{/vendorExtensions.x-sdk-put}}
+{{#vendorExtensions.x-sdk-get}}
+
+    /**
+     * Retrieve a specific {{classname}}
+     * <p>
+     * Receive a single {{classname}} object previously created in the Stark Bank API by passing its id
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id. ex: "5656565656565656"
+     * <p>
+     * Return:
+     * @return {{classname}} object with updated attributes
+     * @throws Exception error in the request
+     */
+    public static {{classname}} get(String id) throws Exception {
+        return {{classname}}.get(id, null);
     }
 
     /**
      * Retrieve a specific {{classname}}
+     * <p>
+     * Receive a single {{classname}} object previously created in the Stark Bank API by passing its id
      * <p>
      * Parameters:
      * @param id [string]: object unique id. ex: "5656565656565656"
@@ -62,9 +172,62 @@ public class {{classname}} extends Resource {
     public static {{classname}} get(String id, User user) throws Exception {
         return Rest.getId(data, id, user);
     }
+{{/vendorExtensions.x-sdk-get}}
+{{#vendorExtensions.x-sdk-query}}
 
     /**
      * Retrieve {{classname}}s
+     * <p>
+     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
+     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
+     * <p>
+     * Return:
+     * @return generator of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    public static Generator<{{classname}}> query() throws Exception {
+        return {{classname}}.query(new HashMap<>(), null);
+    }
+
+    /**
+     * Retrieve {{classname}}s
+     * <p>
+     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
+     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
+     * <p>
+     * Parameters:
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
+     * <p>
+     * Return:
+     * @return generator of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    public static Generator<{{classname}}> query(User user) throws Exception {
+        return {{classname}}.query(new HashMap<>(), user);
+    }
+
+    /**
+     * Retrieve {{classname}}s
+     * <p>
+     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
+     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
+     * <p>
+     * Parameters:
+     * @param params map of parameters for the query
+     * <p>
+     * Return:
+     * @return generator of {{classname}} objects with updated attributes
+     * @throws Exception error in the request
+     */
+    public static Generator<{{classname}}> query(Map<String, Object> params) throws Exception {
+        return {{classname}}.query(params, null);
+    }
+
+    /**
+     * Retrieve {{classname}}s
+     * <p>
+     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
+     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
      * <p>
      * Parameters:
      * @param params map of parameters for the query
@@ -77,5 +240,88 @@ public class {{classname}} extends Resource {
     public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
         return Rest.getStream(data, params, user);
     }
+{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-page}}
+
+    public final static class Page {
+        public List<{{classname}}> {{classVarName}}s;
+        public String cursor;
+
+        public Page(List<{{classname}}> {{classVarName}}s, String cursor) {
+            this.{{classVarName}}s = {{classVarName}}s;
+            this.cursor = cursor;
+        }
+    }
+
+    /**
+     * Retrieve paged {{classname}}s
+     * <p>
+     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
+     * Use this function instead of query if you want to manually page your requests.
+     * <p>
+     * Return:
+     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
+     * @throws Exception error in the request
+     */
+    public static Page page() throws Exception {
+        return {{classname}}.page(new HashMap<>(), null);
+    }
+
+    /**
+     * Retrieve paged {{classname}}s
+     * <p>
+     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
+     * Use this function instead of query if you want to manually page your requests.
+     * <p>
+     * Parameters:
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
+     * <p>
+     * Return:
+     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
+     * @throws Exception error in the request
+     */
+    public static Page page(User user) throws Exception {
+        return {{classname}}.page(new HashMap<>(), user);
+    }
+
+    /**
+     * Retrieve paged {{classname}}s
+     * <p>
+     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
+     * Use this function instead of query if you want to manually page your requests.
+     * <p>
+     * Parameters:
+     * @param params parameters of the query
+     * <p>
+     * Return:
+     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
+     * @throws Exception error in the request
+     */
+    public static Page page(Map<String, Object> params) throws Exception {
+        return {{classname}}.page(params, null);
+    }
+
+    /**
+     * Retrieve paged {{classname}}s
+     * <p>
+     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
+     * Use this function instead of query if you want to manually page your requests.
+     * <p>
+     * Parameters:
+     * @param params parameters of the query
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
+     * <p>
+     * Return:
+     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
+     * @throws Exception error in the request
+     */
+    public static Page page(Map<String, Object> params, User user) throws Exception {
+        com.starkcore.utils.Page page = Rest.getPage(data, params, user);
+        List<{{classname}}> {{classVarName}}s = new ArrayList<>();
+        for (SubResource {{classVarName}}: page.entities)
+            {{classVarName}}s.add(({{classname}}) {{classVarName}});
+        return new Page({{classVarName}}s, page.cursor);
+    }
+{{/vendorExtensions.x-sdk-page}}
 }
 {{/model}}{{/models}}

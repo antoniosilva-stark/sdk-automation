@@ -123,7 +123,7 @@ jobs:
           git config user.email "sdk-automation@starkbank.com"
           git checkout -b sdk-automation/test-splitprofile
           git add src/main/java/com/starkbank/SplitProfile.java
-          git commit -m "test: add SplitProfile for validation (sdk-automation test)"
+          git commit -m "Add SplitProfile for validation (test)"
           git push origin sdk-automation/test-splitprofile --force-with-lease
 
       - name: Open PR on antoniosilva-stark/sdk-node (TEST REPO)
@@ -133,7 +133,7 @@ jobs:
           GH_TOKEN: ${{ secrets.SDK_REPOS_TOKEN_TEST }}
         run: |
           gh pr create \
-            --title "test: add SplitProfile (sdk-automation validation)" \
+            --title "Add SplitProfile (validation)" \
             --body "🧪 Teste de validação do workflow sdk-automation.\n\nEste é um teste para validar que o pipeline consegue abrir PRs automaticamente. Após validação, fechar/deletar esta PR.\n\n**Gerado automaticamente** pelo workflow sdk-sync-test.yaml" \
             --base main \
             --head sdk-automation/test-splitprofile \

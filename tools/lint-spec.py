@@ -1,0 +1,207 @@
+import re
+import sys
+import yaml
+import argparse
+from pathlib import Path
+from dataclasses import dataclass
+
+SPEC_FILE = "apis/spec-v2.openapi.yaml"
+CREATE_SUFFIX = "Create"
+
+CODE_SCAFFOLDING = "SCAFFOLDING"
+CODE_UNDECLARED = "UNDECLARED"
+
+MIN_READ_PROPS = 3
+MIN_CREATE_PROPS = 1
+
+_SCHEMA_LINE = re.compile(r"^    ([A-Za-z][A-Za-z0-9]*):", re.M)
+
+
+@dataclass
+class Issue:
+    file: str
+    line: int
+    col: int
+    code: str
+    message: str
+
+
+@dataclass
+class ResourceReport:
+    name: str
+    line: int
+    readProps: int
+    createProps: int
+    subObjects: int
+    reasons: list[str]
+
+    @property
+    def generatable(self) -> bool:
+        return not self.reasons
+
+
+def emit(text: str) -> None:
+    sys.stdout.write(f"{text}\n")
+
+
+def loadYaml(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def resolveRef(ref: str, specPath: Path) -> dict:
+    if "#" not in ref:
+        raise ValueError(f"$ref sem ponteiro não é suportado: {ref}")
+
+    filePart, pointer = ref.split("#", 1)
+    target = (specPath.parent / filePart).resolve()
+    if not target.exists():
+        raise FileNotFoundError(f"$ref aponta para arquivo inexistente: {target}")
+
+    node = loadYaml(target)
+    for segment in [s for s in pointer.split("/") if s]:
+        if segment not in node:
+            raise KeyError(f"ponteiro {pointer} quebrado em {segment!r} dentro de {target}")
+        node = node[segment]
+    return node
+
+
+def schemaProps(schema: dict | None, specPath: Path) -> dict:
+    if not isinstance(schema, dict):
+        return {}
+    if "$ref" in schema:
+        return schemaProps(resolveRef(schema["$ref"], specPath), specPath)
+    return schema.get("properties") or {}
+
+
+def countSubObjects(props: dict) -> int:
+    total = 0
+    for definition in props.values():
+        if not isinstance(definition, dict):
+            continue
+        if definition.get("type") == "object":
+            total += 1
+            continue
+        items = definition.get("items")
+        if definition.get("type") == "array" and isinstance(items, dict) and items.get("type") == "object":
+            total += 1
+    return total
+
+
+def schemaLines(specPath: Path) -> dict[str, int]:
+    source = specPath.read_text(encoding="utf-8")
+    lines: dict[str, int] = {}
+    for match in _SCHEMA_LINE.finditer(source):
+        lines.setdefault(match.group(1), source.count("\n", 0, match.start()) + 1)
+    return lines
+
+
+def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, int]) -> ResourceReport:
+    readProps = schemaProps(schemas.get(name), specPath)
+    createProps = schemaProps(schemas.get(name + CREATE_SUFFIX), specPath)
+
+    reasons: list[str] = []
+    if len(readProps) < MIN_READ_PROPS:
+        reasons.append(f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})")
+    if len(createProps) < MIN_CREATE_PROPS:
+        reasons.append(f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS})")
+
+    return ResourceReport(
+        name=name,
+        line=lines.get(name, 0),
+        readProps=len(readProps),
+        createProps=len(createProps),
+        subObjects=countSubObjects(readProps),
+        reasons=reasons,
+    )
+
+
+def resourceNames(schemas: dict) -> list[str]:
+    return sorted(n for n in schemas if not n.endswith(CREATE_SUFFIX))
+
+
+def reportInventory(reports: list[ResourceReport]) -> None:
+    generatable = [r for r in reports if r.generatable]
+    scaffolding = [r for r in reports if not r.generatable]
+
+    emit(f"[INFO] {len(reports)} recurso(s) declarado(s) na spec")
+    emit("")
+    emit(f"[OK] gerável ({len(generatable)}):")
+    for report in generatable:
+        subObjects = f", {report.subObjects} sub-objeto(s)" if report.subObjects else ""
+        emit(f"  {report.name} — {report.readProps} props / {report.createProps} create{subObjects}")
+
+    emit("")
+    emit(f"[WARN] scaffolding ({len(scaffolding)}):")
+    for report in scaffolding[:5]:
+        emit(f"  {report.name} — {report.reasons[0]}")
+    if len(scaffolding) > 5:
+        emit(f"  ... e mais {len(scaffolding) - 5}")
+
+
+def requiredIssues(reports: list[ResourceReport], required: set[str], specPath: Path) -> list[Issue]:
+    declared = {r.name for r in reports}
+    issues = [
+        Issue(str(specPath), 0, 0, CODE_UNDECLARED, f"recurso exigido não está na spec: {name}")
+        for name in sorted(required - declared)
+    ]
+    for report in reports:
+        if report.name not in required or report.generatable:
+            continue
+        for reason in report.reasons:
+            issues.append(
+                Issue(str(specPath), report.line, 0, CODE_SCAFFOLDING, f"{report.name}: {reason}")
+            )
+    return issues
+
+
+def reportIssues(issues: list[Issue]) -> None:
+    emit("")
+    for issue in sorted(issues, key=lambda i: (i.line, i.code)):
+        emit(f"[ERROR] {issue.file}:{issue.line} {issue.code} {issue.message}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Classifica recursos da spec como geráveis ou scaffolding")
+    parser.add_argument("--spec", default=SPEC_FILE, help=f"caminho da spec (padrão: {SPEC_FILE})")
+    parser.add_argument("--require", default="", help="recursos que devem ser geráveis, separados por vírgula")
+    parser.add_argument("--quiet", action="store_true", help="omite o inventário")
+    args = parser.parse_args()
+
+    specPath = Path(args.spec)
+    if not specPath.exists():
+        emit(f"[ERROR] spec não encontrada: {specPath}")
+        return 2
+
+    spec = loadYaml(specPath)
+    schemas = (spec.get("components") or {}).get("schemas") or {}
+    if not schemas:
+        emit(f"[ERROR] nenhum components.schemas em {specPath}")
+        return 2
+
+    lines = schemaLines(specPath)
+    reports = [inspectResource(name, schemas, specPath, lines) for name in resourceNames(schemas)]
+
+    if not args.quiet:
+        reportInventory(reports)
+
+    required = {name.strip() for name in args.require.split(",") if name.strip()}
+    if not required:
+        emit("")
+        emit("[INFO] modo inventário (sem --require) — não reprova")
+        return 0
+
+    issues = requiredIssues(reports, required, specPath)
+    if issues:
+        reportIssues(issues)
+        emit("")
+        emit(f"[ERROR] {len(issues)} problema(s) bloqueando a geração")
+        return 1
+
+    emit("")
+    emit(f"[OK] os {len(required)} recurso(s) exigido(s) são geráveis")
+    emit("[INFO] gerável significa schema não-vazio, não paridade com o SDK real")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

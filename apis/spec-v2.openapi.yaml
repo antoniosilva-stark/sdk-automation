@@ -5239,14 +5239,23 @@ paths:
 components:
   schemas:
     Transaction:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-query: true
       $ref: ./schemas/transaction.yaml#/components/schemas/Transaction
     TransactionCreate:
       $ref: ./schemas/transaction.yaml#/components/schemas/TransactionCreate
     Invoice:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-query: true
       $ref: ./schemas/invoice.yaml#/components/schemas/Invoice
     InvoiceCreate:
       $ref: ./schemas/invoice.yaml#/components/schemas/InvoiceCreate
     Transfer:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-query: true
       $ref: ./schemas/transfer.yaml#/components/schemas/Transfer
     TransferCreate:
       $ref: ./schemas/transfer.yaml#/components/schemas/TransferCreate
@@ -5702,6 +5711,9 @@ components:
       properties: {}
     SplitProfile:
       type: object
+      x-sdk-put: true
+      x-sdk-get: true
+      x-sdk-query: true
       description: |
         When you create a Split, the entity SplitProfile will be automatically created.
         If you haven't created a Split yet, you can use put to create your SplitProfile.

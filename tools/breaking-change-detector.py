@@ -1,52 +1,68 @@
-#!/usr/bin/env python3
 """Breaking Change Detector — detects breaking changes between spec versions."""
-import json
-import subprocess
+
 import sys
+import json
 import yaml
+import subprocess
+from pathlib import Path
 
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
 
-def load_spec(ref=None):
+
+def emit(text: str) -> None:
+    sys.stdout.write(f"{text}\n")
+
+
+def loadSpec(ref: str | None = None) -> dict | None:
+    if ref is None:
+        return yaml.safe_load(Path(SPEC_FILE).read_text(encoding="utf-8"))
+
     try:
-        if ref:
-            result = subprocess.run(["git", "show", f"{ref}:{SPEC_FILE}"], capture_output=True, text=True, check=True)
-            return yaml.safe_load(result.stdout)
-        else:
-            with open(SPEC_FILE, "r") as f:
-                return yaml.safe_load(f)
-    except Exception as e:
-        if ref == "HEAD":
-            print("ℹ️  No previous spec found (first commit)")
-            return None
-        raise
+        result = subprocess.run(
+            ["git", "show", f"{ref}:{SPEC_FILE}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        emit("[INFO] nenhuma spec anterior encontrada (primeiro commit)")
+        return None
 
-def detect_breaking_changes(current, previous):
-    changes = []
+    return yaml.safe_load(result.stdout)
+
+
+def detectBreakingChanges(current: dict, previous: dict | None) -> list[dict]:
     if not previous:
-        return changes
+        return []
 
-    prev_paths = previous.get("paths", {})
-    curr_paths = current.get("paths", {})
+    prevPaths = previous.get("paths") or {}
+    currPaths = current.get("paths") or {}
 
-    for path in set(prev_paths.keys()) - set(curr_paths.keys()):
-        changes.append({"type": "removed_path", "severity": "MAJOR", "path": path})
+    return [
+        {"type": "removed_path", "severity": "MAJOR", "path": path}
+        for path in sorted(set(prevPaths) - set(currPaths))
+    ]
 
-    return changes
 
-def main():
-    print("🔍 Detecting breaking changes...")
-    previous = load_spec("HEAD")
-    current = load_spec(None)
-    changes = detect_breaking_changes(current, previous)
+def main() -> int:
+    if not Path(SPEC_FILE).exists():
+        emit(f"[ERROR] spec não encontrada: {SPEC_FILE}")
+        return 2
+
+    emit("[INFO] verificando breaking changes...")
+    previous = loadSpec("HEAD")
+    current = loadSpec()
+    changes = detectBreakingChanges(current, previous)
 
     if changes:
-        print(f"\n❌ Breaking changes detected ({len(changes)}):")
-        print(json.dumps(changes, indent=2))
-        sys.exit(1)
+        emit("")
+        emit(f"[ERROR] {len(changes)} breaking change(s) detectada(s):")
+        emit(json.dumps(changes, indent=2))
+        return 1
 
-    print("✅ No breaking changes detected")
-    sys.exit(0)
+    emit("[OK] nenhuma breaking change detectada")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

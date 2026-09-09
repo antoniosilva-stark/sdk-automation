@@ -6,3 +6,6 @@ openapi-spec-validator>=0.7.0
 
 # YAML parsing
 pyyaml>=6.0
+
+# Test runner for tools/ (lint-spec, assert-generated, breaking-change-detector)
+pytest>=8.0

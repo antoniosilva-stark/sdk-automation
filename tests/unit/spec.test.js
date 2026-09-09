@@ -87,7 +87,7 @@ describe('OpenAPI Specification Tests', () => {
           cwd: path.join(__dirname, '../../'),
           encoding: 'utf8'
         });
-        expect(output).toMatch(/✅ No breaking changes detected/);
+        expect(output).toMatch(/\[OK\] nenhuma breaking change detectada/);
       } catch (error) {
         throw new Error(`Breaking change detector failed: ${error.message}`);
       }
