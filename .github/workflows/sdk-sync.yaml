@@ -8,24 +8,12 @@ on:
         required: true
         default: SplitProfile
       language:
-        description: 'Linguagem do SDK'
+        description: 'Linguagem do SDK — define o repositório alvo'
         type: choice
-        options: [java]
+        options: [java, node]
         default: java
-      owner:
-        description: 'Owner do repositório alvo'
-        required: true
-        default: antoniosilva-stark
-      repo:
-        description: 'Repositório alvo'
-        required: true
-        default: sdk-java
-      base:
-        description: 'Branch base da PR'
-        required: true
-        default: master
 
-run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ inputs.owner }}/${{ inputs.repo }}"
+run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
 jobs:
   validate:
@@ -77,6 +65,13 @@ jobs:
       - run: pip install -r requirements.txt
       - run: npm ci
 
+      - name: Resolve target repository
+        id: target
+        run: |
+          REPO=$(python3 tools/place-generated.py --lang "${{ inputs.language }}" --repo)
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "Alvo: ${{ github.repository_owner }}/$REPO"
+
       - name: Require GitHub App credentials
         run: |
           if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
@@ -90,18 +85,29 @@ jobs:
         with:
           app-id: ${{ secrets.SDK_APP_ID }}
           private-key: ${{ secrets.SDK_APP_PRIVATE_KEY }}
-          owner: ${{ inputs.owner }}
-          repositories: ${{ inputs.repo }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.target.outputs.repo }}
           permission-contents: write
           permission-pull-requests: write
 
       - name: Checkout target SDK
         uses: actions/checkout@v7
         with:
-          repository: ${{ inputs.owner }}/${{ inputs.repo }}
-          ref: ${{ inputs.base }}
+          repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
           token: ${{ steps.app-token.outputs.token }}
           path: target
+
+      - name: Resolve base branch
+        id: base
+        working-directory: target
+        run: |
+          BASE=$(git rev-parse --abbrev-ref HEAD)
+          if [ "$BASE" = "HEAD" ]; then
+            echo "HEAD desanexado — branch default do alvo indeterminada."
+            exit 1
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "Base: $BASE (branch default de ${{ steps.target.outputs.repo }})"
 
       - name: Prepare working branch
         id: branch
@@ -154,15 +160,15 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BRANCH="${{ steps.branch.outputs.branch }}"
-          TARGET="${{ inputs.owner }}/${{ inputs.repo }}"
+          TARGET="${{ github.repository_owner }}/${{ steps.target.outputs.repo }}"
           if [ "$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
             echo "PR ja aberta para $BRANCH — o push atualizou."
             exit 0
           fi
 
           gh pr create \
-            --repo "${{ inputs.owner }}/${{ inputs.repo }}" \
+            --repo "$TARGET" \
             --title "Add ${{ inputs.resource }} resource" \
             --body "${{ inputs.resource }} gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
-            --base "${{ inputs.base }}" \
+            --base "${{ steps.base.outputs.base }}" \
             --head "${{ steps.branch.outputs.branch }}"

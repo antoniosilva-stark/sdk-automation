@@ -14,6 +14,11 @@ LAYOUTS = {
     ],
 }
 
+TARGETS = {
+    "java": "sdk-java",
+    "node": "sdk-node",
+}
+
 
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
@@ -49,12 +54,25 @@ def placeFiles(generatedDir: Path, targetDir: Path, pairs: list[tuple[str, str]]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Move a saída do gerador para o layout do SDK alvo")
-    parser.add_argument("resource", help="nome do recurso, ex: SplitProfile")
+    parser.add_argument("resource", nargs="?", help="nome do recurso, ex: SplitProfile")
     parser.add_argument("--lang", required=True, help=f"linguagem ({', '.join(sorted(LAYOUTS))})")
     parser.add_argument("--from", dest="generated", help="raiz da saída do gerador, com um subdiretório por papel")
     parser.add_argument("--to", dest="target", help="raiz do repositório do SDK alvo")
     parser.add_argument("--list", action="store_true", help="imprime os pares origem -> destino sem copiar")
+    parser.add_argument("--repo", action="store_true", help="imprime o repositório alvo da linguagem e encerra")
     args = parser.parse_args()
+
+    if args.repo:
+        if args.lang not in TARGETS:
+            emit(f"[ERROR] linguagem sem repositório alvo mapeado: {args.lang}")
+            emit(f"[INFO] mapeadas: {', '.join(sorted(TARGETS))}")
+            return 2
+        emit(TARGETS[args.lang])
+        return 0
+
+    if not args.resource:
+        emit("[ERROR] resource é obrigatório fora do modo --repo")
+        return 2
 
     try:
         pairs = resolvePairs(args.lang, args.resource)

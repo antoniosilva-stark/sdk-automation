@@ -1,11 +1,23 @@
+import yaml
 import shutil
 import pytest
 from pathlib import Path
 
-from conftest import runTool
+from conftest import REPO_ROOT, runTool
 
 ARTIFACT = "src/main/java/com/starkbank/SplitProfile.java"
 GENERATOR_READY = shutil.which("npx") is not None
+WORKFLOW = REPO_ROOT / ".github/workflows/sdk-sync.yaml"
+
+
+def _dispatchInputs() -> dict:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    trigger = workflow["on"] if "on" in workflow else workflow[True]
+    return trigger["workflow_dispatch"]["inputs"]
+
+
+def _languageInput() -> dict:
+    return _dispatchInputs()["language"]
 
 
 def _target(tmpPath: Path) -> Path:
@@ -26,6 +38,41 @@ def test_javaTemUmRunNodeTemTres(buildResource):
 def test_papeisDoNodeCobremImplBarrelTypes(buildResource):
     papeis = [run["role"] for run in buildResource.GENERATORS["node"]]
     assert papeis == ["impl", "barrel", "types"]
+
+
+def test_workflowOfereceTodaLinguagemComGerador(buildResource):
+    assert set(buildResource.GENERATORS) <= set(_languageInput()["options"])
+
+
+def test_workflowNaoOfereceLinguagemSemGerador(buildResource):
+    assert set(_languageInput()["options"]) <= set(buildResource.GENERATORS)
+
+
+def test_defaultDoWorkflowEhUmaLinguagemOferecida():
+    language = _languageInput()
+    assert language["default"] in language["options"]
+
+
+def test_dispatchPedeApenasRecursoELinguagem():
+    assert set(_dispatchInputs()) == {"resource", "language"}
+
+
+def test_dispatchNaoPedeDestinoNemBase():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    for derived in ("inputs.owner", "inputs.repo", "inputs.base"):
+        assert derived not in raw
+
+
+def test_ownerVemDoRepositorioQueExecuta():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "github.repository_owner" in raw
+
+
+def test_baseNaoEhFixadaNoWorkflow():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    assert "--base \"${{ steps.base.outputs.base }}\"" in raw
+    assert "ref: master" not in raw
+    assert "ref: main" not in raw
 
 
 def test_typescriptAxiosNaoEhUsado(buildResource):

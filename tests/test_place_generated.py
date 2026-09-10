@@ -76,6 +76,39 @@ def test_varNameDerivaNomeDoDiretorio(placeGenerated):
     assert placeGenerated.varName("Invoice") == "invoice"
 
 
+def test_repoImprimeORepositorioAlvo():
+    for language, expected in (("java", "sdk-java"), ("node", "sdk-node")):
+        code, out = runTool("place-generated.py", "--lang", language, "--repo")
+        assert (code, out.strip()) == (0, expected)
+
+
+def test_repoNaoExigeResource():
+    code, out = runTool("place-generated.py", "--lang", "java", "--repo")
+    assert code == 0
+    assert "obrigatório" not in out
+
+
+def test_repoDeLinguagemSemAlvoRetornaDois():
+    code, out = runTool("place-generated.py", "--lang", "cobol", "--repo")
+    assert code == 2
+    assert "linguagem sem repositório alvo mapeado" in out
+
+
+def test_resourceAusenteForaDoModoRepoRetornaDois():
+    code, out = runTool("place-generated.py", "--lang", "java", "--list")
+    assert code == 2
+    assert "resource é obrigatório fora do modo --repo" in out
+
+
+def test_todaLinguagemComLayoutTemRepositorioAlvo(placeGenerated):
+    assert set(placeGenerated.LAYOUTS) == set(placeGenerated.TARGETS)
+
+
+def test_cadaLinguagemTemUmAlvoDistinto(placeGenerated):
+    alvos = list(placeGenerated.TARGETS.values())
+    assert len(alvos) == len(set(alvos))
+
+
 def test_linguagemSemLayoutRetornaDois(tmpPath):
     generated = _generated(tmpPath)
     repo = _targetRepo(tmpPath)
