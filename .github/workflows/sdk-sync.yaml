@@ -31,15 +31,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '18'
 
@@ -59,17 +59,17 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '18'
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -96,18 +96,15 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout target SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.owner }}/${{ inputs.repo }}
           ref: ${{ inputs.base }}
           token: ${{ steps.app-token.outputs.token }}
           path: target
 
-      - name: Build and verify resource
-        run: python3 tools/build-resource.py "${{ inputs.resource }}" --lang "${{ inputs.language }}" --into target
-
-      - name: Commit into a dedicated branch
-        id: commit
+      - name: Prepare working branch
+        id: branch
         working-directory: target
         run: |
           SLUG=$(python3 -c "import re,sys; print(re.sub(r'(?<!^)(?=[A-Z])','-',sys.argv[1]).lower())" "${{ inputs.resource }}")
@@ -116,12 +113,28 @@ jobs:
 
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
-          git checkout -b "$BRANCH"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            echo "Branch $BRANCH ja existe — comparando contra o que ja foi entregue."
+          else
+            git checkout -b "$BRANCH"
+            echo "Branch $BRANCH e nova."
+          fi
+
+      - name: Build and verify resource
+        run: python3 tools/build-resource.py "${{ inputs.resource }}" --lang "${{ inputs.language }}" --into target
+
+      - name: Commit when the generated output differs
+        id: commit
+        working-directory: target
+        run: |
           git add --all
 
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Nada mudou — nenhum commit criado (idempotente)."
+            echo "Gerado identico ao que ja esta na branch — nenhum commit criado."
             exit 0
           fi
 
@@ -132,7 +145,7 @@ jobs:
       - name: Push branch
         if: steps.commit.outputs.changed == 'true'
         working-directory: target
-        run: git push -u origin "${{ steps.commit.outputs.branch }}"
+        run: git push -u origin "${{ steps.branch.outputs.branch }}"
 
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true'
@@ -140,9 +153,16 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          TARGET="${{ inputs.owner }}/${{ inputs.repo }}"
+          if [ "$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
+            echo "PR ja aberta para $BRANCH — o push atualizou."
+            exit 0
+          fi
+
           gh pr create \
             --repo "${{ inputs.owner }}/${{ inputs.repo }}" \
             --title "Add ${{ inputs.resource }} resource" \
             --body "${{ inputs.resource }} gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
             --base "${{ inputs.base }}" \
-            --head "${{ steps.commit.outputs.branch }}"
+            --head "${{ steps.branch.outputs.branch }}"
