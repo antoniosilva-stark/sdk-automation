@@ -12,6 +12,7 @@ CODE_PLACEHOLDER = "PLACEHOLDER"
 CODE_EMPTY_TOKEN = "EMPTY_TOKEN"
 CODE_SYNTAX = "SYNTAX"
 CODE_CONTRACT_GAP = "CONTRACT_GAP"
+CODE_DEAD_IMPORT = "DEAD_IMPORT"
 
 CONTRACT_KINDS = ("signature", "declaration", "constructor", "inner", "export", "namespace")
 
@@ -20,6 +21,7 @@ _EMPTY_ARG = re.compile(r"\(\s*,|,\s*\)|,\s*,")
 _EMPTY_SLOT = re.compile(r"\(\s+(?:instanceof|:|\))")
 _DROPPED_NAME = re.compile(r"\w {2,}[:,)]")
 _JAVAC_SYNTAX = re.compile(r"error: (?:.*expected|illegal start|bad initializer|reached end of file)")
+_IMPORT = re.compile(r"^import (?:static )?([\w.]+);", re.M)
 
 
 @dataclass
@@ -77,6 +79,29 @@ def checkEmptyTokens(source: str, filePath: str) -> list[Issue]:
                       f"identificador vazio em {match.group(0)!r}")
             )
             break
+    return issues
+
+
+def checkDeadImports(source: str, filePath: str) -> list[Issue]:
+    body = _IMPORT.sub("", source)
+    issues = []
+    seen = set()
+
+    for number, line in enumerate(source.splitlines(), start=1):
+        match = _IMPORT.match(line)
+        if not match:
+            continue
+        target = match.group(1)
+
+        if target in seen:
+            issues.append(Issue(filePath, number, 0, CODE_DEAD_IMPORT, f"import duplicado: {target}"))
+            continue
+        seen.add(target)
+
+        simple = target.rsplit(".", 1)[-1]
+        if simple != "*" and not re.search(r"\b" + re.escape(simple) + r"\b", body):
+            issues.append(Issue(filePath, number, 0, CODE_DEAD_IMPORT, f"import nao usado: {target}"))
+
     return issues
 
 
@@ -160,6 +185,7 @@ def main() -> int:
     executed = ["estrutura"]
     skipped = []
     blocking = checkPlaceholders(source, filePath) + checkEmptyTokens(source, filePath)
+    blocking += checkDeadImports(source, filePath)
 
     if language == "java":
         ran, syntaxIssues = javacSyntax(target)

@@ -3,15 +3,11 @@ package {{package}};
 import com.starkbank.utils.Rest;
 import com.starkbank.utils.Resource;
 import com.starkbank.utils.Generator;
-import com.starkcore.utils.SubResource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-{{#imports}}
-import {{import}};
-{{/imports}}
 
 {{#models}}{{#model}}
 /**
@@ -318,7 +314,7 @@ public class {{classname}} extends Resource {
     public static Page page(Map<String, Object> params, User user) throws Exception {
         com.starkcore.utils.Page page = Rest.getPage(data, params, user);
         List<{{classname}}> {{classVarName}}s = new ArrayList<>();
-        for (SubResource {{classVarName}}: page.entities)
+        for (com.starkcore.utils.SubResource {{classVarName}}: page.entities)
             {{classVarName}}s.add(({{classname}}) {{classVarName}});
         return new Page({{classVarName}}s, page.cursor);
     }

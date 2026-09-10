@@ -98,7 +98,7 @@ def test_sintaxeNaoRelatadaQuandoJavacInoperante(tmpPath):
 
 
 @pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java não clonado")
-@pytest.mark.parametrize("name", ["Invoice.java", "Transfer.java", "Transaction.java"])
+@pytest.mark.parametrize("name", ["Invoice.java", "Transaction.java"])
 def test_javaRealDeProducaoPassa(tmpPath, name):
     target = _copyReal(tmpPath, REAL_JAVA / name)
     code, out = runTool("assert-generated.py", str(target))
@@ -179,3 +179,43 @@ def test_assinaturaPresenteNaoEhGap(tmpPath):
     contract = _write(tmpPath, "widget.contract", "signature public static Widget get(String id)\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
     assert code == 0, out
+
+
+def test_importDuplicadoReprova(assertGenerated):
+    source = "import java.util.List;\nimport java.util.List;\nclass X { List<String> a; }\n"
+    issues = assertGenerated.checkDeadImports(source, "X.java")
+    assert len(issues) == 1
+    assert issues[0].code == "DEAD_IMPORT"
+    assert "duplicado" in issues[0].message
+
+
+def test_importNaoUsadoReprova(assertGenerated):
+    source = "import java.time.OffsetDateTime;\nclass X { String a; }\n"
+    issues = assertGenerated.checkDeadImports(source, "X.java")
+    assert len(issues) == 1
+    assert "nao usado: java.time.OffsetDateTime" in issues[0].message
+
+
+def test_importUsadoNaoEhReprovado(assertGenerated):
+    source = "import java.util.List;\nimport java.util.Map;\nclass X { List<String> a; Map<String,Object> b; }\n"
+    assert assertGenerated.checkDeadImports(source, "X.java") == []
+
+
+def test_importDeTipoUsadoSoEmGenericoPassa(assertGenerated):
+    source = "import java.util.ArrayList;\nclass X { void f() { new ArrayList<>(); } }\n"
+    assert assertGenerated.checkDeadImports(source, "X.java") == []
+
+
+def test_wildcardNaoEhAvaliado(assertGenerated):
+    source = "import java.util.*;\nclass X { List<String> a; }\n"
+    assert assertGenerated.checkDeadImports(source, "X.java") == []
+
+
+@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java nao clonado")
+def test_importMortoNoJavaRealEhDetectado(tmpPath):
+    """O Transfer.java de producao importa GsonEvent sem usar — o gate deve acusar."""
+    target = _copyReal(tmpPath, REAL_JAVA / "Transfer.java")
+    code, out = runTool("assert-generated.py", str(target))
+
+    assert code == 1
+    assert "GsonEvent" in out
