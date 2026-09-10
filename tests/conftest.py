@@ -1,7 +1,6 @@
-"""Shared helpers for the tools tests."""
-
 import os
 import sys
+import shutil
 import pytest
 import subprocess
 import importlib.util
@@ -9,6 +8,36 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS_DIR = REPO_ROOT / "tools"
+
+
+def commandWorks(*command: str) -> bool:
+    if not shutil.which(command[0]):
+        return False
+    try:
+        return subprocess.run(command, capture_output=True).returncode == 0
+    except OSError:
+        return False
+
+
+def missingGeneratorDependency() -> str | None:
+    if not shutil.which("npx"):
+        return "npx ausente"
+    if not commandWorks("java", "-version"):
+        return "JRE ausente ou inoperante — o gerador roda em Java"
+    return None
+
+
+def missingJavacDependency() -> str | None:
+    if not commandWorks("javac", "-version"):
+        return "javac ausente ou inoperante — sem verificação de sintaxe Java"
+    return None
+
+
+GENERATOR_SKIP = missingGeneratorDependency()
+JAVAC_SKIP = missingJavacDependency()
+
+requiresGenerator = pytest.mark.skipif(GENERATOR_SKIP is not None, reason=GENERATOR_SKIP or "")
+requiresJavac = pytest.mark.skipif(JAVAC_SKIP is not None, reason=JAVAC_SKIP or "")
 
 
 def _loadTool(fileName: str):

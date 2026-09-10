@@ -1,17 +1,8 @@
-"""assert-generated tests."""
-
 import shutil
 import pytest
-import subprocess
 from pathlib import Path
 
-from conftest import runTool
-
-
-def _javacWorks() -> bool:
-    if not shutil.which("javac"):
-        return False
-    return subprocess.run(["javac", "-version"], capture_output=True).returncode == 0
+from conftest import requiresJavac, runTool
 
 WORKSPACE = Path.home() / "workspace"
 
@@ -76,7 +67,7 @@ def test_relataVerificacoesExecutadas(tmpPath):
     assert "estrutura" in out
 
 
-@pytest.mark.skipif(not _javacWorks(), reason="javac inoperante neste ambiente")
+@requiresJavac
 def test_sintaxeRelatadaQuandoJavacFunciona(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target))

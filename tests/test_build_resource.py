@@ -1,12 +1,9 @@
 import yaml
-import shutil
-import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, runTool
+from conftest import REPO_ROOT, requiresGenerator, runTool
 
 ARTIFACT = "src/main/java/com/starkbank/SplitProfile.java"
-GENERATOR_READY = shutil.which("npx") is not None
 WORKFLOW = REPO_ROOT / ".github/workflows/sdk-sync.yaml"
 
 
@@ -128,7 +125,7 @@ def test_nadaEhEscritoQuandoLintReprova(tmpPath):
     assert list(target.rglob("*")) == []
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_pilotoProduzArtefatoVerificado(tmpPath):
     target = _target(tmpPath)
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
@@ -142,7 +139,7 @@ def test_pilotoProduzArtefatoVerificado(tmpPath):
     assert "{{" not in source
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_duasExecucoesProduzemOMesmoConteudo(tmpPath):
     target = _target(tmpPath)
     args = ("SplitProfile", "--lang", "java", "--into", str(target))
@@ -161,7 +158,7 @@ NODE_ARTIFACTS = (
 )
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_nodeProduzOsTresArtefatos(tmpPath):
     target = _target(tmpPath)
     code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
@@ -171,7 +168,7 @@ def test_nodeProduzOsTresArtefatos(tmpPath):
         assert (target / relative).is_file(), relative
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_nodeUsaOShapeDeFuncoesDeModulo(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
@@ -183,7 +180,7 @@ def test_nodeUsaOShapeDeFuncoesDeModulo(tmpPath):
     assert "require('starkcore').Resource" in source
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_nodeAplicaCheckDatetimeEmCampoDeData(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
@@ -192,7 +189,7 @@ def test_nodeAplicaCheckDatetimeEmCampoDeData(tmpPath):
     assert "check.datetime(created)" in source
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_nodeBarrelSoExportaOperacaoDeclarada(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
@@ -202,7 +199,7 @@ def test_nodeBarrelSoExportaOperacaoDeclarada(tmpPath):
     assert "exports.page" not in barrel
 
 
-@pytest.mark.skipif(not GENERATOR_READY, reason="npx ausente")
+@requiresGenerator
 def test_nodeTypesUsaDeclareModule(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
