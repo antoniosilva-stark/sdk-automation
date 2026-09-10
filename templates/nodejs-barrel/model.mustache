@@ -1,0 +1,9 @@
+{{#models}}{{#model}}const {{classVarName}} = require('./{{classVarName}}.js');
+
+{{#vendorExtensions.x-sdk-create}}exports.create = {{classVarName}}.create;
+{{/vendorExtensions.x-sdk-create}}{{#vendorExtensions.x-sdk-put}}exports.put = {{classVarName}}.put;
+{{/vendorExtensions.x-sdk-put}}{{#vendorExtensions.x-sdk-get}}exports.get = {{classVarName}}.get;
+{{/vendorExtensions.x-sdk-get}}{{#vendorExtensions.x-sdk-query}}exports.query = {{classVarName}}.query;
+{{/vendorExtensions.x-sdk-query}}{{#vendorExtensions.x-sdk-page}}exports.page = {{classVarName}}.page;
+{{/vendorExtensions.x-sdk-page}}exports.{{classname}} = {{classVarName}}.{{classname}};
+{{/model}}{{/models}}

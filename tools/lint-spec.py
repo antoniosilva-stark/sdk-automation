@@ -10,6 +10,7 @@ CREATE_SUFFIX = "Create"
 
 CODE_SCAFFOLDING = "SCAFFOLDING"
 CODE_UNDECLARED = "UNDECLARED"
+CODE_ID_ORDER = "ID_ORDER"
 
 MIN_READ_PROPS = 3
 MIN_CREATE_PROPS = 1
@@ -33,7 +34,7 @@ class ResourceReport:
     readProps: int
     createProps: int
     subObjects: int
-    reasons: list[str]
+    reasons: list[tuple[str, str]]
 
     @property
     def generatable(self) -> bool:
@@ -99,11 +100,14 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
     readProps = schemaProps(schemas.get(name), specPath)
     createProps = schemaProps(schemas.get(name + CREATE_SUFFIX), specPath)
 
-    reasons: list[str] = []
+    reasons: list[tuple[str, str]] = []
+    names = list(readProps)
+    if "id" in names and names[0] != "id":
+        reasons.append((CODE_ID_ORDER, f"'id' deve ser a primeira propriedade, mas veio depois de '{names[0]}'"))
     if len(readProps) < MIN_READ_PROPS:
-        reasons.append(f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})")
+        reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
     if len(createProps) < MIN_CREATE_PROPS:
-        reasons.append(f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS})")
+        reasons.append((CODE_SCAFFOLDING, f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS})"))
 
     return ResourceReport(
         name=name,
@@ -133,7 +137,7 @@ def reportInventory(reports: list[ResourceReport]) -> None:
     emit("")
     emit(f"[WARN] scaffolding ({len(scaffolding)}):")
     for report in scaffolding[:5]:
-        emit(f"  {report.name} — {report.reasons[0]}")
+        emit(f"  {report.name} — {report.reasons[0][1]}")
     if len(scaffolding) > 5:
         emit(f"  ... e mais {len(scaffolding) - 5}")
 
@@ -147,9 +151,9 @@ def requiredIssues(reports: list[ResourceReport], required: set[str], specPath: 
     for report in reports:
         if report.name not in required or report.generatable:
             continue
-        for reason in report.reasons:
+        for code, message in report.reasons:
             issues.append(
-                Issue(str(specPath), report.line, 0, CODE_SCAFFOLDING, f"{report.name}: {reason}")
+                Issue(str(specPath), report.line, 0, code, f"{report.name}: {message}")
             )
     return issues
 

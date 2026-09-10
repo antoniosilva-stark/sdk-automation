@@ -1,5 +1,6 @@
 """Shared helpers for the tools tests."""
 
+import os
 import sys
 import pytest
 import subprocess
@@ -19,12 +20,13 @@ def _loadTool(fileName: str):
     return module
 
 
-def runTool(fileName: str, *args: str) -> tuple[int, str]:
+def runTool(fileName: str, *args: str, env: dict | None = None) -> tuple[int, str]:
     result = subprocess.run(
         [sys.executable, str(TOOLS_DIR / fileName), *args],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
+        env={**os.environ, **env} if env else None,
     )
     return result.returncode, result.stdout
 
@@ -47,3 +49,18 @@ def detector():
 @pytest.fixture
 def assertGenerated():
     return _loadTool("assert-generated.py")
+
+
+@pytest.fixture
+def placeGenerated():
+    return _loadTool("place-generated.py")
+
+
+@pytest.fixture
+def buildResource():
+    return _loadTool("build-resource.py")
+
+
+@pytest.fixture
+def extractSchema():
+    return _loadTool("extract-schema.py")

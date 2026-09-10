@@ -1,22 +1,50 @@
-name: SDK Sync — SplitProfile Pilot (Java)
+name: SDK Sync
 
-# Manual trigger: open-pr pushes to a real external repo (starkbank/sdk-java).
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      resource:
+        description: 'Recurso a gerar (ex: SplitProfile)'
+        required: true
+        default: SplitProfile
+      language:
+        description: 'Linguagem do SDK'
+        type: choice
+        options: [java]
+        default: java
+      owner:
+        description: 'Owner do repositório alvo'
+        required: true
+        default: antoniosilva-stark
+      repo:
+        description: 'Repositório alvo'
+        required: true
+        default: sdk-java
+      base:
+        description: 'Branch base da PR'
+        required: true
+        default: master
+
+run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ inputs.owner }}/${{ inputs.repo }}"
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.9'
+          fetch-depth: 0
 
-      - name: Install dependencies
-        run: pip install pyyaml openapi-spec-validator && npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - run: pip install -r requirements.txt
+      - run: npm ci
 
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
@@ -24,116 +52,97 @@ jobs:
       - name: Detect breaking changes
         run: python3 tools/breaking-change-detector.py
 
-  generate:
+      - name: Run tests
+        run: make test
+
+  sync:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
 
+      - run: pip install -r requirements.txt
       - run: npm ci
 
-      - name: Generate SplitProfile.java (piloto, escopo reduzido)
+      - name: Require GitHub App credentials
         run: |
-          npx openapi-generator-cli generate \
-            -i apis/spec-v2.openapi.yaml \
-            -g java \
-            --template-dir templates/java \
-            --model-package com.starkbank \
-            --api-package com.starkbank \
-            --invoker-package com.starkbank \
-            -o generated/sdk-java-temp \
-            --global-property models=SplitProfile,supportingFiles=false,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: split-profile-java
-          path: generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java
-
-  test:
-    needs: generate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: split-profile-java
-          path: generated/sdk-java-temp/src/main/java/com/starkbank
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - run: npm ci
-      - run: npm test
-
-  open-pr:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: split-profile-java
-          path: generated/sdk-java-temp/src/main/java/com/starkbank
-
-      - name: Check SDK_REPOS_TOKEN is configured
-        id: check-token
-        run: |
-          if [ -z "${{ secrets.SDK_REPOS_TOKEN }}" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+          if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
+            echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
+            echo "Sem credencial este job reprova — nao passa verde sem fazer nada."
+            exit 1
           fi
 
-      - name: Skip — SDK_REPOS_TOKEN not configured
-        if: steps.check-token.outputs.configured == 'false'
-        run: |
-          echo "SDK_REPOS_TOKEN não está configurado neste repo — pulando abertura de PR."
-          echo "Ver docs/SECRETS_MANAGEMENT.md para como criar e cadastrar o token."
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.SDK_APP_ID }}
+          private-key: ${{ secrets.SDK_APP_PRIVATE_KEY }}
+          owner: ${{ inputs.owner }}
+          repositories: ${{ inputs.repo }}
+          permission-contents: write
+          permission-pull-requests: write
 
-      - name: Checkout starkbank/sdk-java
-        if: steps.check-token.outputs.configured == 'true'
+      - name: Checkout target SDK
         uses: actions/checkout@v4
         with:
-          repository: starkbank/sdk-java
-          token: ${{ secrets.SDK_REPOS_TOKEN }}
-          path: sdk-java-target
+          repository: ${{ inputs.owner }}/${{ inputs.repo }}
+          ref: ${{ inputs.base }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: target
 
-      - name: Commit SplitProfile and push branch
-        if: steps.check-token.outputs.configured == 'true'
-        working-directory: sdk-java-target
+      - name: Build and verify resource
+        run: python3 tools/build-resource.py "${{ inputs.resource }}" --lang "${{ inputs.language }}" --into target
+
+      - name: Commit into a dedicated branch
+        id: commit
+        working-directory: target
         run: |
-          cp ../generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java src/main/java/com/starkbank/SplitProfile.java
+          SLUG=$(python3 -c "import re,sys; print(re.sub(r'(?<!^)(?=[A-Z])','-',sys.argv[1]).lower())" "${{ inputs.resource }}")
+          BRANCH="sdk-automation/$SLUG"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
-          git checkout -b sdk-automation/split-profile-pilot
-          git add src/main/java/com/starkbank/SplitProfile.java
-          git commit -m "Add SplitProfile resource (pilot)"
-          git push origin sdk-automation/split-profile-pilot --force-with-lease
+          git checkout -b "$BRANCH"
+          git add --all
 
-      - name: Open PR on starkbank/sdk-java
-        if: steps.check-token.outputs.configured == 'true'
-        working-directory: sdk-java-target
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Nada mudou — nenhum commit criado (idempotente)."
+            exit 0
+          fi
+
+          git diff --cached --name-only
+          git commit -m "Add ${{ inputs.resource }} resource"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push branch
+        if: steps.commit.outputs.changed == 'true'
+        working-directory: target
+        run: git push -u origin "${{ steps.commit.outputs.branch }}"
+
+      - name: Open pull request
+        if: steps.commit.outputs.changed == 'true'
+        working-directory: target
         env:
-          GH_TOKEN: ${{ secrets.SDK_REPOS_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr create \
-            --title "Add SplitProfile resource (pilot)" \
-            --body "Gerado automaticamente pelo sdk-automation (Card 944) a partir de apis/spec-v2.openapi.yaml. Escopo reduzido: sem overloads de conveniência, sem sub-recurso Log. **Revisar antes de merge** — Rest.put(...) é assumido, não verificado contra o starkcore real." \
-            --base main \
-            --head sdk-automation/split-profile-pilot \
-            || echo "PR já existe para essa branch — pulando criação."
+            --repo "${{ inputs.owner }}/${{ inputs.repo }}" \
+            --title "Add ${{ inputs.resource }} resource" \
+            --body "${{ inputs.resource }} gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
+            --base "${{ inputs.base }}" \
+            --head "${{ steps.commit.outputs.branch }}"

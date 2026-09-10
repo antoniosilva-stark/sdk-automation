@@ -1,5 +1,9 @@
 .PHONY: help setup install validate check-bc generate clean test test-node test-python
 
+# Local Stark Bank Python SDK clone used as field/type reference.
+# Falls back to cloning from GitHub when absent (CI).
+SDK_PYTHON ?= $(HOME)/workspace/bank/sdk-python
+
 # Colors for output
 GREEN := \033[0;32m
 BLUE := \033[0;34m
@@ -49,14 +53,14 @@ install-node: ## Install Node.js dependencies (npm)
 	npm install
 	@echo "$(GREEN)✅ Node.js dependencies installed$(NC)"
 
-clone-sdk-ref: ## Clone Python SDK v0.28.0 as reference
-	@echo "$(BLUE)Cloning Python SDK reference...$(NC)"
-	mkdir -p _references
-	@if [ ! -d "_references/sdk-python" ]; then \
-		git clone -q https://github.com/starkbank/sdk-python.git _references/sdk-python; \
-		echo "$(GREEN)✅ Python SDK reference cloned$(NC)"; \
+clone-sdk-ref: ## Resolve the Python SDK reference (local clone, or clone from GitHub)
+	@echo "$(BLUE)Resolving Python SDK reference...$(NC)"
+	@if [ -d "$(SDK_PYTHON)/starkbank" ]; then \
+		echo "$(GREEN)✅ Python SDK reference: $(SDK_PYTHON)$(NC)"; \
 	else \
-		echo "$(GREEN)✅ Python SDK reference already exists$(NC)"; \
+		mkdir -p _references; \
+		[ -d "_references/sdk-python/starkbank" ] || git clone -q https://github.com/starkbank/sdk-python.git _references/sdk-python; \
+		echo "$(GREEN)✅ Python SDK reference: _references/sdk-python$(NC)"; \
 	fi
 
 # ============================================

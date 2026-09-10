@@ -97,8 +97,9 @@ npm install
 ### 3. Clone Python SDK Reference
 
 ```bash
-mkdir -p _references
-git clone https://github.com/starkbank/sdk-python.git _references/sdk-python
+make clone-sdk-ref
+# usa $(HOME)/workspace/bank/sdk-python se existir; senao clona do GitHub
+# sobrescreva com: make clone-sdk-ref SDK_PYTHON=/outro/caminho
 ```
 
 ### 4. Verify Setup
@@ -113,10 +114,10 @@ npm run check-breaking-changes
 # Expected: "✅ No breaking changes detected" (on first run)
 ```
 
-### 5. Install OpenAPI Generator (Entrega 3+)
+### 5. Install OpenAPI Generator
 
 ```bash
-# Only needed for SDK generation (Entrega 3)
+# Only needed for SDK generation
 npm install -g @openapitools/openapi-generator-cli@7.0.1
 
 # Verify installation
@@ -192,15 +193,6 @@ All SDKs updated ✅
 - Go (GitHub Releases)
 - PHP (Packagist)
 - Dotnet (NuGet)
-
-## Timeline
-
-- **Entrega 1**: Setup, governance, spec v0.1 (3 resources)
-- **Entrega 2**: Spec expansion (60 resources), BC detector
-- **Entrega 3**: Generator setup, templates, Node SDK
-- **Entrega 4**: CI/CD workflow, Card 0006 pilot, publish
-
-See MASTER_CONTEXT.md for detailed timeline.
 
 ## Contact
 

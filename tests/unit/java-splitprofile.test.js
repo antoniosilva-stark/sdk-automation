@@ -76,8 +76,8 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
     const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
     const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));
 
-    test('should exist with the 4 expected jobs', () => {
-      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'generate', 'test', 'open-pr']);
+    test('should exist with the 2 expected jobs', () => {
+      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'sync']);
     });
 
     test('should trigger manually, not on push', () => {
@@ -85,10 +85,12 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
       expect(workflow.on.push).toBeUndefined();
     });
 
-    test('should guard open-pr behind SDK_REPOS_TOKEN and not reference registry secrets', () => {
+    test('should authenticate via GitHub App only, with no PAT or registry secrets', () => {
       const raw = fs.readFileSync(workflowPath, 'utf8');
 
-      expect(raw).toMatch(/SDK_REPOS_TOKEN/);
+      expect(raw).toMatch(/SDK_APP_ID/);
+      expect(raw).toMatch(/SDK_APP_PRIVATE_KEY/);
+      expect(raw).not.toMatch(/SDK_REPOS_TOKEN/);
       for (const registrySecret of ['NPM_TOKEN', 'PYPI_API_TOKEN', 'MAVEN_CENTRAL_TOKEN', 'GEM_HOST_API_KEY', 'NUGET_API_KEY']) {
         expect(raw).not.toMatch(registrySecret);
       }

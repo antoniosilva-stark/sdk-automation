@@ -18,13 +18,16 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pyyaml openapi-spec-validator && npm ci
+        run: pip install -r requirements.txt && npm ci
 
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
+
+      - name: Lint spec resources
+        run: python3 tools/lint-spec.py --quiet --require SplitProfile,Invoice,Transfer,Transaction
 
       - name: Detect breaking changes
         run: python3 tools/breaking-change-detector.py

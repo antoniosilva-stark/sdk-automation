@@ -2,13 +2,30 @@
 
 import shutil
 import pytest
+import subprocess
 from pathlib import Path
 
 from conftest import runTool
 
+
+def _javacWorks() -> bool:
+    if not shutil.which("javac"):
+        return False
+    return subprocess.run(["javac", "-version"], capture_output=True).returncode == 0
+
 WORKSPACE = Path.home() / "workspace"
-REAL_JAVA = WORKSPACE / "sdk-java/src/main/java/com/starkbank"
-REAL_NODE = WORKSPACE / "bank/sdk-node/sdk"
+
+
+def _resolveSdk(*candidates: str) -> Path | None:
+    for candidate in candidates:
+        path = WORKSPACE / candidate
+        if path.is_dir():
+            return path
+    return None
+
+
+REAL_JAVA = _resolveSdk("bank/sdk-java/src/main/java/com/starkbank", "sdk-java/src/main/java/com/starkbank")
+REAL_NODE = _resolveSdk("bank/sdk-node/sdk", "sdk-node/sdk")
 
 CLEAN_JAVA = """package com.starkbank;
 
@@ -52,14 +69,35 @@ def test_arquivoLimpoPassa(tmpPath):
     assert "[OK]" in out
 
 
-def test_relataTiersExecutados(tmpPath):
+def test_relataVerificacoesExecutadas(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target))
-    assert "tiers executados" in out
-    assert "1 estrutural" in out
+    assert "verificações executadas" in out
+    assert "estrutura" in out
 
 
-@pytest.mark.skipif(not REAL_JAVA.exists(), reason="sdk-java não clonado")
+@pytest.mark.skipif(not _javacWorks(), reason="javac inoperante neste ambiente")
+def test_sintaxeRelatadaQuandoJavacFunciona(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target))
+    assert "sintaxe (javac)" in out
+
+
+def test_sintaxeNaoRelatadaQuandoJavacInoperante(tmpPath):
+    fakeBin = tmpPath / "bin"
+    fakeBin.mkdir()
+    fake = fakeBin / "javac"
+    fake.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake.chmod(0o755)
+
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target), env={"PATH": str(fakeBin)})
+    assert "sintaxe (javac)" not in out
+    assert "verificação de sintaxe indisponível" in out
+    assert code == 0
+
+
+@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java não clonado")
 @pytest.mark.parametrize("name", ["Invoice.java", "Transfer.java", "Transaction.java"])
 def test_javaRealDeProducaoPassa(tmpPath, name):
     target = _copyReal(tmpPath, REAL_JAVA / name)
@@ -67,7 +105,7 @@ def test_javaRealDeProducaoPassa(tmpPath, name):
     assert code == 0, out
 
 
-@pytest.mark.skipif(not REAL_NODE.exists(), reason="sdk-node não clonado")
+@pytest.mark.skipif(REAL_NODE is None, reason="sdk-node não clonado")
 @pytest.mark.parametrize("name", ["transfer/transfer.js", "transaction/transaction.js"])
 def test_nodeRealDeProducaoPassa(tmpPath, name):
     target = _copyReal(tmpPath, REAL_NODE / name)

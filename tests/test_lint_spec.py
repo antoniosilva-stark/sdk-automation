@@ -74,7 +74,7 @@ def test_createVazioEhScaffolding(lintSpec, tmpPath):
     specPath = _writeSpec(tmpPath, schemas)
     report = lintSpec.inspectResource("Widget", schemas, specPath, {})
     assert not report.generatable
-    assert any("WidgetCreate" in reason for reason in report.reasons)
+    assert any("WidgetCreate" in message for _, message in report.reasons)
 
 
 def test_apenasIdECreatedEhScaffolding(lintSpec, tmpPath):
@@ -85,7 +85,7 @@ def test_apenasIdECreatedEhScaffolding(lintSpec, tmpPath):
     specPath = _writeSpec(tmpPath, schemas)
     report = lintSpec.inspectResource("Widget", schemas, specPath, {})
     assert not report.generatable
-    assert "2 propriedades" in report.reasons[0]
+    assert "2 propriedades" in report.reasons[0][1]
 
 
 def test_stubExigidoReprovaNaSpecReal():
@@ -119,3 +119,27 @@ def test_refQuebradoFalhaAlto(lintSpec, tmpPath):
 
     with pytest.raises(ValueError):
         lintSpec.schemaProps({"$ref": "./schemas/widget.yaml"}, specPath)
+
+
+def test_idForaDaPrimeiraPosicaoReprovaComCodigoProprio(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"properties": {"amount": {}, "id": {}, "status": {}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not report.generatable
+    assert report.reasons[0][0] == lintSpec.CODE_ID_ORDER
+    assert "primeira propriedade" in report.reasons[0][1]
+
+
+def test_schemaSemIdNaoDisparaIdOrder(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"properties": {"amount": {}, "status": {}, "extra": {}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert report.generatable

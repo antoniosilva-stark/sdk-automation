@@ -93,8 +93,15 @@ def checkContract(source: str, contract: dict[str, list[str]], filePath: str) ->
     return issues
 
 
-def javacSyntax(target: Path) -> tuple[bool, list[Issue]]:
+def javacWorks() -> bool:
     if not shutil.which("javac"):
+        return False
+    probe = subprocess.run(["javac", "-version"], capture_output=True, text=True)
+    return probe.returncode == 0
+
+
+def javacSyntax(target: Path) -> tuple[bool, list[Issue]]:
+    if not javacWorks():
         return (False, [])
 
     result = subprocess.run(
@@ -150,14 +157,17 @@ def main() -> int:
     source = target.read_text(encoding="utf-8")
     filePath = str(target)
 
-    tiers = ["1 estrutural"]
+    executed = ["estrutura"]
+    skipped = []
     blocking = checkPlaceholders(source, filePath) + checkEmptyTokens(source, filePath)
 
     if language == "java":
         ran, syntaxIssues = javacSyntax(target)
         if ran:
-            tiers.append("2 sintaxe (javac)")
+            executed.append("sintaxe (javac)")
             blocking.extend(syntaxIssues)
+        else:
+            skipped.append("verificação de sintaxe indisponível: javac ausente ou inoperante")
 
     contractPath = resolveContract(target, language, args.contract)
     gaps = []
@@ -165,8 +175,10 @@ def main() -> int:
         gaps = checkContract(source, parseContract(contractPath), filePath)
 
     emit(f"[INFO] {target} — linguagem {language}")
-    emit(f"[INFO] tiers executados: {', '.join(tiers)}")
-    emit("[INFO] tier 3 (compilação contra o SDK real) não implementado — roda no CI")
+    emit(f"[INFO] verificações executadas: {', '.join(executed)}")
+    for reason in skipped:
+        emit(f"[WARN] {reason}")
+    emit("[INFO] compilação contra o SDK real não implementada — roda no CI")
     if not contractPath:
         emit("[INFO] sem contrato para este recurso — gap não verificado")
 
