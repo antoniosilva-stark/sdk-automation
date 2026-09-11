@@ -10,6 +10,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -19,6 +22,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
 
       - name: Install dependencies
         run: pip install -r requirements.txt && npm ci
@@ -30,11 +38,11 @@ jobs:
         run: python3 tools/lint-spec.py --quiet --require SplitProfile,Invoice,Transfer,Transaction
 
       - name: Detect breaking changes
+        id: breaking-change
         run: python3 tools/breaking-change-detector.py
-        continue-on-error: false
 
       - name: Comment on PR (if BC detected)
-        if: failure()
+        if: failure() && steps.breaking-change.outcome == 'failure'
         uses: actions/github-script@v9
         with:
           script: |

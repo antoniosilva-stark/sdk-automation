@@ -18,6 +18,8 @@ run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.reposi
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,7 +31,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '18'
+          node-version: '22'
 
       - run: pip install -r requirements.txt
       - run: npm ci
@@ -46,8 +48,12 @@ jobs:
   sync:
     needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -55,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '18'
+          node-version: '22'
 
       - uses: actions/setup-java@v6
         with:
@@ -65,12 +71,32 @@ jobs:
       - run: pip install -r requirements.txt
       - run: npm ci
 
+      - name: Validate resource name
+        id: resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "Recurso validado, slug: $SLUG"
+
       - name: Resolve target repository
         id: target
+        env:
+          LANGUAGE: ${{ inputs.language }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          REPO=$(python3 tools/place-generated.py --lang "${{ inputs.language }}" --repo)
+          REPO=$(python3 tools/place-generated.py --lang "$LANGUAGE" --repo)
           echo "repo=$REPO" >> "$GITHUB_OUTPUT"
-          echo "Alvo: ${{ github.repository_owner }}/$REPO"
+          echo "Alvo: $OWNER/$REPO"
+
+      - name: Build and verify resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          LANGUAGE: ${{ inputs.language }}
+        run: |
+          mkdir -p staging
+          python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging
 
       - name: Require GitHub App credentials
         run: |
@@ -80,7 +106,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
           app-id: ${{ secrets.SDK_APP_ID }}
@@ -100,20 +126,30 @@ jobs:
       - name: Resolve base branch
         id: base
         working-directory: target
+        env:
+          TARGET_REPO: ${{ steps.target.outputs.repo }}
         run: |
           BASE=$(git rev-parse --abbrev-ref HEAD)
-          if [ "$BASE" = "HEAD" ]; then
-            echo "HEAD desanexado — branch default do alvo indeterminada."
+          REMOTE_DEFAULT=$(git ls-remote --symref origin HEAD | awk '/^ref:/ {sub("refs/heads/","",$2); print $2; exit}')
+
+          if [ -z "$REMOTE_DEFAULT" ]; then
+            echo "nao foi possivel ler a branch default de $TARGET_REPO."
             exit 1
           fi
+          if [ "$BASE" != "$REMOTE_DEFAULT" ]; then
+            echo "checkout ficou em '$BASE' mas a default de $TARGET_REPO e '$REMOTE_DEFAULT'."
+            exit 1
+          fi
+
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
-          echo "Base: $BASE (branch default de ${{ steps.target.outputs.repo }})"
+          echo "Base: $BASE (default de $TARGET_REPO, confirmada no remoto)"
 
       - name: Prepare working branch
         id: branch
         working-directory: target
+        env:
+          SLUG: ${{ steps.resource.outputs.slug }}
         run: |
-          SLUG=$(python3 -c "import re,sys; print(re.sub(r'(?<!^)(?=[A-Z])','-',sys.argv[1]).lower())" "${{ inputs.resource }}")
           BRANCH="sdk-automation/$SLUG"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
@@ -129,14 +165,21 @@ jobs:
             echo "Branch $BRANCH e nova."
           fi
 
-      - name: Build and verify resource
-        run: python3 tools/build-resource.py "${{ inputs.resource }}" --lang "${{ inputs.language }}" --into target
+
+      - name: Copy verified artifacts into the target
+        run: cp -R staging/. target/
 
       - name: Commit when the generated output differs
         id: commit
         working-directory: target
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          LANGUAGE: ${{ inputs.language }}
         run: |
-          git add --all
+          PATHS=$(python3 ../tools/place-generated.py "$RESOURCE" --lang "$LANGUAGE" --targets)
+          while IFS= read -r target; do
+            git add -- "$target"
+          done <<< "$PATHS"
 
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -145,7 +188,7 @@ jobs:
           fi
 
           git diff --cached --name-only
-          git commit -m "Add ${{ inputs.resource }} resource"
+          git commit -m "Add $RESOURCE resource"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push branch
@@ -158,17 +201,22 @@ jobs:
         working-directory: target
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RESOURCE: ${{ inputs.resource }}
+          OWNER: ${{ github.repository_owner }}
+          TARGET_REPO: ${{ steps.target.outputs.repo }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          BASE: ${{ steps.base.outputs.base }}
         run: |
-          BRANCH="${{ steps.branch.outputs.branch }}"
-          TARGET="${{ github.repository_owner }}/${{ steps.target.outputs.repo }}"
-          if [ "$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
+          TARGET="$OWNER/$TARGET_REPO"
+          OPEN=$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$OPEN" -gt 0 ]; then
             echo "PR ja aberta para $BRANCH — o push atualizou."
             exit 0
           fi
 
           gh pr create \
             --repo "$TARGET" \
-            --title "Add ${{ inputs.resource }} resource" \
-            --body "${{ inputs.resource }} gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
-            --base "${{ steps.base.outputs.base }}" \
-            --head "${{ steps.branch.outputs.branch }}"
+            --title "Add $RESOURCE resource" \
+            --body "$RESOURCE gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
+            --base "$BASE" \
+            --head "$BRANCH"

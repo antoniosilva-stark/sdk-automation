@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from conftest import runTool
@@ -94,10 +95,48 @@ def test_repoDeLinguagemSemAlvoRetornaDois():
     assert "linguagem sem repositório alvo mapeado" in out
 
 
-def test_resourceAusenteForaDoModoRepoRetornaDois():
+def test_resourceAusenteForaDosModosDeConsultaRetornaDois():
     code, out = runTool("place-generated.py", "--lang", "java", "--list")
     assert code == 2
-    assert "resource é obrigatório fora do modo --repo" in out
+    assert "resource é obrigatório fora dos modos --repo e --slug" in out
+
+
+def test_slugDerivaOKebabDoRecurso():
+    for resource, expected in (("SplitProfile", "split-profile"), ("Invoice", "invoice"),
+                               ("DictKey", "dict-key"), ("Transaction", "transaction")):
+        code, out = runTool("place-generated.py", resource, "--slug")
+        assert (code, out.strip()) == (0, expected), resource
+
+
+def test_slugNaoExigeLang():
+    code, out = runTool("place-generated.py", "Invoice", "--slug")
+    assert code == 0
+    assert "obrigatório" not in out
+
+
+def test_slugRejeitaMetacaractereDeShell():
+    for hostile in ("X$(id)", "X`id`", "X;id", "X|id", "X&id", "X\nbranch=evil"):
+        code, out = runTool("place-generated.py", hostile, "--slug")
+        assert code == 2, f"{hostile!r} passou"
+        assert "nome de recurso inválido" in out
+
+
+def test_slugRejeitaFormaForaDeUpperCamelCase():
+    for invalid in ("lower", "With Space", "has-dash", "has_underscore", "9Leading"):
+        code, out = runTool("place-generated.py", invalid, "--slug")
+        assert code == 2, f"{invalid!r} passou"
+
+
+def test_slugSemResourceRetornaDois():
+    code, out = runTool("place-generated.py", "--slug")
+    assert code == 2
+    assert "resource é obrigatório no modo --slug" in out
+
+
+def test_langAusenteForaDeConsultaRetornaDois(tmpPath):
+    code, out = runTool("place-generated.py", "SplitProfile", "--list")
+    assert code == 2
+    assert "--lang é obrigatório" in out
 
 
 def test_todaLinguagemComLayoutTemRepositorioAlvo(placeGenerated):
@@ -162,3 +201,44 @@ def test_nadaEhEscritoQuandoFonteAusente(tmpPath):
             "--from", str(generated), "--to", str(repo))
 
     assert list(repo.rglob("*")) == []
+
+
+def test_targetsImprimeSoOsDestinos():
+    code, out = runTool("place-generated.py", "Transfer", "--lang", "node", "--targets")
+    linhas = out.strip().splitlines()
+
+    assert code == 0
+    assert linhas == ["sdk/transfer/transfer.js", "sdk/transfer/index.js", "types/transfer/transfer.d.ts"]
+    assert all("->" not in linha for linha in linhas)
+
+
+def test_targetsTemAMesmaContagemDoList():
+    _, targets = runTool("place-generated.py", "Invoice", "--lang", "node", "--targets")
+    _, pares = runTool("place-generated.py", "Invoice", "--lang", "node", "--list")
+    assert len(targets.strip().splitlines()) == len(pares.strip().splitlines())
+
+
+def test_arquivoEstranhoNoAlvoNaoEntraNoCommit(tmpPath):
+    repo = tmpPath / "alvo"
+    repo.mkdir()
+    for command in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                    ["git", "config", "user.name", "t"]):
+        subprocess.run(command, cwd=repo, check=True, capture_output=True)
+
+    code, out = runTool("place-generated.py", "SplitProfile", "--lang", "java", "--targets")
+    assert code == 0
+    declared = out.strip().splitlines()
+
+    for relative in declared:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("gerado\n", encoding="utf-8")
+    (repo / "sobra.tmp").write_text("lixo do gerador\n", encoding="utf-8")
+
+    for relative in declared:
+        subprocess.run(["git", "add", "--", relative], cwd=repo, check=True, capture_output=True)
+
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo,
+                            capture_output=True, text=True, check=True).stdout.split()
+    assert staged == declared
+    assert "sobra.tmp" not in staged

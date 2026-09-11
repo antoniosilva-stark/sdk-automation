@@ -14,7 +14,9 @@ CODE_SYNTAX = "SYNTAX"
 CODE_CONTRACT_GAP = "CONTRACT_GAP"
 CODE_DEAD_IMPORT = "DEAD_IMPORT"
 
-CONTRACT_KINDS = ("signature", "declaration", "constructor", "inner", "export", "namespace")
+CONTRACT_KINDS = ("signature", "declaration", "constructor", "inner", "export",
+                  "namespace", "field", "require")
+CONTRACT_NOTES = ("todo",)
 
 _PLACEHOLDER = re.compile(r"\{\{.*?\}\}")
 _EMPTY_ARG = re.compile(r"\(\s*,|,\s*\)|,\s*,")
@@ -38,14 +40,17 @@ def emit(text: str) -> None:
 
 
 def parseContract(path: Path) -> dict[str, list[str]]:
-    entries: dict[str, list[str]] = {kind: [] for kind in CONTRACT_KINDS}
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    entries: dict[str, list[str]] = {kind: [] for kind in CONTRACT_KINDS + CONTRACT_NOTES}
+    for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         kind, _, value = line.partition(" ")
-        if kind in entries and value.strip():
-            entries[kind].append(value.strip())
+        if kind not in entries:
+            raise ValueError(f"{path}:{number} kind desconhecido: {kind!r}")
+        if not value.strip():
+            raise ValueError(f"{path}:{number} kind {kind!r} sem valor")
+        entries[kind].append(value.strip())
     return entries
 
 
@@ -144,10 +149,15 @@ def javacSyntax(target: Path) -> tuple[bool, list[Issue]]:
     return (True, issues)
 
 
-def resolveContract(target: Path, language: str, explicit: str | None) -> Path | None:
+def resolveContract(target: Path, language: str, explicit: str | None, role: str | None) -> Path | None:
     if explicit:
         return Path(explicit)
-    candidate = Path(CONTRACT_DIR) / f"{language}-{target.stem.lower()}.contract"
+    stem = target.stem.lower()
+    if role:
+        byRole = Path(CONTRACT_DIR) / f"{language}-{stem}-{role}.contract"
+        if byRole.exists():
+            return byRole
+    candidate = Path(CONTRACT_DIR) / f"{language}-{stem}.contract"
     return candidate if candidate.exists() else None
 
 
@@ -171,6 +181,7 @@ def main() -> int:
     parser.add_argument("--lang", choices=["java", "node"], default=None)
     parser.add_argument("--contract", default=None, help="arquivo .contract explícito")
     parser.add_argument("--strict", action="store_true", help="trata gap de contrato como reprovação")
+    parser.add_argument("--role", help="papel do artefato, ex: impl, barrel, types")
     args = parser.parse_args()
 
     target = Path(args.target)
@@ -195,10 +206,17 @@ def main() -> int:
         else:
             skipped.append("verificação de sintaxe indisponível: javac ausente ou inoperante")
 
-    contractPath = resolveContract(target, language, args.contract)
+    contractPath = resolveContract(target, language, args.contract, args.role)
     gaps = []
+    pending = []
     if contractPath and contractPath.exists():
-        gaps = checkContract(source, parseContract(contractPath), filePath)
+        try:
+            contract = parseContract(contractPath)
+        except ValueError as error:
+            emit(f"[ERROR] contrato inválido: {error}")
+            return 2
+        gaps = checkContract(source, contract, filePath)
+        pending = contract["todo"]
 
     emit(f"[INFO] {target} — linguagem {language}")
     emit(f"[INFO] verificações executadas: {', '.join(executed)}")
@@ -207,6 +225,8 @@ def main() -> int:
     emit("[INFO] compilação contra o SDK real não implementada — roda no CI")
     if not contractPath:
         emit("[INFO] sem contrato para este recurso — gap não verificado")
+    for note in pending:
+        emit(f"[INFO] paridade pendente, nao verificada: {note}")
 
     if blocking:
         emit("")

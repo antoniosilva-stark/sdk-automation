@@ -87,7 +87,8 @@ def generate(resource: str, run: dict, outputDir: Path) -> int:
 def assertGenerated(artifact: Path, language: str, role: str) -> int:
     code, _ = runStep(
         f"assert-generated {role}",
-        [sys.executable, str(TOOLS_DIR / "assert-generated.py"), str(artifact), "--lang", language],
+        [sys.executable, str(TOOLS_DIR / "assert-generated.py"), str(artifact),
+         "--lang", language, "--role", role, "--strict"],
     )
     return code
 

@@ -66,10 +66,15 @@ def test_ownerVemDoRepositorioQueExecuta():
 
 
 def test_baseNaoEhFixadaNoWorkflow():
-    raw = WORKFLOW.read_text(encoding="utf-8")
-    assert "--base \"${{ steps.base.outputs.base }}\"" in raw
-    assert "ref: master" not in raw
-    assert "ref: main" not in raw
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["sync"]["steps"]
+
+    pr = next(s for s in steps if "gh pr create" in (s.get("run") or ""))
+    assert pr["env"]["BASE"] == "${{ steps.base.outputs.base }}"
+    assert "--base \"$BASE\"" in pr["run"]
+
+    checkout = next(s for s in steps if "Checkout target" in (s.get("name") or ""))
+    assert "ref" not in (checkout.get("with") or {}), "ref fixo reintroduz o defeito nº12"
 
 
 def test_typescriptAxiosNaoEhUsado(buildResource):
@@ -208,3 +213,33 @@ def test_nodeTypesUsaDeclareModule(tmpPath):
     assert "declare module 'starkbank'" in types
     assert "export namespace transaction" in types
     assert "&lt;" not in types
+
+
+def test_geradorQueRetornaZeroSemProduzirEhAcusado(tmpPath):
+    fakeBin = tmpPath / "bin"
+    fakeBin.mkdir()
+    fake = fakeBin / "npx"
+    fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake.chmod(0o755)
+
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java",
+                        "--into", str(target), env={"PATH": str(fakeBin)})
+
+    assert code == 1
+    assert "retornou 0 mas não produziu o artefato" in out
+    assert "SplitProfile.java" in out
+
+
+def test_nadaEhPosicionadoQuandoOGeradorNaoProduz(tmpPath):
+    fakeBin = tmpPath / "bin"
+    fakeBin.mkdir()
+    fake = fakeBin / "npx"
+    fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake.chmod(0o755)
+
+    target = _target(tmpPath)
+    runTool("build-resource.py", "SplitProfile", "--lang", "java",
+            "--into", str(target), env={"PATH": str(fakeBin)})
+
+    assert list(target.rglob("*")) == []

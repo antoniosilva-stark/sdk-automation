@@ -1,3 +1,4 @@
+import re
 import sys
 import shutil
 import argparse
@@ -19,6 +20,8 @@ TARGETS = {
     "node": "sdk-node",
 }
 
+_RESOURCE_NAME = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+
 
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
@@ -26,6 +29,10 @@ def emit(text: str) -> None:
 
 def varName(resource: str) -> str:
     return resource[0].lower() + resource[1:]
+
+
+def slugName(resource: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "-", resource).lower()
 
 
 def resolvePairs(language: str, resource: str) -> list[tuple[str, str]]:
@@ -55,12 +62,25 @@ def placeFiles(generatedDir: Path, targetDir: Path, pairs: list[tuple[str, str]]
 def main() -> int:
     parser = argparse.ArgumentParser(description="Move a saída do gerador para o layout do SDK alvo")
     parser.add_argument("resource", nargs="?", help="nome do recurso, ex: SplitProfile")
-    parser.add_argument("--lang", required=True, help=f"linguagem ({', '.join(sorted(LAYOUTS))})")
+    parser.add_argument("--lang", help=f"linguagem ({', '.join(sorted(LAYOUTS))})")
     parser.add_argument("--from", dest="generated", help="raiz da saída do gerador, com um subdiretório por papel")
     parser.add_argument("--to", dest="target", help="raiz do repositório do SDK alvo")
     parser.add_argument("--list", action="store_true", help="imprime os pares origem -> destino sem copiar")
+    parser.add_argument("--targets", action="store_true", help="imprime só os destinos, um por linha")
     parser.add_argument("--repo", action="store_true", help="imprime o repositório alvo da linguagem e encerra")
+    parser.add_argument("--slug", action="store_true", help="valida o nome do recurso e imprime o slug da branch")
     args = parser.parse_args()
+
+    if args.slug:
+        if not args.resource:
+            emit("[ERROR] resource é obrigatório no modo --slug")
+            return 2
+        if not _RESOURCE_NAME.match(args.resource):
+            emit(f"[ERROR] nome de recurso inválido: {args.resource!r}")
+            emit("[INFO] esperado UpperCamelCase só com letras e dígitos, ex: SplitProfile")
+            return 2
+        emit(slugName(args.resource))
+        return 0
 
     if args.repo:
         if args.lang not in TARGETS:
@@ -70,8 +90,12 @@ def main() -> int:
         emit(TARGETS[args.lang])
         return 0
 
+    if not args.lang:
+        emit("[ERROR] --lang é obrigatório fora dos modos de consulta")
+        return 2
+
     if not args.resource:
-        emit("[ERROR] resource é obrigatório fora do modo --repo")
+        emit("[ERROR] resource é obrigatório fora dos modos --repo e --slug")
         return 2
 
     try:
@@ -84,6 +108,11 @@ def main() -> int:
     if args.list:
         for source, target in pairs:
             emit(f"{source} -> {target}")
+        return 0
+
+    if args.targets:
+        for _, target in pairs:
+            emit(target)
         return 0
 
     if not args.generated or not args.target:

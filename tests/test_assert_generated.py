@@ -2,7 +2,7 @@ import shutil
 import pytest
 from pathlib import Path
 
-from conftest import requiresJavac, runTool
+from conftest import REPO_ROOT, requiresJavac, runTool
 
 WORKSPACE = Path.home() / "workspace"
 
@@ -210,3 +210,105 @@ def test_importMortoNoJavaRealEhDetectado(tmpPath):
 
     assert code == 1
     assert "GsonEvent" in out
+
+
+CONTRACT_DIR = Path(__file__).resolve().parent / "contract"
+
+
+def test_todoKindUsadoNosContratosEstaDeclarado(assertGenerated):
+    usados = set()
+    for path in sorted(CONTRACT_DIR.glob("*.contract")):
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            usados.add(line.split(" ")[0])
+    declarados = set(assertGenerated.CONTRACT_KINDS) | set(assertGenerated.CONTRACT_NOTES)
+    desconhecidos = usados - declarados
+    assert desconhecidos == set(), f"kind usado e nao declarado: {sorted(desconhecidos)}"
+
+
+def test_kindDesconhecidoReprovaNoParse(assertGenerated, tmpPath):
+    contract = _write(tmpPath, "x.contract", "shape isto nao e um kind\n")
+    with pytest.raises(ValueError, match="kind desconhecido"):
+        assertGenerated.parseContract(contract)
+
+
+def test_kindSemValorReprovaNoParse(assertGenerated, tmpPath):
+    contract = _write(tmpPath, "x.contract", "signature\n")
+    with pytest.raises(ValueError, match="sem valor"):
+        assertGenerated.parseContract(contract)
+
+
+def test_contratoInvalidoRetornaDoisNaCli(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "inexistente alguma coisa\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract))
+    assert code == 2
+    assert "contrato inválido" in out
+
+
+def test_fieldPresenteNoFonteNaoEhGap(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public String status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+    assert code == 0, out
+
+
+def test_fieldAusenteEhGap(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public List<Widget.Rule> rules;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+    assert code == 1
+    assert "field ausente" in out
+
+
+def test_requireAusenteEhGap(tmpPath):
+    target = _write(tmpPath, "widget.js", "const a = 1;\n")
+    contract = _write(tmpPath, "widget.contract", "require const rest = require('../utils/rest.js')\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--contract", str(contract), "--strict")
+    assert code == 1
+    assert "require ausente" in out
+
+
+def test_papelResolveContratoProprio(assertGenerated, tmpPath):
+    resolved = {
+        role: assertGenerated.resolveContract(Path("Transfer.js"), "node", None, role)
+        for role in ("impl", "barrel", "types")
+    }
+    assert all(path is not None for path in resolved.values()), resolved
+    assert len({path.name for path in resolved.values()}) == 3, resolved
+
+
+def test_semPapelCaiNoContratoDoRecurso(assertGenerated):
+    resolved = assertGenerated.resolveContract(Path("Invoice.java"), "java", None, None)
+    assert resolved is not None
+    assert resolved.name == "java-invoice.contract"
+
+
+def test_papelSemContratoProprioCaiNoFallback(assertGenerated):
+    resolved = assertGenerated.resolveContract(Path("Invoice.java"), "java", None, "main")
+    assert resolved.name == "java-invoice.contract"
+
+
+def test_contratoAusenteContinuaAnunciado(tmpPath):
+    target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target), "--strict")
+    assert code == 0
+    assert "sem contrato para este recurso" in out
+
+
+def test_todoNaoEhGapMasEhAnunciado(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "todo signature public static void futuro()\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+    assert code == 0, out
+    assert "paridade pendente, nao verificada" in out
+    assert "CONTRACT_GAP" not in out
+
+
+def test_buildResourcePassaStrictERole(buildResource, tmpPath):
+    source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
+    assert '"--strict"' in source
+    assert '"--role", role' in source

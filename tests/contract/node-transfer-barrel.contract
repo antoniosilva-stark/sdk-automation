@@ -1,0 +1,14 @@
+# Contrato do artefato barrel: sdk/transfer/index.js
+# Derivado de ~/workspace/bank/sdk-node/sdk/transfer/index.js
+
+require const transfer = require('./transfer.js')
+
+export exports.Transfer = transfer.Transfer
+export exports.get = transfer.get
+export exports.query = transfer.query
+
+# --- Paridade ainda nao alcancada ---
+todo export exports.log = require('./log')
+todo export exports.Rule = require('./rule/rule.js').Rule
+todo export exports.delete = transfer.delete
+todo export exports.pdf = transfer.pdf
