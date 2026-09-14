@@ -8,6 +8,7 @@ from conftest import REPO_ROOT, requiresGenerator, runTool
 
 SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
 VENDORED = REPO_ROOT / "_references/sdk-python"
+REAL_JAVA = REPO_ROOT / "_references/sdk-java/src/main/java/com/starkbank"
 
 RESOURCE = "SplitProfile"
 LANGUAGE = "java"
@@ -49,8 +50,9 @@ def _commitDeclared(repo: Path) -> bool:
 
 
 @pytest.mark.skipif(
-    not (SDK_PYTHON / "starkbank").is_dir() and not (VENDORED / "starkbank").is_dir(),
-    reason="sdk-python do Stark Bank não resolvido",
+    not ((SDK_PYTHON / "starkbank").is_dir() or (VENDORED / "starkbank").is_dir())
+    or not REAL_JAVA.is_dir(),
+    reason="referências do Stark Bank não resolvidas",
 )
 def test_recursoAlvoVemDaDescobertaNaoDeUmaLista():
     code, out = runTool("list-gaps.py", "--json")

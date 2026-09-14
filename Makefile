@@ -3,6 +3,7 @@
 # Local Stark Bank Python SDK clone used as field/type reference.
 # Falls back to cloning from GitHub when absent (CI).
 SDK_PYTHON ?= $(HOME)/workspace/bank/sdk-python
+SDK_JAVA ?= $(HOME)/workspace/bank/sdk-java
 
 # Colors for output
 GREEN := \033[0;32m
@@ -53,14 +54,26 @@ install-node: ## Install Node.js dependencies (npm)
 	npm install
 	@echo "$(GREEN)✅ Node.js dependencies installed$(NC)"
 
-clone-sdk-ref: ## Resolve the Python SDK reference (local clone, or clone from GitHub)
+clone-sdk-ref: ## Resolve the Python and Java SDK references (local clone, or clone from GitHub)
 	@echo "$(BLUE)Resolving Python SDK reference...$(NC)"
 	@if [ -d "$(SDK_PYTHON)/starkbank" ]; then \
 		echo "$(GREEN)✅ Python SDK reference: $(SDK_PYTHON)$(NC)"; \
 	else \
 		mkdir -p _references; \
-		[ -d "_references/sdk-python/starkbank" ] || git clone -q https://github.com/starkbank/sdk-python.git _references/sdk-python; \
+		[ -d "_references/sdk-python/starkbank" ] || git clone -q --depth 1 https://github.com/starkbank/sdk-python.git _references/sdk-python; \
 		echo "$(GREEN)✅ Python SDK reference: _references/sdk-python$(NC)"; \
+	fi
+	@echo "$(BLUE)Resolving Java SDK reference...$(NC)"
+	@if [ -d "_references/sdk-java/src/main/java/com/starkbank" ]; then \
+		echo "$(GREEN)✅ Java SDK reference: _references/sdk-java$(NC)"; \
+	elif [ -d "$(SDK_JAVA)/src/main/java/com/starkbank" ]; then \
+		mkdir -p _references; \
+		ln -sfn "$(SDK_JAVA)" _references/sdk-java; \
+		echo "$(GREEN)✅ Java SDK reference: $(SDK_JAVA)$(NC)"; \
+	else \
+		mkdir -p _references; \
+		git clone -q --depth 1 https://github.com/starkbank/sdk-java.git _references/sdk-java; \
+		echo "$(GREEN)✅ Java SDK reference: _references/sdk-java$(NC)"; \
 	fi
 
 # ============================================
