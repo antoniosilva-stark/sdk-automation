@@ -233,6 +233,27 @@ def test_todoWorkflowUsaAMesmaMajorDeNode():
     assert len(versions) <= 1, f"majors divergentes entre workflows: {sorted(versions)}"
 
 
+def test_quemRodaTesteResolveAReferenciaAntes():
+    """47 testes pytest ficavam skipped no CI por falta de _references/sdk-python.
+
+    O golden, o teste de gap e o de cobertura estavam entre eles: o CI nao verificava
+    fidelidade ao SDK Python, que e o proposito do projeto.
+    """
+    for path in workflowFiles():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for jobName, job in (workflow.get("jobs") or {}).items():
+            steps = job.get("steps") or []
+            scripts = [step.get("run") or "" for step in steps]
+
+            testIndex = next((i for i, script in enumerate(scripts) if "make test" in script), None)
+            if testIndex is None:
+                continue
+
+            cloneIndex = next((i for i, script in enumerate(scripts) if "clone-sdk-ref" in script), None)
+            assert cloneIndex is not None, f"{path.name}:{jobName} roda teste sem resolver a referencia"
+            assert cloneIndex < testIndex
+
+
 def test_quemRodaNpmCiConfiguraONode():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))

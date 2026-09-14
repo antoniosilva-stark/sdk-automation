@@ -1,9 +1,13 @@
 import json
 import shutil
+import pytest
 import subprocess
 from pathlib import Path
 
 from conftest import REPO_ROOT, requiresGenerator, runTool
+
+SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
+VENDORED = REPO_ROOT / "_references/sdk-python"
 
 RESOURCE = "SplitProfile"
 LANGUAGE = "java"
@@ -44,6 +48,10 @@ def _commitDeclared(repo: Path) -> bool:
     return True
 
 
+@pytest.mark.skipif(
+    not (SDK_PYTHON / "starkbank").is_dir() and not (VENDORED / "starkbank").is_dir(),
+    reason="sdk-python do Stark Bank não resolvido",
+)
 def test_recursoAlvoVemDaDescobertaNaoDeUmaLista():
     code, out = runTool("list-gaps.py", "--json")
 

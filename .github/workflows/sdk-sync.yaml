@@ -42,6 +42,9 @@ jobs:
       - name: Detect breaking changes
         run: python3 tools/breaking-change-detector.py
 
+      - name: Resolve the Python SDK reference
+        run: make clone-sdk-ref
+
       - name: Run tests
         run: make test
 
