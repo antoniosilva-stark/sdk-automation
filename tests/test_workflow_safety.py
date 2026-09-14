@@ -115,6 +115,37 @@ def test_geradorRodaAntesDoTokenExistir():
     assert build < token, "gerador roda com o token do App em disco"
 
 
+def test_alvoEhCompiladoAntesDoCommit():
+    """O sdk-java nao tem CI nenhuma: este gate e o unico que pega Java que nao compila.
+
+    Tem de rodar depois do copy, porque so ali o pom.xml do alvo e o gerado coexistem,
+    e antes do commit, para nao abrir PR com codigo que nao compila.
+    """
+    steps = syncSteps()
+    copy = stepIndex(steps, "cp -R staging/.", "run")
+    build = stepIndex(steps, "test-compile", "run")
+    commit = stepIndex(steps, "git commit", "run")
+
+    assert build >= 0, "nenhum step compila o gerado contra o SDK real"
+    assert copy >= 0 and commit >= 0
+    assert copy < build < commit, "compilacao fora da janela entre copy e commit"
+
+
+def test_compilacaoCobreOTesteGeradoENaoExecutaNada():
+    """`mvn compile` nao compila src/test — o teste gerado passaria sem verificacao.
+
+    E `mvn test` exigiria PROJECT_ID/PROJECT_PRIVATE_KEY de sandbox, que este repo
+    nao tem e nao deve ter.
+    """
+    scripts = [step.get("run") or "" for step in syncSteps()]
+    mvn = [script for script in scripts if "mvn" in script]
+
+    assert mvn, "nenhuma invocacao de maven"
+    for script in mvn:
+        assert "test-compile" in script, "compile puro nao cobre o teste gerado"
+        assert not re.search(r"mvn\s+(?:-\S+\s+)*test(?![-\w])", script), "mvn test pede credencial de sandbox"
+
+
 def test_checkoutDoProprioRepoNaoPersisteCredencial():
     first = syncSteps()[0]
     assert "actions/checkout" in first["uses"]

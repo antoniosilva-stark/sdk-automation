@@ -1,0 +1,29 @@
+components:
+  schemas:
+    CardMethod:
+      type: object
+      description: "CardMethod's codes are used to define methods filters in CorporateRules."
+      properties:
+        code:
+          type: string
+          description: "method's code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\", \"contactless\""
+        name:
+          type: string
+          description: "method's name. ex: \"token\""
+        number:
+          type: string
+          description: "method's number. ex: \"81\""
+      required:
+        - code
+        - name
+        - number
+
+    CardMethodCreate:
+      type: object
+      description: "CardMethod creation request"
+      properties:
+        code:
+          type: string
+          description: "method's code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\", \"contactless\""
+      required:
+        - code

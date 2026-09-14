@@ -1,0 +1,79 @@
+components:
+  schemas:
+    Deposit:
+      type: object
+      description: "Deposits represent passive cash-in received by your account from external transfers"
+      properties:
+        id:
+          type: string
+          description: "unique id associated with a Deposit when it is created. ex: \"5656565656565656\""
+        name:
+          type: string
+          description: "payer name. ex: \"Iron Bank S.A.\""
+        taxId:
+          type: string
+          description: "payer tax ID (CPF or CNPJ). ex: \"012.345.678-90\" or \"20.018.183/0001-80\""
+        bankCode:
+          type: string
+          description: "payer bank code in Brazil. ex: \"20018183\" or \"341\""
+        branchCode:
+          type: string
+          description: "payer bank account branch. ex: \"1357-9\""
+        accountNumber:
+          type: string
+          description: "payer bank account number. ex: \"876543-2\""
+        accountType:
+          type: string
+          description: "payer bank account type. ex: \"checking\""
+        amount:
+          type: integer
+          format: int64
+          description: "Deposit value in cents. ex: 1234 (= R$ 12.34)"
+        type:
+          type: string
+          description: "Type of settlement that originated the deposit. ex: \"pix\" or \"ted\""
+        status:
+          type: string
+          description: "current Deposit status. ex: \"created\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings that are tagging the deposit. ex: [\"reconciliationId\", \"txId\"]"
+        fee:
+          type: integer
+          description: "fee charged by this deposit. ex: 50 (= R$ 0.50)"
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this deposit (if there are more than one, all but the first are reversals or failed reversal chargebacks). ex: [\"19827356981273\"]"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the Deposit. ex: datetime.datetime(2020, 12, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the Deposit. ex: datetime.datetime(2020, 12, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - name
+        - taxId
+        - bankCode
+        - branchCode
+        - accountNumber
+        - accountType
+        - amount
+        - type
+        - status
+        - tags
+        - fee
+        - transactionIds
+        - created
+        - updated
+
+    DepositCreate:
+      type: object
+      description: "Deposit creation request"
+      properties: {}

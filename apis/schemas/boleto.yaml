@@ -1,0 +1,194 @@
+components:
+  schemas:
+    Boleto:
+      type: object
+      description: "When you initialize a Boleto, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when Boleto is created. ex: \"5656565656565656\""
+        amount:
+          type: integer
+          format: int64
+          description: "Boleto value in cents. Minimum = 200 (R$2,00). ex: 1234 (= R$ 12.34)"
+        name:
+          type: string
+          description: "payer full name. ex: \"Anthony Edward Stark\""
+        taxId:
+          type: string
+          description: "payer tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        streetLine1:
+          type: string
+          description: "payer main address. ex: Av. Paulista, 200"
+        streetLine2:
+          type: string
+          description: "payer address complement. ex: Apto. 123"
+        district:
+          type: string
+          description: "payer address district / neighbourhood. ex: Bela Vista"
+        city:
+          type: string
+          description: "payer address city. ex: Rio de Janeiro"
+        stateCode:
+          type: string
+          description: "payer address state. ex: GO"
+        zipCode:
+          type: string
+          description: "payer address zip code. ex: 01311-200"
+        due:
+          type: string
+          format: date
+          description: "Boleto due date in ISO format. ex: 2020-04-30"
+        fine:
+          type: number
+          description: "Boleto fine for overdue payment in %. ex: 2.5"
+        interest:
+          type: number
+          description: "Boleto monthly interest for overdue payment in %. ex: 5.2"
+        overdueLimit:
+          type: integer
+          description: "limit in days for payment after due date. ex: 7 (max: 59)"
+        descriptions:
+          type: array
+          items:
+            type: object
+          description: "list of dictionaries with \"text\":string and (optional) \"amount\":int pairs"
+        discounts:
+          type: array
+          items:
+            type: object
+          description: "list of dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        receiverName:
+          type: string
+          description: "receiver (Sacador Avalista) full name. ex: \"Anthony Edward Stark\""
+        receiverTaxId:
+          type: string
+          description: "receiver (Sacador Avalista) tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        fee:
+          type: integer
+          description: "fee charged when Boleto is paid. ex: 200 (= R$ 2.00)"
+        line:
+          type: string
+          description: "generated Boleto line for payment. ex: \"34191.09008 63571.277308 71444.640008 5 81960000000062\""
+        barCode:
+          type: string
+          description: "generated Boleto bar-code for payment. ex: \"34195819600000000621090063571277307144464000\""
+        status:
+          type: string
+          description: "current Boleto status. ex: \"registered\" or \"paid\""
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this boleto. ex: [\"19827356981273\"]"
+        workspaceId:
+          type: string
+          description: "ID of the Workspace where this Boleto was generated. ex: \"4545454545454545\""
+        ourNumber:
+          type: string
+          description: "Reference number registered at the settlement bank. ex:\"10131474\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the Boleto. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - amount
+        - name
+        - taxId
+        - streetLine1
+        - streetLine2
+        - district
+        - city
+        - stateCode
+        - zipCode
+        - fee
+        - line
+        - barCode
+        - status
+        - transactionIds
+        - workspaceId
+        - ourNumber
+        - created
+
+    BoletoCreate:
+      type: object
+      description: "Boleto creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "Boleto value in cents. Minimum = 200 (R$2,00). ex: 1234 (= R$ 12.34)"
+        name:
+          type: string
+          description: "payer full name. ex: \"Anthony Edward Stark\""
+        taxId:
+          type: string
+          description: "payer tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        streetLine1:
+          type: string
+          description: "payer main address. ex: Av. Paulista, 200"
+        streetLine2:
+          type: string
+          description: "payer address complement. ex: Apto. 123"
+        district:
+          type: string
+          description: "payer address district / neighbourhood. ex: Bela Vista"
+        city:
+          type: string
+          description: "payer address city. ex: Rio de Janeiro"
+        stateCode:
+          type: string
+          description: "payer address state. ex: GO"
+        zipCode:
+          type: string
+          description: "payer address zip code. ex: 01311-200"
+        due:
+          type: string
+          format: date
+          description: "Boleto due date in ISO format. ex: 2020-04-30"
+        fine:
+          type: number
+          description: "Boleto fine for overdue payment in %. ex: 2.5"
+        interest:
+          type: number
+          description: "Boleto monthly interest for overdue payment in %. ex: 5.2"
+        overdueLimit:
+          type: integer
+          description: "limit in days for payment after due date. ex: 7 (max: 59)"
+        descriptions:
+          type: array
+          items:
+            type: object
+          description: "list of dictionaries with \"text\":string and (optional) \"amount\":int pairs"
+        discounts:
+          type: array
+          items:
+            type: object
+          description: "list of dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        receiverName:
+          type: string
+          description: "receiver (Sacador Avalista) full name. ex: \"Anthony Edward Stark\""
+        receiverTaxId:
+          type: string
+          description: "receiver (Sacador Avalista) tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+      required:
+        - amount
+        - name
+        - taxId
+        - streetLine1
+        - streetLine2
+        - district
+        - city
+        - stateCode
+        - zipCode

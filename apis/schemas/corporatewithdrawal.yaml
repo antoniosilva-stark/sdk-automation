@@ -1,0 +1,55 @@
+components:
+  schemas:
+    CorporateWithdrawal:
+      type: object
+      description: "The CorporateWithdrawal objects created in your Workspace return cash from your Corporate balance to your Banking balance."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when CorporateWithdrawal is created. ex: \"5656565656565656\""
+        amount:
+          type: integer
+          format: int64
+          description: "CorporateWithdrawal value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. ex: [\"tony\", \"stark\"]"
+        transactionId:
+          type: string
+          description: "Stark Bank ledger transaction ids linked to this CorporateWithdrawal"
+        corporateTransactionId:
+          type: string
+          description: "corporate ledger transaction ids linked to this CorporateWithdrawal"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the CorporateWithdrawal. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the CorporateWithdrawal. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - amount
+        - transactionId
+        - corporateTransactionId
+        - updated
+        - created
+
+    CorporateWithdrawalCreate:
+      type: object
+      description: "CorporateWithdrawal creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "CorporateWithdrawal value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. ex: [\"tony\", \"stark\"]"
+      required:
+        - amount

@@ -1,12 +1,8 @@
-# Contrato público real — referência de paridade para geração Java
 # source:    ~/workspace/sdk-java/src/main/java/com/starkbank/Invoice.java (1161 linhas)
 # extracted: 2026-09-09
-# uso:       assert-generated.sh compara o gerado contra este contrato e reporta o gap.
-#            Linhas `signature` ausentes no gerado são gap, não necessariamente erro —
-#            o gap só é erro quando a spec declara a operação correspondente.
 
 todo declaration public final class Invoice extends Resource
-field       static ClassData data = new ClassData(Invoice.class, "Invoice")
+field       static ClassData data = new ClassData(Invoice.class, "Invoice");
 
 todo constructor public Invoice(Number amount, String due, String taxId, ...)
 constructor public Invoice(Map<String, Object> data) throws Exception
@@ -20,10 +16,10 @@ signature public static Generator<Invoice> query()
 signature public static Generator<Invoice> query(Map<String, Object> params)
 signature public static Generator<Invoice> query(User user)
 signature public static Generator<Invoice> query(Map<String, Object> params, User user)
-todo signature public static Page page()
-todo signature public static Page page(Map<String, Object> params)
-todo signature public static Page page(User user)
-todo signature public static Page page(Map<String, Object> params, User user)
+signature public static Page page()
+signature public static Page page(Map<String, Object> params)
+signature public static Page page(User user)
+signature public static Page page(Map<String, Object> params, User user)
 todo signature public static Invoice update(String id, Map<String, Object> patchData)
 todo signature public static Invoice update(String id, Map<String, Object> patchData, User user)
 todo signature public static InputStream pdf(String id)
@@ -37,25 +33,43 @@ todo inner public final static class Rule
 todo inner public final static class Discount
 todo inner public final static class Description
 todo inner public final static class Payment
-todo inner public final static class Page
-todo inner public final static class Log
+inner public final static class Page
+inner public final static class Log
 
-# Sub-recurso Log expõe o próprio conjunto
-todo signature public static Log Log.get(String id)
-todo signature public static Log Log.get(String id, User user)
-todo signature public static Generator<Log> Log.query()
-todo signature public static Generator<Log> Log.query(Map<String, Object> params)
-todo signature public static Generator<Log> Log.query(User user)
-todo signature public static Generator<Log> Log.query(Map<String, Object> params, User user)
-todo signature public static Log.Page Log.page()
-todo signature public static Log.Page Log.page(Map<String, Object> params)
-todo signature public static Log.Page Log.page(User user)
-todo signature public static Log.Page Log.page(Map<String, Object> params, User user)
+signature public static Log get(String id)
+signature public static Log get(String id, User user)
+signature public static Generator<Log> query()
+signature public static Generator<Log> query(Map<String, Object> params)
+signature public static Generator<Log> query(User user)
+signature public static Generator<Log> query(Map<String, Object> params, User user)
+signature public static Log.Page page()
+signature public static Log.Page page(Map<String, Object> params)
+signature public static Log.Page page(User user)
+signature public static Log.Page page(Map<String, Object> params, User user)
 
-# --- Gap medido contra a spec atual (2026-09-09) ---
-# spec declara para Invoice: create, get, query
-# contrato exige também:     page, update, pdf, qrcode, payment, Log.*
-# => 20 assinaturas no topo + 10 em Log; spec sustenta 8 (create x2, get x2, query x4)
+field public String due;
+field public String taxId;
+field public String name;
+field public String pdf;
+field public String link;
+field public String brcode;
+field public Integer fee;
+field public String status;
+field public String created;
+field public String updated;
 
-# Paridade pendente movida para 'todo' em 2026-09-11 ao ligar --strict:
-# 30 de 30 gaps medidos contra o Invoice.java gerado
+todo field public Number amount;  # gerado: public Long amount;
+todo field public Number expiration;  # gerado: public Integer expiration;
+todo field public Number fine;  # gerado: public BigDecimal fine;
+todo field public Number interest;  # gerado: public BigDecimal interest;
+todo field public Number nominalAmount;  # gerado: public Long nominalAmount;
+todo field public Number fineAmount;  # gerado: public Long fineAmount;
+todo field public Number interestAmount;  # gerado: public Long interestAmount;
+todo field public Number discountAmount;  # gerado: public Long discountAmount;
+todo field public List<Invoice.Description> descriptions;  # gerado: public List<Object> descriptions;
+todo field public List<Invoice.Discount> discounts;  # gerado: public List<Object> discounts;
+todo field public List<Invoice.Rule> rules;  # gerado: public List<Object> rules;
+todo field public List<Split> splits;  # gerado: public List<Object> splits;
+todo field public String[] tags;  # gerado: public List<String> tags;
+todo field public String[] transactionIds;  # gerado: public List<String> transactionIds;
+

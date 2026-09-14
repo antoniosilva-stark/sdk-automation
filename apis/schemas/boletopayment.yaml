@@ -1,0 +1,90 @@
+components:
+  schemas:
+    BoletoPayment:
+      type: object
+      description: "When you initialize a BoletoPayment, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when payment is created. ex: \"5656565656565656\""
+        line:
+          type: string
+          description: "Number sequence that describes the payment. Either 'line' or 'bar_code' parameters are required. If both are sent, they must match. ex: \"34191.09008 63571.277308 71444.640008 5 81960000000062\""
+        barCode:
+          type: string
+          description: "Bar code number that describes the payment. Either 'line' or 'barCode' parameters are required. If both are sent, they must match. ex: \"34195819600000000621090063571277307144464000\""
+        taxId:
+          type: string
+          description: "receiver tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        description:
+          type: string
+          description: "Text to be displayed in your statement (min. 10 characters). ex: \"payment ABC\""
+        amount:
+          type: integer
+          format: int64
+          description: "amount to be paid. If none is informed, the current boleto value will be used. ex: 23456 (= R$ 234.56)"
+        scheduled:
+          type: string
+          format: date
+          description: "payment scheduled date. ex: datetime.date(2020, 3, 10)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        status:
+          type: string
+          description: "current payment status. ex: \"success\" or \"failed\""
+        fee:
+          type: integer
+          description: "fee charged when the boleto payment is created. ex: 200 (= R$ 2.00)"
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this BoletoPayment. ex: [\"19827356981273\"]"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - taxId
+        - description
+        - status
+        - fee
+        - transactionIds
+        - created
+
+    BoletoPaymentCreate:
+      type: object
+      description: "BoletoPayment creation request"
+      properties:
+        line:
+          type: string
+          description: "Number sequence that describes the payment. Either 'line' or 'bar_code' parameters are required. If both are sent, they must match. ex: \"34191.09008 63571.277308 71444.640008 5 81960000000062\""
+        barCode:
+          type: string
+          description: "Bar code number that describes the payment. Either 'line' or 'barCode' parameters are required. If both are sent, they must match. ex: \"34195819600000000621090063571277307144464000\""
+        taxId:
+          type: string
+          description: "receiver tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        description:
+          type: string
+          description: "Text to be displayed in your statement (min. 10 characters). ex: \"payment ABC\""
+        amount:
+          type: integer
+          format: int64
+          description: "amount to be paid. If none is informed, the current boleto value will be used. ex: 23456 (= R$ 234.56)"
+        scheduled:
+          type: string
+          format: date
+          description: "payment scheduled date. ex: datetime.date(2020, 3, 10)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - taxId
+        - description

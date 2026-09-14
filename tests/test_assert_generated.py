@@ -248,6 +248,22 @@ def test_contratoInvalidoRetornaDoisNaCli(tmpPath):
     assert "contrato inválido" in out
 
 
+def test_nenhumaMensagemAfirmaVerificacaoQueNaoRoda(tmpPath):
+    """A tool afirmava "compilacao contra o SDK real ... roda no CI" e o CI nao compilava.
+
+    Mesma classe do achado 7 do code-review: registro afirmando cobertura inexistente.
+    A compilacao acontece no workflow, contra o checkout do alvo — nunca aqui, que ve
+    um arquivo solto sem o pom nem o classpath do SDK.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target))
+
+    assert code == 0, out
+    assert "roda no CI" not in out
+    assert "compilação contra o SDK real" in out
+    assert "fora do alcance desta verificação" in out
+
+
 def test_fieldPresenteNoFonteNaoEhGap(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "field public String status;\n")
@@ -263,6 +279,43 @@ def test_fieldAusenteEhGap(tmpPath):
     assert "field ausente" in out
 
 
+def test_tipoDivergenteEhGapEDizOQueVeio(tmpPath):
+    """O gap que passou batido: Transaction gerado tinha Integer amount, real tem long.
+
+    Acusar so "ausente" obrigava a abrir os dois arquivos para descobrir que o campo
+    existe com outro tipo.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+    assert code == 1
+    assert "field divergente" in out
+    assert "public long status;" in out
+    assert "public String status;" in out
+
+
+def test_campoComNomePrefixoNaoSatisfazOContrato(tmpPath):
+    """statusCode nao pode passar por status."""
+    source = CLEAN_JAVA.replace("public String status;", "public String statusCode;")
+    target = _write(tmpPath, "Widget.java", source)
+    contract = _write(tmpPath, "widget.contract", "field public String status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+    assert code == 1
+    assert "field ausente" in out
+
+
+def test_fieldDeclaradoComoTodoNaoBloqueia(tmpPath):
+    """Tipo que o gerador nao alcanca (primitivo) fica visivel sem travar o pipeline."""
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "todo field public long status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+    assert code == 0, out
+    assert "paridade pendente" in out
+
+
 def test_requireAusenteEhGap(tmpPath):
     target = _write(tmpPath, "widget.js", "const a = 1;\n")
     contract = _write(tmpPath, "widget.contract", "require const rest = require('../utils/rest.js')\n")
@@ -270,6 +323,27 @@ def test_requireAusenteEhGap(tmpPath):
                         "--contract", str(contract), "--strict")
     assert code == 1
     assert "require ausente" in out
+
+
+def test_todoFieldDosContratosReaisTerminaEmPontoEVirgula(assertGenerated):
+    """Sem o `;` a entrada casa por prefixo: `public String status` passaria por
+    `public String statusCode;`, e o contrato afirmaria paridade que não existe."""
+    contracts = sorted(Path(assertGenerated.CONTRACT_DIR).glob("*.contract"))
+    assert contracts
+
+    for contract in contracts:
+        entries = assertGenerated.parseContract(contract)
+        for entry in entries["field"]:
+            assert entry.endswith(";"), f"{contract.name}: {entry}"
+
+
+def test_contratoDeCampoCobreOsRecursosComContratoJava(assertGenerated):
+    """Contrato sem entrada de campo não pega divergência de tipo — foi assim que
+    `Integer amount` contra `long amount` passou até 2026-09-11."""
+    for name in ("java-transaction", "java-invoice"):
+        entries = assertGenerated.parseContract(Path(assertGenerated.CONTRACT_DIR) / f"{name}.contract")
+        declared = [e for e in entries["field"] if e.startswith("public ")]
+        assert len(declared) >= 5, f"{name}: {len(declared)} campos declarados"
 
 
 def test_papelResolveContratoProprio(assertGenerated, tmpPath):

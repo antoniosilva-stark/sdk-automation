@@ -1,0 +1,100 @@
+components:
+  schemas:
+    CorporateCard:
+      type: object
+      description: "The CorporateCard object displays the information of the cards created in your Workspace. Sensitive information will only be returned when the \"expand\" parameter is used, to avoid security concerns. When you initialize a CorporateCard, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the created object."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when CorporateCard is created. ex: \"5656565656565656\""
+        holderId:
+          type: string
+          description: "card holder unique id. ex: \"5656565656565656\""
+        holderName:
+          type: string
+          description: "card holder name. ex: \"Tony Stark\""
+        displayName:
+          type: string
+          description: "card displayed name. ex: \"ANTHONY STARK\""
+        rules:
+          type: array
+          items:
+            type: object
+          description: "[EXPANDABLE] list of card spending rules."
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. ex: [\"travel\", \"food\"]"
+        streetLine1:
+          type: string
+          description: "card holder main address. ex: \"Av. Paulista, 200\""
+        streetLine2:
+          type: string
+          description: "card holder address complement. ex: \"Apto. 123\""
+        district:
+          type: string
+          description: "card holder address district/neighbourhood. ex: \"Bela Vista\""
+        city:
+          type: string
+          description: "card holder address city. ex: \"Rio de Janeiro\""
+        stateCode:
+          type: string
+          description: "card holder address state. ex: \"GO\""
+        zipCode:
+          type: string
+          description: "card holder address zip code. ex: \"01311-200\""
+        type:
+          type: string
+          description: "card type. ex: \"virtual\""
+        status:
+          type: string
+          description: "current CorporateCard status. ex: \"active\", \"blocked\", \"canceled\", \"expired\""
+        number:
+          type: string
+          description: "[EXPANDABLE] masked card number. Expand to unmask the value. ex: \"123\""
+        securityCode:
+          type: string
+          description: "[EXPANDABLE] masked card verification value (cvv). Expand to unmask the value. ex: \"123\""
+        expiration:
+          type: string
+          format: date-time
+          description: "[EXPANDABLE] masked card expiration datetime. Expand to unmask the value. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the CorporateCard. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the CorporateCard. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - holderId
+        - holderName
+        - displayName
+        - rules
+        - tags
+        - streetLine1
+        - streetLine2
+        - district
+        - city
+        - stateCode
+        - zipCode
+        - type
+        - status
+        - number
+        - securityCode
+        - expiration
+        - updated
+        - created
+
+    CorporateCardCreate:
+      type: object
+      description: "CorporateCard creation request"
+      properties:
+        holderId:
+          type: string
+          description: "card holder unique id. ex: \"5656565656565656\""
+      required:
+        - holderId

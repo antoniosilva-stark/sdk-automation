@@ -1,0 +1,99 @@
+components:
+  schemas:
+    MerchantSession:
+      type: object
+      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-session"
+      properties:
+        id:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        allowedFundingTypes:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        allowedInstallments:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        allowedIps:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeMode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        uuid:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        softDescriptor:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - id
+        - allowedFundingTypes
+        - allowedInstallments
+        - expiration
+
+    MerchantSessionCreate:
+      type: object
+      description: "MerchantSession creation request"
+      properties:
+        allowedFundingTypes:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        allowedInstallments:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        allowedIps:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeMode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        uuid:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        softDescriptor:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - allowedFundingTypes
+        - allowedInstallments
+        - expiration

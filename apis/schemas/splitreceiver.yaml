@@ -1,0 +1,89 @@
+components:
+  schemas:
+    SplitReceiver:
+      type: object
+      description: "When you initialize a SplitReceiver, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when the splitReceiver is created. ex: \"5656565656565656\""
+        name:
+          type: string
+          description: "receiver full name. ex: \"Anthony Edward Stark\""
+        taxId:
+          type: string
+          description: "receiver account tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        bankCode:
+          type: string
+          description: "code of the receiver bank institution in Brazil. If an ISPB (8 digits) is informed, a PIX splitReceiver will be created, else a TED will be issued. ex: \"20018183\" or \"341\""
+        branchCode:
+          type: string
+          description: "receiver bank account branch. Use '-' in case there is a verifier digit. ex: \"1357-9\""
+        accountNumber:
+          type: string
+          description: "receiver bank account number. Use '-' before the verifier digit. ex: \"876543-2\""
+        accountType:
+          type: string
+          description: "Receiver bank account type. This parameter only has effect on Pix SplitReceivers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for reference when searching for receivers. ex: [\"seller/123456\"]"
+        status:
+          type: string
+          description: "current splitReceiver status. ex: \"success\" or \"failed\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the splitReceiver. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the splitReceiver. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - name
+        - taxId
+        - bankCode
+        - branchCode
+        - accountNumber
+        - accountType
+        - status
+        - created
+        - updated
+
+    SplitReceiverCreate:
+      type: object
+      description: "SplitReceiver creation request"
+      properties:
+        name:
+          type: string
+          description: "receiver full name. ex: \"Anthony Edward Stark\""
+        taxId:
+          type: string
+          description: "receiver account tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        bankCode:
+          type: string
+          description: "code of the receiver bank institution in Brazil. If an ISPB (8 digits) is informed, a PIX splitReceiver will be created, else a TED will be issued. ex: \"20018183\" or \"341\""
+        branchCode:
+          type: string
+          description: "receiver bank account branch. Use '-' in case there is a verifier digit. ex: \"1357-9\""
+        accountNumber:
+          type: string
+          description: "receiver bank account number. Use '-' before the verifier digit. ex: \"876543-2\""
+        accountType:
+          type: string
+          description: "Receiver bank account type. This parameter only has effect on Pix SplitReceivers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for reference when searching for receivers. ex: [\"seller/123456\"]"
+      required:
+        - name
+        - taxId
+        - bankCode
+        - branchCode
+        - accountNumber
+        - accountType

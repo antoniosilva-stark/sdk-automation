@@ -1,4 +1,5 @@
 import sys
+import yaml
 import shutil
 import argparse
 import tempfile
@@ -22,6 +23,15 @@ GENERATORS = {
                 "--type-mappings", "OffsetDateTime=String,Date=String,URI=String",
             ],
         },
+        {
+            "role": "test",
+            "generator": "java",
+            "templateDir": "templates/java-test",
+            "extra": [
+                "--model-package", "com.starkbank",
+                "--type-mappings", "OffsetDateTime=String,Date=String,URI=String",
+            ],
+        },
     ],
     "node": [
         {"role": "impl", "generator": "javascript", "templateDir": "templates/nodejs-impl", "extra": []},
@@ -29,6 +39,37 @@ GENERATORS = {
         {"role": "types", "generator": "typescript-node", "templateDir": "templates/nodejs-types", "extra": []},
     ],
 }
+
+
+GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
+LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
+SETTINGS_USERS = ("x-sdk-query", "x-sdk-page", "x-sdk-log")
+REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
+              "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
+
+
+def declaredFlags(resource: str) -> set[str]:
+    spec = yaml.safe_load((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return {key for key in schema if key.startswith("x-sdk-")}
+
+
+def javaImports(flags: set[str]) -> list[str]:
+    """Quais imports o template Java pode emitir sem virar import morto.
+
+    Só o que vale entra: additional-property chega como string, e "false" é
+    verdadeiro no Mustache.
+    """
+    properties = []
+    if flags & set(GENERATOR_USERS):
+        properties.append("usesGenerator=true")
+    if flags & set(LIST_USERS):
+        properties.append("usesList=true")
+    if flags & set(SETTINGS_USERS):
+        properties.append("usesSettings=true")
+    if flags & set(REST_USERS):
+        properties.append("usesRest=true")
+    return properties
 
 
 def emit(text: str) -> None:
@@ -69,6 +110,11 @@ def plannedPairs(resource: str, language: str) -> list[tuple[str, str]]:
 
 
 def generate(resource: str, run: dict, outputDir: Path) -> int:
+    extra = list(run["extra"])
+    properties = javaImports(declaredFlags(resource)) if run["generator"] == "java" else []
+    if properties:
+        extra.extend(["--additional-properties", ",".join(properties)])
+
     code, _ = runStep(
         f"generate {run['role']} ({run['generator']})",
         [
@@ -78,7 +124,7 @@ def generate(resource: str, run: dict, outputDir: Path) -> int:
             "--template-dir", run["templateDir"],
             "-o", str(outputDir),
             "--global-property", f"models={resource},{SCOPE}",
-            *run["extra"],
+            *extra,
         ],
     )
     return code

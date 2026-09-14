@@ -32,11 +32,41 @@ class Widget(Resource):
 '''
 
 
+BARE_MODULE = '''
+from starkcore.utils.resource import Resource
+from starkcore.utils.checks import check_datetime, check_datetime_or_date
+
+
+class Widget(Resource):
+    """# Widget object
+    Check out our API Documentation at https://starkbank.com/docs/api#widget
+    """
+
+    def __init__(self, id=None, ending=None, holder_name=None, status=None, tags=None,
+                 expiration=None, created=None):
+        Resource.__init__(self, id=id)
+        self.ending = ending
+        self.holder_name = holder_name
+        self.status = status
+        self.tags = tags
+        self.expiration = check_datetime_or_date(expiration)
+        self.created = check_datetime(created)
+'''
+
+
 def _fakeSdk(tmpPath: Path, module: str = "widget", body: str = WIDGET_MODULE) -> Path:
     root = tmpPath / "sdk-python"
     package = root / "starkbank" / module
     package.mkdir(parents=True)
     (package / f"__{module}.py").write_text(body, encoding="utf-8")
+    return root
+
+
+def _withInit(root: Path, module: str, exports: str, log: bool = False) -> Path:
+    package = root / "starkbank" / module
+    (package / "__init__.py").write_text(f"from .__{module} import {exports}\n", encoding="utf-8")
+    if log:
+        (package / "log").mkdir()
     return root
 
 
@@ -135,6 +165,274 @@ def test_raizSemStarkbankRetornaDois(tmpPath):
     assert "não contém starkbank/" in out
 
 
+def test_docstringSemCamposCaiNoInit(tmpPath):
+    """5 recursos novos (MerchantCard, MerchantSession, DynamicBrcode, MerchantPurchase,
+    MerchantInstallment) so dizem "Check out our API Documentation": os campos vivem no
+    __init__. Sem fallback, o extrator devolve zero e o recurso fica fora do alcance.
+    """
+    root = _fakeSdk(tmpPath, body=BARE_MODULE)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert list(properties) == ["id", "ending", "holderName", "status", "tags", "expiration", "created"]
+
+
+def test_tipoInferidoEhMarcadoComoInferido(tmpPath):
+    """Tipo vindo do __init__ e palpite, nao medicao: precisa ser distinguivel de tipo
+    lido do docstring, senao vira paridade afirmada sem lastro."""
+    root = _fakeSdk(tmpPath, body=BARE_MODULE)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert properties["created"]["format"] == "date-time"
+    assert "inferido" in properties["status"]["description"]
+
+
+def test_fallbackNaoAtropelaDocstringExistente(tmpPath):
+    root = _fakeSdk(tmpPath)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert properties["amount"]["type"] == "integer"
+    assert "inferido" not in properties["amount"]["description"]
+
+
+READONLY_MODULE = '''
+from starkcore.utils.resource import Resource
+
+
+class Widget(Resource):
+    """# Widget object
+    A Widget does widget things.
+    ## Attributes (return-only):
+    - id [string]: unique id. ex: "5656"
+    - status [string]: current status. ex: "created"
+    - created [string]: creation datetime. ex: "2020-03-10"
+    """
+
+    def __init__(self, id=None, status=None, created=None):
+        Resource.__init__(self, id=id)
+        self.status = status
+        self.created = created
+'''
+
+
+CONDITIONAL_MODULE = '''
+from starkcore.utils.resource import Resource
+
+
+class Widget(Resource):
+    """# Widget object
+    A Widget does widget things.
+    ## Parameters (conditionally required):
+    - code [string, default None]: category code. ex: "fastFood"
+    - type [string, default None]: category type. ex: "food"
+    ## Attributes (return only):
+    - id [string]: unique id. ex: "5656"
+    """
+
+    def __init__(self, code=None, type=None, id=None):
+        Resource.__init__(self, id=id)
+        self.code = code
+        self.type = type
+'''
+
+
+def test_secoesMenosComunsNaoSaoPerdidas(tmpPath):
+    """`conditionally required` aparece em 9 modulos e `return only` (sem hifen) em 1.
+
+    Sem reconhecer, o campo some sem aviso e o recurso parece scaffolding.
+    """
+    root = _fakeSdk(tmpPath, body=CONDITIONAL_MODULE)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert set(properties) == {"id", "code", "type"}
+
+
+def test_recursoSemCampoDeCreateEmiteObjetoVazioNaoNulo(tmpPath):
+    """Event e Workspace nao tem campo de create. Emitir `properties:` sem valor
+    produz None, e o gerador reprova a spec inteira com SpecValidationException —
+    um recurso quebra a geracao de todos.
+    """
+    root = _fakeSdk(tmpPath, body=READONLY_MODULE)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    create = yaml.safe_load(out)["components"]["schemas"]["WidgetCreate"]
+
+    assert create["properties"] == {}
+
+
+def test_convencaoAplicaInt64EmCampoMonetario(extractSchema, tmpPath):
+    """Decisao 44: recurso novo segue convencao; Integer estoura em R$ 21.474.836,47.
+
+    Por nome de campo, nao em bloco: o SDK real usa Integer para `fee` e 64 bits para
+    `amount`/`balance`, e uma regra unica quebraria um dos dois.
+    """
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("integerFormats:\n  amount: int64\n", encoding="utf-8")
+
+    assert extractSchema.integerFormat("amount", conventions) == "int64"
+    assert extractSchema.integerFormat("fee", conventions) is None
+
+
+def test_convencaoAusenteNaoQuebra(extractSchema, tmpPath):
+    assert extractSchema.integerFormat("amount", tmpPath / "nao-existe.yaml") is None
+
+
+def test_schemaGravadoCarregaOFormatoDaConvencao(tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "create, get, query, page")
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    schema = yaml.safe_load(out)["components"]["schemas"]["Widget"]
+    assert schema["properties"]["amount"]["format"] == "int64"
+
+
+def test_operacoesVemDosExportsDoInit(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "create, get, query, page")
+
+    operations = extractSchema.declaredOperations(root, "Widget")
+
+    assert operations["flags"] == ["x-sdk-create", "x-sdk-get", "x-sdk-page", "x-sdk-query"]
+    assert operations["unsupported"] == []
+
+
+def test_putEhDerivadoQuandoOPythonExporta(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "put, get, query, page")
+
+    assert "x-sdk-put" in extractSchema.declaredOperations(root, "Widget")["flags"]
+
+
+def test_operacaoSemFlagEhAnunciadaNaoIgnorada(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, parse, response")
+
+    operations = extractSchema.declaredOperations(root, "Widget")
+
+    assert operations["flags"] == ["x-sdk-get", "x-sdk-query"]
+    assert operations["unsupported"] == ["parse", "response"]
+
+
+def test_logVemDaPresencaDoDiretorio(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get", log=True)
+
+    assert "x-sdk-log" in extractSchema.declaredOperations(root, "Widget")["flags"]
+
+
+def test_classeSemOperacaoViraDataOnly(extractSchema, tmpPath):
+    """CorporateRule declara a classe e exporta so o helper parse_rules: no Java e
+    classe so de dados, com zero `public static`."""
+    root = _withInit(_fakeSdk(tmpPath), "widget", "Widget, parse_rules")
+
+    operations = extractSchema.declaredOperations(root, "Widget")
+
+    assert operations["flags"] == ["x-sdk-data-only"]
+    assert operations["unsupported"] == ["parse_rules"]
+
+
+def test_logExportadoNaoContaComoOperacaoSemFlag(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, log", log=True)
+
+    operations = extractSchema.declaredOperations(root, "Widget")
+
+    assert "x-sdk-log" in operations["flags"]
+    assert operations["unsupported"] == []
+
+
+def test_initAusenteNaoInventaOperacao(extractSchema, tmpPath):
+    root = _fakeSdk(tmpPath)
+
+    operations = extractSchema.declaredOperations(root, "Widget")
+
+    assert operations["flags"] == []
+    assert operations["missingInit"] is True
+
+
+def test_documentoNaoMudaComAsOperacoes(tmpPath):
+    """O golden compara o documento; as flags sao siblings do $ref na spec, nao do schema.
+
+    Se a saida padrao passasse a carregar flag, os 3 arquivos de apis/schemas/ divergiriam.
+    """
+    root = _withInit(_fakeSdk(tmpPath), "widget", "create, get, query, page")
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0
+    assert "x-sdk" not in out
+
+
+def test_operacoesSaemComOFlagDedicado(tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "create, get, query, page")
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
+
+    assert code == 0
+    assert yaml.safe_load(out) == {
+        "x-sdk-create": True, "x-sdk-get": True, "x-sdk-page": True, "x-sdk-query": True,
+    }
+
+
+def test_stdoutDasOperacoesEhYamlPuro(tmpPath):
+    """O consumidor parseia stdout; aviso misturado ali quebraria o parse."""
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, parse, response")
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
+
+    assert code == 0, out
+    assert yaml.safe_load(out) == {"x-sdk-get": True, "x-sdk-query": True}
+
+
+@pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
+def test_operacoesReaisDoDictKey(extractSchema):
+    operations = extractSchema.declaredOperations(SDK_PYTHON, "DictKey")
+
+    assert operations["flags"] == ["x-sdk-get", "x-sdk-page", "x-sdk-query"]
+
+
+def test_raizInexistenteDizQueNaoExiste(tmpPath):
+    """Antes acusava "e o SDK do Stark Infra ou caminho errado" quando o diretorio
+    simplesmente nao estava la — mandava caçar o problema errado."""
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(tmpPath / "nao-existe"))
+
+    assert code == 2
+    assert "não existe" in out
+    assert "Stark Infra" not in out
+
+
+def test_raizDefaultResolveSemSymlink(extractSchema, tmpPath, monkeypatch):
+    """Decisao 21: a referencia vem de SDK_PYTHON, sem symlink em _references/.
+
+    Com o default fixo em _references/sdk-python, o tool falhava em toda maquina
+    onde a referencia mora em ~/workspace/bank/sdk-python.
+    """
+    local = tmpPath / "bank" / "sdk-python"
+    (local / "starkbank").mkdir(parents=True)
+    monkeypatch.setenv("SDK_PYTHON", str(local))
+
+    assert extractSchema.resolveRoot(None) == local
+
+
+def test_raizDefaultIgnoraEnvInvalida(extractSchema, tmpPath, monkeypatch):
+    """SDK_PYTHON apontando para o Stark Infra nao pode vencer: cai no fallback."""
+    infra = tmpPath / "sdk-python"
+    (infra / "starkinfra").mkdir(parents=True)
+    monkeypatch.setenv("SDK_PYTHON", str(infra))
+
+    assert extractSchema.resolveRoot(None) != infra
+
+
+def test_raizExplicitaVenceAResolucao(extractSchema, tmpPath, monkeypatch):
+    explicit = tmpPath / "explicita"
+    (explicit / "starkbank").mkdir(parents=True)
+    monkeypatch.setenv("SDK_PYTHON", str(tmpPath / "outra"))
+
+    assert extractSchema.resolveRoot(str(explicit)) == explicit
+
+
 def test_moduloInexistenteRetornaDois(tmpPath):
     root = _fakeSdk(tmpPath)
     code, out = runTool("extract-schema.py", "NaoExiste", "--from", str(root))
@@ -180,8 +478,29 @@ def test_avisaCampoDocumentadoAusenteNoInit(tmpPath):
     assert "tags" in out
 
 
+def appliedSchemas() -> list[tuple[str, Path]]:
+    """Todo arquivo de apis/schemas/, com o nome da classe lido do proprio conteudo.
+
+    O nome UpperCamelCase nao e derivavel do arquivo: dictkey.yaml -> DictKey.
+    """
+    applied = []
+    for path in sorted((REPO_ROOT / "apis/schemas").glob("*.yaml")):
+        schemas = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"]
+        resource = next(name for name in schemas if not name.endswith("Create"))
+        applied.append((resource, path))
+    return applied
+
+
+def test_todoSchemaAplicadoEntraNoGolden():
+    """Sem isto, recurso novo aplicado ficaria fora do guard em silencio."""
+    resources = [resource for resource, _ in appliedSchemas()]
+
+    assert len(resources) >= 4
+    assert "DictKey" in resources
+
+
 @pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
-@pytest.mark.parametrize("resource", ["Transaction", "Transfer", "Invoice"])
+@pytest.mark.parametrize("resource", [resource for resource, _ in appliedSchemas()])
 def test_extraidoBateComOSchemaAplicado(resource, tmpPath):
     destination = tmpPath / "out.yaml"
     code, _ = runTool("extract-schema.py", resource, "--from", str(SDK_PYTHON), "--out", str(destination))

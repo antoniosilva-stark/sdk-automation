@@ -1,0 +1,7 @@
+integerFormats:
+  amount: int64
+  balance: int64
+  nominalAmount: int64
+  fineAmount: int64
+  interestAmount: int64
+  discountAmount: int64

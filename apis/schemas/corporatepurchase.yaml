@@ -1,0 +1,131 @@
+components:
+  schemas:
+    CorporatePurchase:
+      type: object
+      description: "Displays the CorporatePurchase objects created in your Workspace."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when CorporatePurchase is created. ex: \"5656565656565656\""
+        holderId:
+          type: string
+          description: "card holder unique id. ex: \"5656565656565656\""
+        holderName:
+          type: string
+          description: "card holder name. ex: \"Tony Stark\""
+        centerId:
+          type: string
+          description: "target cost center ID. ex: \"5656565656565656\""
+        cardId:
+          type: string
+          description: "unique id returned when CorporateCard is created. ex: \"5656565656565656\""
+        cardEnding:
+          type: string
+          description: "last 4 digits of the card number. ex: \"1234\""
+        description:
+          type: string
+          description: "purchase descriptions. ex: \"my_description\""
+        amount:
+          type: integer
+          format: int64
+          description: "CorporatePurchase value in cents. Minimum = 0. ex: 1234 (= R$ 12.34)"
+        tax:
+          type: integer
+          description: "IOF amount taxed for international purchases. ex: 1234 (= R$ 12.34)"
+        issuerAmount:
+          type: integer
+          description: "issuer amount. ex: 1234 (= R$ 12.34)"
+        issuerCurrencyCode:
+          type: string
+          description: "issuer currency code. ex: \"USD\""
+        issuerCurrencySymbol:
+          type: string
+          description: "issuer currency symbol. ex: \"$\""
+        merchantAmount:
+          type: integer
+          description: "merchant amount. ex: 1234 (= R$ 12.34)"
+        merchantCurrencyCode:
+          type: string
+          description: "merchant currency code. ex: \"USD\""
+        merchantCurrencySymbol:
+          type: string
+          description: "merchant currency symbol. ex: \"$\""
+        merchantCategoryCode:
+          type: string
+          description: "merchant category code. ex: \"fastFoodRestaurants\""
+        merchantCategoryType:
+          type: string
+          description: "merchant category type. ex: \"health\""
+        merchantCountryCode:
+          type: string
+          description: "merchant country code. ex: \"USA\""
+        merchantName:
+          type: string
+          description: "merchant name. ex: \"Google Cloud Platform\""
+        merchantDisplayName:
+          type: string
+          description: "merchant name. ex: \"Google Cloud Platform\""
+        merchantDisplayUrl:
+          type: string
+          description: "public merchant icon (png image). ex: \"https://sandbox.api.starkbank.com/v2/corporate-icon/merchant/ifood.png\""
+        merchantFee:
+          type: integer
+          description: "fee charged by the merchant to cover specific costs, such as ATM withdrawal logistics, etc. ex: 200 (= R$ 2.00)"
+        methodCode:
+          type: string
+          description: "method code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\" or \"contactless\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging returned by the sub-issuer during the authorization. ex: [\"travel\", \"food\"]"
+        corporateTransactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this Purchase"
+        status:
+          type: string
+          description: "current CorporateCard status. Options: \"approved\", \"canceled\", \"denied\", \"confirmed\", \"voided\""
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the CorporatePurchase. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the CorporatePurchase. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - holderId
+        - holderName
+        - centerId
+        - cardId
+        - cardEnding
+        - description
+        - amount
+        - tax
+        - issuerAmount
+        - issuerCurrencyCode
+        - issuerCurrencySymbol
+        - merchantAmount
+        - merchantCurrencyCode
+        - merchantCurrencySymbol
+        - merchantCategoryCode
+        - merchantCategoryType
+        - merchantCountryCode
+        - merchantName
+        - merchantDisplayName
+        - merchantDisplayUrl
+        - merchantFee
+        - methodCode
+        - tags
+        - corporateTransactionIds
+        - status
+        - updated
+        - created
+
+    CorporatePurchaseCreate:
+      type: object
+      description: "CorporatePurchase creation request"
+      properties: {}

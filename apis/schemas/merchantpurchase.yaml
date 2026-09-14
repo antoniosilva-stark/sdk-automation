@@ -1,0 +1,215 @@
+components:
+  schemas:
+    MerchantPurchase:
+      type: object
+      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-purchase"
+      properties:
+        id:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        amount:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        installmentCount:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardExpiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardNumber:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardSecurityCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderName:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderEmail:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderPhone:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingCountryCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingCity:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStateCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStreetLine1:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStreetLine2:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingZipCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        metadata:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardEnding:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        softDescriptor:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeMode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeUrl:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        currencyCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        endToEndId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fee:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        source:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - id
+        - amount
+        - installmentCount
+        - fundingType
+        - cardId
+
+    MerchantPurchaseCreate:
+      type: object
+      description: "MerchantPurchase creation request"
+      properties:
+        amount:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        installmentCount:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardExpiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardNumber:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardSecurityCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderName:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderEmail:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderPhone:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingCountryCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingCity:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStateCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStreetLine1:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingStreetLine2:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        billingZipCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        metadata:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardEnding:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        cardId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        softDescriptor:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeMode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        challengeUrl:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        currencyCode:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        endToEndId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fee:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        source:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - amount
+        - installmentCount
+        - fundingType
+        - cardId

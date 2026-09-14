@@ -1,0 +1,76 @@
+components:
+  schemas:
+    MerchantCard:
+      type: object
+      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-card"
+      properties:
+        id:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        ending:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderName:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - id
+
+    MerchantCardCreate:
+      type: object
+      description: "MerchantCard creation request"
+      properties:
+        ending:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        holderName:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"

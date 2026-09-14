@@ -9,6 +9,7 @@ components:
           description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string
@@ -95,6 +96,7 @@ components:
       properties:
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string

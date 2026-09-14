@@ -1,0 +1,40 @@
+# source:    _references/sdk-node/sdk/splitprofile/
+# extracted: 2026-09-11
+
+declaration public class SplitProfile extends Resource
+field       static ClassData data = new ClassData(SplitProfile.class, "SplitProfile");
+
+constructor public SplitProfile(Map<String, Object> data) throws Exception
+constructor public SplitProfile()
+
+signature public static SplitProfile get(String id)
+signature public static SplitProfile get(String id, User user)
+signature public static Generator<SplitProfile> query()
+signature public static Generator<SplitProfile> query(Map<String, Object> params)
+signature public static Generator<SplitProfile> query(User user)
+signature public static Generator<SplitProfile> query(Map<String, Object> params, User user)
+signature public static Page page()
+signature public static Page page(Map<String, Object> params)
+signature public static Page page(User user)
+signature public static Page page(Map<String, Object> params, User user)
+
+inner public final static class Page
+
+field public String interval;
+field public Integer delay;
+field public String status;
+field public String created;
+field public String updated;
+
+todo signature public static List<SplitProfile> put(List<?> splitProfiles)
+todo signature public static List<SplitProfile> put(List<?> splitProfiles, User user)
+
+inner public final static class Log
+signature public static Log get(String id)
+signature public static Log get(String id, User user)
+signature public static Generator<Log> query()
+signature public static Generator<Log> query(Map<String, Object> params)
+signature public static Log.Page page()
+signature public static Log.Page page(Map<String, Object> params)
+
+todo field public String[] tags;  # gerado: public List<String> tags;

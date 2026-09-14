@@ -16,6 +16,861 @@ servers:
 - url: https://sandbox.api.starkbank.com/v2
   description: Sandbox
 paths:
+  /merchant-category:
+    get:
+      operationId: queryMerchantCategory
+      tags:
+      - MerchantCategorys
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantCategory'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /utility-payment:
+    post:
+      operationId: createUtilityPayment
+      tags:
+      - UtilityPayments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/UtilityPaymentCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UtilityPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryUtilityPayment
+      tags:
+      - UtilityPayments
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UtilityPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /utility-payment/{id}:
+    get:
+      operationId: getUtilityPayment
+      tags:
+      - UtilityPayments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UtilityPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    delete:
+      operationId: deleteUtilityPayment
+      tags:
+      - UtilityPayments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UtilityPayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split-receiver:
+    post:
+      operationId: createSplitReceiver
+      tags:
+      - SplitReceivers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SplitReceiverCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitReceiver'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: querySplitReceiver
+      tags:
+      - SplitReceivers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitReceiver'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split-receiver/{id}:
+    get:
+      operationId: getSplitReceiver
+      tags:
+      - SplitReceivers
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitReceiver'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split:
+    get:
+      operationId: querySplit
+      tags:
+      - Splits
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Split'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /split/{id}:
+    get:
+      operationId: getSplit
+      tags:
+      - Splits
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Split'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /payment-request:
+    post:
+      operationId: createPaymentRequest
+      tags:
+      - PaymentRequests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentRequestCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryPaymentRequest
+      tags:
+      - PaymentRequests
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-session:
+    post:
+      operationId: createMerchantSession
+      tags:
+      - MerchantSessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/MerchantSessionCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSession'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryMerchantSession
+      tags:
+      - MerchantSessions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSession'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-session/{id}:
+    get:
+      operationId: getMerchantSession
+      tags:
+      - MerchantSessions
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSession'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-purchase:
+    post:
+      operationId: createMerchantPurchase
+      tags:
+      - MerchantPurchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/MerchantPurchaseCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPurchase'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryMerchantPurchase
+      tags:
+      - MerchantPurchases
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPurchase'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-purchase/{id}:
+    get:
+      operationId: getMerchantPurchase
+      tags:
+      - MerchantPurchases
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPurchase'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    patch:
+      operationId: updateMerchantPurchase
+      tags:
+      - MerchantPurchases
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPurchase'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-installment:
+    get:
+      operationId: queryMerchantInstallment
+      tags:
+      - MerchantInstallments
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantInstallment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-installment/{id}:
+    get:
+      operationId: getMerchantInstallment
+      tags:
+      - MerchantInstallments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantInstallment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-country:
+    get:
+      operationId: queryMerchantCountry
+      tags:
+      - MerchantCountrys
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantCountry'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-card:
+    get:
+      operationId: queryMerchantCard
+      tags:
+      - MerchantCards
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantCard'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /merchant-card/{id}:
+    get:
+      operationId: getMerchantCard
+      tags:
+      - MerchantCards
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantCard'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /invoice-pull-subscription:
+    post:
+      operationId: createInvoicePullSubscription
+      tags:
+      - InvoicePullSubscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/InvoicePullSubscriptionCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullSubscription'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryInvoicePullSubscription
+      tags:
+      - InvoicePullSubscriptions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullSubscription'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /invoice-pull-subscription/{id}:
+    get:
+      operationId: getInvoicePullSubscription
+      tags:
+      - InvoicePullSubscriptions
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullSubscription'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    delete:
+      operationId: deleteInvoicePullSubscription
+      tags:
+      - InvoicePullSubscriptions
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullSubscription'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /invoice-pull-request:
+    post:
+      operationId: createInvoicePullRequest
+      tags:
+      - InvoicePullRequests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/InvoicePullRequestCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryInvoicePullRequest
+      tags:
+      - InvoicePullRequests
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /invoice-pull-request/{id}:
+    get:
+      operationId: getInvoicePullRequest
+      tags:
+      - InvoicePullRequests
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    delete:
+      operationId: deleteInvoicePullRequest
+      tags:
+      - InvoicePullRequests
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePullRequest'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /institution:
+    get:
+      operationId: queryInstitution
+      tags:
+      - Institutions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Institution'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /dynamic-brcode:
+    post:
+      operationId: createDynamicBrcode
+      tags:
+      - DynamicBrcodes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DynamicBrcodeCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicBrcode'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryDynamicBrcode
+      tags:
+      - DynamicBrcodes
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicBrcode'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /dynamic-brcode/{id}:
+    get:
+      operationId: getDynamicBrcode
+      tags:
+      - DynamicBrcodes
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicBrcode'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /brcode-payment:
+    post:
+      operationId: createBrcodePayment
+      tags:
+      - BrcodePayments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BrcodePaymentCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrcodePayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBrcodePayment
+      tags:
+      - BrcodePayments
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrcodePayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /brcode-payment/{id}:
+    get:
+      operationId: getBrcodePayment
+      tags:
+      - BrcodePayments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrcodePayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    patch:
+      operationId: updateBrcodePayment
+      tags:
+      - BrcodePayments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrcodePayment'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto-holmes:
+    post:
+      operationId: createBoletoHolmes
+      tags:
+      - BoletoHolmess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BoletoHolmesCreate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoHolmes'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+    get:
+      operationId: queryBoletoHolmes
+      tags:
+      - BoletoHolmess
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoHolmes'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+  /boleto-holmes/{id}:
+    get:
+      operationId: getBoletoHolmes
+      tags:
+      - BoletoHolmess
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletoHolmes'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
   /transaction:
     post:
       operationId: createTransaction
@@ -5238,10 +6093,144 @@ paths:
           description: Server error
 components:
   schemas:
+    MerchantCategory:
+      x-sdk-query: true
+      $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategory
+    MerchantCategoryCreate:
+      $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategoryCreate
+    UtilityPayment:
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      $ref: ./schemas/utilitypayment.yaml#/components/schemas/UtilityPayment
+    UtilityPaymentCreate:
+      $ref: ./schemas/utilitypayment.yaml#/components/schemas/UtilityPaymentCreate
+    SplitReceiver:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/splitreceiver.yaml#/components/schemas/SplitReceiver
+    SplitReceiverCreate:
+      $ref: ./schemas/splitreceiver.yaml#/components/schemas/SplitReceiverCreate
+    Split:
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/split.yaml#/components/schemas/Split
+    SplitCreate:
+      $ref: ./schemas/split.yaml#/components/schemas/SplitCreate
+    PaymentRequest:
+      x-sdk-create: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/paymentrequest.yaml#/components/schemas/PaymentRequest
+    PaymentRequestCreate:
+      $ref: ./schemas/paymentrequest.yaml#/components/schemas/PaymentRequestCreate
+    MerchantSession:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/merchantsession.yaml#/components/schemas/MerchantSession
+    MerchantSessionCreate:
+      $ref: ./schemas/merchantsession.yaml#/components/schemas/MerchantSessionCreate
+    MerchantPurchase:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/merchantpurchase.yaml#/components/schemas/MerchantPurchase
+    MerchantPurchaseCreate:
+      $ref: ./schemas/merchantpurchase.yaml#/components/schemas/MerchantPurchaseCreate
+    MerchantInstallment:
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallment
+    MerchantInstallmentCreate:
+      $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallmentCreate
+    MerchantCountry:
+      x-sdk-query: true
+      $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountry
+    MerchantCountryCreate:
+      $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountryCreate
+    MerchantCard:
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/merchantcard.yaml#/components/schemas/MerchantCard
+    MerchantCardCreate:
+      $ref: ./schemas/merchantcard.yaml#/components/schemas/MerchantCardCreate
+    InvoicePullSubscription:
+      x-sdk-cancel: true
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/invoicepullsubscription.yaml#/components/schemas/InvoicePullSubscription
+    InvoicePullSubscriptionCreate:
+      $ref: ./schemas/invoicepullsubscription.yaml#/components/schemas/InvoicePullSubscriptionCreate
+    InvoicePullRequest:
+      x-sdk-cancel: true
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequest
+    InvoicePullRequestCreate:
+      $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequestCreate
+    Institution:
+      x-sdk-query: true
+      $ref: ./schemas/institution.yaml#/components/schemas/Institution
+    InstitutionCreate:
+      $ref: ./schemas/institution.yaml#/components/schemas/InstitutionCreate
+    DynamicBrcode:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/dynamicbrcode.yaml#/components/schemas/DynamicBrcode
+    DynamicBrcodeCreate:
+      $ref: ./schemas/dynamicbrcode.yaml#/components/schemas/DynamicBrcodeCreate
+    BrcodePayment:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/brcodepayment.yaml#/components/schemas/BrcodePayment
+    BrcodePaymentCreate:
+      $ref: ./schemas/brcodepayment.yaml#/components/schemas/BrcodePaymentCreate
+    BoletoHolmes:
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/boletoholmes.yaml#/components/schemas/BoletoHolmes
+    BoletoHolmesCreate:
+      $ref: ./schemas/boletoholmes.yaml#/components/schemas/BoletoHolmesCreate
     Transaction:
       x-sdk-create: true
       x-sdk-get: true
       x-sdk-query: true
+      x-sdk-page: true
       $ref: ./schemas/transaction.yaml#/components/schemas/Transaction
     TransactionCreate:
       $ref: ./schemas/transaction.yaml#/components/schemas/TransactionCreate
@@ -5249,6 +6238,10 @@ components:
       x-sdk-create: true
       x-sdk-get: true
       x-sdk-query: true
+      x-sdk-page: true
+      x-sdk-log: true
+      x-sdk-update: true
+      x-sdk-pdf: true
       $ref: ./schemas/invoice.yaml#/components/schemas/Invoice
     InvoiceCreate:
       $ref: ./schemas/invoice.yaml#/components/schemas/InvoiceCreate
@@ -5256,63 +6249,40 @@ components:
       x-sdk-create: true
       x-sdk-get: true
       x-sdk-query: true
+      x-sdk-page: true
+      x-sdk-log: true
+      x-sdk-delete: true
+      x-sdk-pdf: true
       $ref: ./schemas/transfer.yaml#/components/schemas/Transfer
     TransferCreate:
       $ref: ./schemas/transfer.yaml#/components/schemas/TransferCreate
     Balance:
-      type: object
-      description: A Balance resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      $ref: ./schemas/balance.yaml#/components/schemas/Balance
     BalanceCreate:
-      type: object
-      description: Balance creation request
-      properties: {}
+      $ref: ./schemas/balance.yaml#/components/schemas/BalanceCreate
     Boleto:
-      type: object
-      description: A Boleto resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      $ref: ./schemas/boleto.yaml#/components/schemas/Boleto
     BoletoCreate:
-      type: object
-      description: Boleto creation request
-      properties: {}
+      $ref: ./schemas/boleto.yaml#/components/schemas/BoletoCreate
     BoletoPayment:
-      type: object
-      description: A BoletoPayment resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      $ref: ./schemas/boletopayment.yaml#/components/schemas/BoletoPayment
     BoletoPaymentCreate:
-      type: object
-      description: BoletoPayment creation request
-      properties: {}
+      $ref: ./schemas/boletopayment.yaml#/components/schemas/BoletoPaymentCreate
     DictAccount:
       type: object
       description: A DictAccount resource
@@ -5332,59 +6302,30 @@ components:
       description: DictAccount creation request
       properties: {}
     DictKey:
-      type: object
-      description: A DictKey resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/dictkey.yaml#/components/schemas/DictKey
     DictKeyCreate:
-      type: object
-      description: DictKey creation request
-      properties: {}
+      $ref: ./schemas/dictkey.yaml#/components/schemas/DictKeyCreate
     Webhook:
-      type: object
-      description: A Webhook resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/webhook.yaml#/components/schemas/Webhook
     WebhookCreate:
-      type: object
-      description: Webhook creation request
-      properties: {}
+      $ref: ./schemas/webhook.yaml#/components/schemas/WebhookCreate
     Event:
-      type: object
-      description: A Event resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/event.yaml#/components/schemas/Event
     EventCreate:
-      type: object
-      description: Event creation request
-      properties: {}
+      $ref: ./schemas/event.yaml#/components/schemas/EventCreate
     PIXPayment:
       type: object
       description: A PIXPayment resource
@@ -5494,149 +6435,66 @@ components:
       description: BrCodePayment creation request
       properties: {}
     CorporateBalance:
-      type: object
-      description: A CorporateBalance resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      $ref: ./schemas/corporatebalance.yaml#/components/schemas/CorporateBalance
     CorporateBalanceCreate:
-      type: object
-      description: CorporateBalance creation request
-      properties: {}
+      $ref: ./schemas/corporatebalance.yaml#/components/schemas/CorporateBalanceCreate
     CorporateCard:
-      type: object
-      description: A CorporateCard resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-cancel: true
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/corporatecard.yaml#/components/schemas/CorporateCard
     CorporateCardCreate:
-      type: object
-      description: CorporateCard creation request
-      properties: {}
+      $ref: ./schemas/corporatecard.yaml#/components/schemas/CorporateCardCreate
     CorporateHolder:
-      type: object
-      description: A CorporateHolder resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-cancel: true
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/corporateholder.yaml#/components/schemas/CorporateHolder
     CorporateHolderCreate:
-      type: object
-      description: CorporateHolder creation request
-      properties: {}
+      $ref: ./schemas/corporateholder.yaml#/components/schemas/CorporateHolderCreate
     CorporatePurchase:
-      type: object
-      description: A CorporatePurchase resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-query: true
+      $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchase
     CorporatePurchaseCreate:
-      type: object
-      description: CorporatePurchase creation request
-      properties: {}
+      $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchaseCreate
     CorporateRule:
-      type: object
-      description: A CorporateRule resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-data-only: true
+      $ref: ./schemas/corporaterule.yaml#/components/schemas/CorporateRule
     CorporateRuleCreate:
-      type: object
-      description: CorporateRule creation request
-      properties: {}
+      $ref: ./schemas/corporaterule.yaml#/components/schemas/CorporateRuleCreate
     CorporateTransaction:
-      type: object
-      description: A CorporateTransaction resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/corporatetransaction.yaml#/components/schemas/CorporateTransaction
     CorporateTransactionCreate:
-      type: object
-      description: CorporateTransaction creation request
-      properties: {}
+      $ref: ./schemas/corporatetransaction.yaml#/components/schemas/CorporateTransactionCreate
     CorporateWithdrawal:
-      type: object
-      description: A CorporateWithdrawal resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/corporatewithdrawal.yaml#/components/schemas/CorporateWithdrawal
     CorporateWithdrawalCreate:
-      type: object
-      description: CorporateWithdrawal creation request
-      properties: {}
+      $ref: ./schemas/corporatewithdrawal.yaml#/components/schemas/CorporateWithdrawalCreate
     CorporateInvoice:
-      type: object
-      description: A CorporateInvoice resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-page: true
+      x-sdk-query: true
+      $ref: ./schemas/corporateinvoice.yaml#/components/schemas/CorporateInvoice
     CorporateInvoiceCreate:
-      type: object
-      description: CorporateInvoice creation request
-      properties: {}
+      $ref: ./schemas/corporateinvoice.yaml#/components/schemas/CorporateInvoiceCreate
     Document:
       type: object
       description: A Document resource
@@ -5692,28 +6550,20 @@ components:
       description: Request creation request
       properties: {}
     Workspace:
-      type: object
-      description: A Workspace resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-get: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/workspace.yaml#/components/schemas/Workspace
     WorkspaceCreate:
-      type: object
-      description: Workspace creation request
-      properties: {}
+      $ref: ./schemas/workspace.yaml#/components/schemas/WorkspaceCreate
     SplitProfile:
       type: object
-      x-sdk-put: true
       x-sdk-get: true
       x-sdk-query: true
+      x-sdk-page: true
+      x-sdk-log: true
       description: |
         When you create a Split, the entity SplitProfile will be automatically created.
         If you haven't created a Split yet, you can use put to create your SplitProfile.
@@ -5771,41 +6621,21 @@ components:
       - interval
       - delay
     DarfPayment:
-      type: object
-      description: A DarfPayment resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPayment
     DarfPaymentCreate:
-      type: object
-      description: DarfPayment creation request
-      properties: {}
+      $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPaymentCreate
     CardMethod:
-      type: object
-      description: A CardMethod resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-query: true
+      $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethod
     CardMethodCreate:
-      type: object
-      description: CardMethod creation request
-      properties: {}
+      $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethodCreate
     Limit:
       type: object
       description: A Limit resource
@@ -5843,41 +6673,19 @@ components:
       description: StaticBrcode creation request
       properties: {}
     Deposit:
-      type: object
-      description: A Deposit resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-query: true
+      x-sdk-update: true
+      $ref: ./schemas/deposit.yaml#/components/schemas/Deposit
     DepositCreate:
-      type: object
-      description: Deposit creation request
-      properties: {}
+      $ref: ./schemas/deposit.yaml#/components/schemas/DepositCreate
     PaymentPreview:
-      type: object
-      description: A PaymentPreview resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      $ref: ./schemas/paymentpreview.yaml#/components/schemas/PaymentPreview
     PaymentPreviewCreate:
-      type: object
-      description: PaymentPreview creation request
-      properties: {}
+      $ref: ./schemas/paymentpreview.yaml#/components/schemas/PaymentPreviewCreate
     AccountNumber:
       type: object
       description: A AccountNumber resource
@@ -5915,23 +6723,16 @@ components:
       description: Account creation request
       properties: {}
     TaxPayment:
-      type: object
-      description: A TaxPayment resource
-      properties:
-        id:
-          type: string
-          description: Unique ID
-        created:
-          type: string
-          format: date-time
-          description: Creation timestamp
-      required:
-      - id
-      - created
+      x-sdk-create: true
+      x-sdk-delete: true
+      x-sdk-get: true
+      x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-pdf: true
+      x-sdk-query: true
+      $ref: ./schemas/taxpayment.yaml#/components/schemas/TaxPayment
     TaxPaymentCreate:
-      type: object
-      description: TaxPayment creation request
-      properties: {}
+      $ref: ./schemas/taxpayment.yaml#/components/schemas/TaxPaymentCreate
     InstallmentPayment:
       type: object
       description: A InstallmentPayment resource

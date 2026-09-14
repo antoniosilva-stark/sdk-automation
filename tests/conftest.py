@@ -93,3 +93,8 @@ def buildResource():
 @pytest.fixture
 def extractSchema():
     return _loadTool("extract-schema.py")
+
+
+@pytest.fixture
+def coverageReport():
+    return _loadTool("coverage-report.py")

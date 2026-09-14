@@ -11,9 +11,16 @@ CREATE_SUFFIX = "Create"
 CODE_SCAFFOLDING = "SCAFFOLDING"
 CODE_UNDECLARED = "UNDECLARED"
 CODE_ID_ORDER = "ID_ORDER"
+CODE_NO_OPERATION = "NO_OPERATION"
 
 MIN_READ_PROPS = 3
 MIN_CREATE_PROPS = 1
+
+OPERATION_FLAGS = (
+    "x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
+    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-data-only",
+)
+WRITE_FLAGS = ("x-sdk-create", "x-sdk-put")
 
 _SCHEMA_LINE = re.compile(r"^    ([A-Za-z][A-Za-z0-9]*):", re.M)
 
@@ -34,6 +41,7 @@ class ResourceReport:
     readProps: int
     createProps: int
     subObjects: int
+    operations: list[str]
     reasons: list[tuple[str, str]]
 
     @property
@@ -66,12 +74,25 @@ def resolveRef(ref: str, specPath: Path) -> dict:
     return node
 
 
-def schemaProps(schema: dict | None, specPath: Path) -> dict:
+def resolveSchema(schema: dict | None, specPath: Path) -> dict:
     if not isinstance(schema, dict):
         return {}
-    if "$ref" in schema:
-        return schemaProps(resolveRef(schema["$ref"], specPath), specPath)
-    return schema.get("properties") or {}
+
+    ref = schema.get("$ref")
+    if not ref:
+        return schema
+
+    merged = dict(resolveSchema(resolveRef(ref, specPath), specPath))
+    merged.update({key: value for key, value in schema.items() if key != "$ref"})
+    return merged
+
+
+def schemaProps(schema: dict | None, specPath: Path) -> dict:
+    return resolveSchema(schema, specPath).get("properties") or {}
+
+
+def declaredOperations(schema: dict) -> list[str]:
+    return [flag for flag in OPERATION_FLAGS if schema.get(flag)]
 
 
 def countSubObjects(props: dict) -> int:
@@ -97,17 +118,26 @@ def schemaLines(specPath: Path) -> dict[str, int]:
 
 
 def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, int]) -> ResourceReport:
-    readProps = schemaProps(schemas.get(name), specPath)
+    readSchema = resolveSchema(schemas.get(name), specPath)
+    readProps = readSchema.get("properties") or {}
     createProps = schemaProps(schemas.get(name + CREATE_SUFFIX), specPath)
+    operations = declaredOperations(readSchema)
+    writes = [flag for flag in WRITE_FLAGS if readSchema.get(flag)]
 
     reasons: list[tuple[str, str]] = []
     names = list(readProps)
+    if not operations:
+        reasons.append((CODE_NO_OPERATION, f"nenhuma operação declarada — use uma de {', '.join(OPERATION_FLAGS)}"))
     if "id" in names and names[0] != "id":
         reasons.append((CODE_ID_ORDER, f"'id' deve ser a primeira propriedade, mas veio depois de '{names[0]}'"))
     if len(readProps) < MIN_READ_PROPS:
         reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
-    if len(createProps) < MIN_CREATE_PROPS:
-        reasons.append((CODE_SCAFFOLDING, f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS})"))
+    if writes and len(createProps) < MIN_CREATE_PROPS:
+        reasons.append((
+            CODE_SCAFFOLDING,
+            f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS}) "
+            f"porque {writes[0]} está declarado",
+        ))
 
     return ResourceReport(
         name=name,
@@ -115,6 +145,7 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
         readProps=len(readProps),
         createProps=len(createProps),
         subObjects=countSubObjects(readProps),
+        operations=operations,
         reasons=reasons,
     )
 
@@ -132,7 +163,8 @@ def reportInventory(reports: list[ResourceReport]) -> None:
     emit(f"[OK] gerável ({len(generatable)}):")
     for report in generatable:
         subObjects = f", {report.subObjects} sub-objeto(s)" if report.subObjects else ""
-        emit(f"  {report.name} — {report.readProps} props / {report.createProps} create{subObjects}")
+        operations = ", ".join(flag.removeprefix("x-sdk-") for flag in report.operations)
+        emit(f"  {report.name} — {report.readProps} props / {report.createProps} create{subObjects} [{operations}]")
 
     emit("")
     emit(f"[WARN] scaffolding ({len(scaffolding)}):")

@@ -169,6 +169,11 @@ jobs:
       - name: Copy verified artifacts into the target
         run: cp -R staging/. target/
 
+      - name: Compile the target against the real SDK
+        if: inputs.language == 'java'
+        working-directory: target
+        run: mvn -q -B --no-transfer-progress test-compile
+
       - name: Commit when the generated output differs
         id: commit
         working-directory: target

@@ -24,6 +24,7 @@ _EMPTY_SLOT = re.compile(r"\(\s+(?:instanceof|:|\))")
 _DROPPED_NAME = re.compile(r"\w {2,}[:,)]")
 _JAVAC_SYNTAX = re.compile(r"error: (?:.*expected|illegal start|bad initializer|reached end of file)")
 _IMPORT = re.compile(r"^import (?:static )?([\w.]+);", re.M)
+_FIELD_NAME = re.compile(r"(\w+)\s*;\s*$")
 
 
 @dataclass
@@ -110,6 +111,23 @@ def checkDeadImports(source: str, filePath: str) -> list[Issue]:
     return issues
 
 
+def declaredField(source: str, name: str) -> str | None:
+    """Declaração do campo `name` como o fonte gerado a escreveu, com o tipo dele."""
+    match = re.search(r"^\s*(public [^;{}\n]*\b" + re.escape(name) + r")\s*;", source, re.M)
+    return f"{match.group(1)};" if match else None
+
+
+def contractGap(kind: str, expected: str, source: str) -> str:
+    if kind != "field":
+        return f"{kind} ausente: {expected}"
+
+    name = _FIELD_NAME.search(expected)
+    found = declaredField(source, name.group(1)) if name else None
+    if not found:
+        return f"field ausente: {expected}"
+    return f"field divergente: esperado {expected!r}, gerado {found!r}"
+
+
 def checkContract(source: str, contract: dict[str, list[str]], filePath: str) -> list[Issue]:
     collapsed = normalise(source)
     issues = []
@@ -118,7 +136,7 @@ def checkContract(source: str, contract: dict[str, list[str]], filePath: str) ->
             if normalise(expected) in collapsed:
                 continue
             issues.append(
-                Issue(filePath, 0, 0, CODE_CONTRACT_GAP, f"{kind} ausente: {expected}")
+                Issue(filePath, 0, 0, CODE_CONTRACT_GAP, contractGap(kind, expected, source))
             )
     return issues
 
@@ -220,9 +238,10 @@ def main() -> int:
 
     emit(f"[INFO] {target} — linguagem {language}")
     emit(f"[INFO] verificações executadas: {', '.join(executed)}")
+    skipped.append("compilação contra o SDK real: fora do alcance desta verificação"
+                   " — o gate roda no workflow, sobre o checkout do alvo")
     for reason in skipped:
         emit(f"[WARN] {reason}")
-    emit("[INFO] compilação contra o SDK real não implementada — roda no CI")
     if not contractPath:
         emit("[INFO] sem contrato para este recurso — gap não verificado")
     for note in pending:

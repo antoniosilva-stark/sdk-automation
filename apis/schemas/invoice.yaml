@@ -9,6 +9,7 @@ components:
           description: "unique id returned when Invoice is created. ex: \"5656565656565656\""
         amount:
           type: integer
+          format: int64
           description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
         taxId:
           type: string
@@ -62,15 +63,19 @@ components:
           description: "public Invoice webpage URL. ex: \"https://my-workspace.sandbox.starkbank.com/invoicelink/d454fa4e524441c1b0c1a729457ed9d8\""
         nominalAmount:
           type: integer
+          format: int64
           description: "Invoice emission value in cents (will change if invoice is updated, but not if it's paid). ex: 400000"
         fineAmount:
           type: integer
+          format: int64
           description: "Invoice fine value calculated over nominal_amount. ex: 20000"
         interestAmount:
           type: integer
+          format: int64
           description: "Invoice interest value calculated over nominal_amount. ex: 10000"
         discountAmount:
           type: integer
+          format: int64
           description: "Invoice discount value calculated over nominal_amount. ex: 3000"
         brcode:
           type: string
@@ -118,6 +123,7 @@ components:
       properties:
         amount:
           type: integer
+          format: int64
           description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
         taxId:
           type: string
