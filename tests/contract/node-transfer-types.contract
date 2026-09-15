@@ -1,4 +1,4 @@
-# source:    ~/workspace/bank/sdk-node/types/transfer/transfer.d.ts
+# source:    _references/sdk-node/types/transfer/transfer.d.ts
 
 declaration declare module 'starkbank'
 declaration export class Transfer

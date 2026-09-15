@@ -10,7 +10,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
 
 VENDORED_ROOT = Path("_references/sdk-python")
-LOCAL_ROOT = Path.home() / "workspace/bank/sdk-python"
 
 SECTION_REQUIRED = "required"
 SECTION_OPTIONAL = "optional"
@@ -304,12 +303,8 @@ def resolveRoot(explicit: str | None) -> Path:
         return Path(explicit)
 
     fromEnv = os.environ.get("SDK_PYTHON")
-    candidates = [Path(fromEnv)] if fromEnv else []
-    candidates += [LOCAL_ROOT, VENDORED_ROOT]
-
-    for candidate in candidates:
-        if isStarkBankSdk(candidate):
-            return candidate
+    if fromEnv and isStarkBankSdk(Path(fromEnv)):
+        return Path(fromEnv)
     return VENDORED_ROOT
 
 
@@ -346,7 +341,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Extrai schema OpenAPI de um recurso do SDK Python")
     parser.add_argument("resource", help="nome da classe, ex: Transaction")
     parser.add_argument("--from", dest="root", default=None,
-                        help=f"raiz do SDK Python (padrão: SDK_PYTHON, {LOCAL_ROOT} ou {VENDORED_ROOT})")
+                        help=f"raiz do SDK Python (padrão: SDK_PYTHON ou {VENDORED_ROOT})")
     parser.add_argument("--out", help="arquivo de saída (padrão: stdout)")
     parser.add_argument("--operations", action="store_true",
                         help="emite as flags x-sdk-* derivadas dos exports, em vez do schema")

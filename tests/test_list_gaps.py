@@ -2,10 +2,7 @@ import json
 import pytest
 from pathlib import Path
 
-from conftest import runTool
-
-SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
-REAL_JAVA = Path("_references/sdk-java/src/main/java/com/starkbank")
+from conftest import requiresJavaSdk, requiresPythonSdk, runTool
 
 
 def _python(root: Path, modules: dict[str, list[tuple[str, str]]]) -> Path:
@@ -110,8 +107,8 @@ def test_invalidRootReturnsTwo(tmpPath):
     assert "[ERROR]" in out
 
 
-@pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
-@pytest.mark.skipif(not REAL_JAVA.is_dir(), reason="sdk-java não clonado em _references/")
+@requiresPythonSdk
+@requiresJavaSdk
 def test_realGapIsOnlySplitProfile():
     """Se devolver mais que isto, a premissa do gap unico caiu e o plano da Entrega 6 muda."""
     code, out = runTool("list-gaps.py", "--json")

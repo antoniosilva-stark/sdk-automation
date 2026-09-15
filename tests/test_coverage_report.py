@@ -2,9 +2,7 @@ import json
 import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, runTool
-
-SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
+from conftest import requiresPythonSdk, runTool
 
 MODULE = '''
 from starkcore.utils.resource import Resource
@@ -90,7 +88,7 @@ def test_newTemplateSectionEntersTheReportOnItsOwn(coverageReport, tmpPath):
     assert coverageReport.templateFlags(template) == {"x-sdk-get", "x-sdk-data-only"}
 
 
-@pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
+@requiresPythonSdk
 def test_realReachMeetsTheDeliveryTarget():
     """Meta da Fase 7: >= 35 de 41, com o restante nomeado."""
     code, out = runTool("coverage-report.py", "--json")

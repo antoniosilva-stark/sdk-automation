@@ -1,4 +1,4 @@
-# source:    ~/workspace/bank/sdk-node/sdk/transfer/transfer.js
+# source:    _references/sdk-node/sdk/transfer/transfer.js
 
 require const rest = require('../utils/rest.js')
 require const check = require('starkcore').check

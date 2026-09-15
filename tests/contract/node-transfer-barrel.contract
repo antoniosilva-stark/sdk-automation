@@ -1,4 +1,4 @@
-# source:    ~/workspace/bank/sdk-node/sdk/transfer/index.js
+# source:    _references/sdk-node/sdk/transfer/index.js
 
 require const transfer = require('./transfer.js')
 

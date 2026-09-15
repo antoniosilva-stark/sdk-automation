@@ -2,9 +2,7 @@ import yaml
 import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, runTool
-
-SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
+from conftest import PYTHON_SDK, REPO_ROOT, requiresPythonSdk, runTool
 
 WIDGET_MODULE = '''
 from starkcore.utils.resource import Resource
@@ -386,9 +384,9 @@ def test_operationsStdoutIsPureYaml(tmpPath):
     assert yaml.safe_load(out) == {"x-sdk-get": True, "x-sdk-query": True}
 
 
-@pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
+@requiresPythonSdk
 def test_realDictKeyOperations(extractSchema):
-    operations = extractSchema.declaredOperations(SDK_PYTHON, "DictKey")
+    operations = extractSchema.declaredOperations(PYTHON_SDK, "DictKey")
 
     assert operations["flags"] == ["x-sdk-get", "x-sdk-page", "x-sdk-query"]
 
@@ -403,13 +401,20 @@ def test_missingRootSaysItDoesNotExist(tmpPath):
     assert "Stark Infra" not in out
 
 
-def test_defaultRootResolvesWithoutSymlink(extractSchema, tmpPath, monkeypatch):
-    """Decisao 21: a referencia vem de SDK_PYTHON, sem symlink em _references/.
+def test_defaultRootIsTheVendoredClone(extractSchema, monkeypatch):
+    """O clone em _references/ e a referencia canonica, feita pelo setup do projeto.
 
-    Com o default fixo em _references/sdk-python, o tool falhava em toda maquina
-    onde a referencia mora em ~/workspace/bank/sdk-python.
+    Substitui a decisao 21 do plano 4.3, que fixava o checkout local de uma pessoa:
+    ninguem mais na equipe organiza os repos daquele jeito.
     """
-    local = tmpPath / "bank" / "sdk-python"
+    monkeypatch.delenv("SDK_PYTHON", raising=False)
+
+    assert extractSchema.resolveRoot(None) == extractSchema.VENDORED_ROOT
+
+
+def test_envOverridesTheVendoredClone(extractSchema, tmpPath, monkeypatch):
+    """Quem mantem um clone proprio aponta por SDK_PYTHON, sem editar codigo."""
+    local = tmpPath / "meu-clone"
     (local / "starkbank").mkdir(parents=True)
     monkeypatch.setenv("SDK_PYTHON", str(local))
 
@@ -499,11 +504,11 @@ def test_everyAppliedSchemaEntersTheGolden():
     assert "DictKey" in resources
 
 
-@pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
+@requiresPythonSdk
 @pytest.mark.parametrize("resource", [resource for resource, _ in appliedSchemas()])
 def test_extractedMatchesTheAppliedSchema(resource, tmpPath):
     destination = tmpPath / "out.yaml"
-    code, _ = runTool("extract-schema.py", resource, "--from", str(SDK_PYTHON), "--out", str(destination))
+    code, _ = runTool("extract-schema.py", resource, "--from", str(PYTHON_SDK), "--out", str(destination))
     assert code == 0
 
     applied = REPO_ROOT / f"apis/schemas/{resource.lower()}.yaml"

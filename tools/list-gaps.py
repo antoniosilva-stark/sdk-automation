@@ -1,3 +1,4 @@
+import os
 import ast
 import sys
 import json
@@ -7,7 +8,9 @@ from importlib.util import spec_from_file_location, module_from_spec
 
 TOOLS_DIR = Path(__file__).resolve().parent
 
-JAVA_ROOT = Path("_references/sdk-java/src/main/java/com/starkbank")
+JAVA_PACKAGE = "src/main/java/com/starkbank"
+VENDORED_JAVA = Path("_references/sdk-java")
+JAVA_ROOT = VENDORED_JAVA / JAVA_PACKAGE
 
 JAVA_NOT_A_RESOURCE = frozenset({
     "User", "Project", "Organization", "MarketplaceApp", "Settings", "Key", "Cache", "Main",
@@ -20,6 +23,22 @@ RESOURCE_BASES = frozenset({"Resource", "SubResource"})
 
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
+
+
+def isStarkBankSdk(root: Path) -> bool:
+    return (root / JAVA_PACKAGE).is_dir()
+
+
+def resolveJavaRoot(explicit: str | None = None) -> Path | None:
+    """Raiz das classes Java: a explícita vence; depois SDK_JAVA, o clone e o checkout local."""
+    if explicit:
+        return Path(explicit)
+
+    fromEnv = os.environ.get("SDK_JAVA")
+    for candidate in ([Path(fromEnv)] if fromEnv else []) + [VENDORED_JAVA]:
+        if isStarkBankSdk(candidate):
+            return candidate / JAVA_PACKAGE
+    return None
 
 
 def declaredClass(source: str) -> str | None:
@@ -110,7 +129,7 @@ def loadExtractSchema():
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lista recursos do SDK Python sem contrapartida no Java")
     parser.add_argument("--python", dest="pythonRoot", default=None, help="raiz do SDK Python")
-    parser.add_argument("--java", dest="javaRoot", default=str(JAVA_ROOT), help=f"raiz das classes Java (padrão: {JAVA_ROOT})")
+    parser.add_argument("--java", dest="javaRoot", default=None, help=f"raiz das classes Java (padrão: SDK_JAVA ou {VENDORED_JAVA})")
     parser.add_argument("--json", action="store_true", help="saída em JSON, para alimentar matriz no workflow")
     args = parser.parse_args()
 
@@ -121,7 +140,7 @@ def main() -> int:
         emit(f"[ERROR] {issue}")
         return 2
 
-    javaRoot = Path(args.javaRoot)
+    javaRoot = Path(args.javaRoot) if args.javaRoot else (resolveJavaRoot() or JAVA_ROOT)
     if not javaRoot.is_dir():
         emit(f"[ERROR] {javaRoot} não existe — rode `make clone-sdk-ref` ou passe --java")
         return 2

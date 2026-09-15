@@ -4,7 +4,6 @@ from pathlib import Path
 
 from conftest import runTool
 
-SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
 
 WIDGET_MODULE = '''
 from starkcore.utils.resource import Resource

@@ -2,21 +2,7 @@ import shutil
 import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, requiresJavac, runTool
-
-WORKSPACE = Path.home() / "workspace"
-
-
-def _resolveSdk(*candidates: str) -> Path | None:
-    for candidate in candidates:
-        path = WORKSPACE / candidate
-        if path.is_dir():
-            return path
-    return None
-
-
-REAL_JAVA = _resolveSdk("bank/sdk-java/src/main/java/com/starkbank", "sdk-java/src/main/java/com/starkbank")
-REAL_NODE = _resolveSdk("bank/sdk-node/sdk", "sdk-node/sdk")
+from conftest import JAVA_SDK, NODE_SDK, REPO_ROOT, requiresJavaSdk, requiresJavac, requiresNodeSdk, runTool
 
 CLEAN_JAVA = """package com.starkbank;
 
@@ -88,18 +74,18 @@ def test_syntaxIsNotReportedWhenJavacIsBroken(tmpPath):
     assert code == 0
 
 
-@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java não clonado")
+@requiresJavaSdk
 @pytest.mark.parametrize("name", ["Invoice.java", "Transaction.java"])
 def test_realProductionJavaPasses(tmpPath, name):
-    target = _copyReal(tmpPath, REAL_JAVA / name)
+    target = _copyReal(tmpPath, JAVA_SDK / name)
     code, out = runTool("assert-generated.py", str(target))
     assert code == 0, out
 
 
-@pytest.mark.skipif(REAL_NODE is None, reason="sdk-node não clonado")
+@requiresNodeSdk
 @pytest.mark.parametrize("name", ["transfer/transfer.js", "transaction/transaction.js"])
 def test_realProductionNodePasses(tmpPath, name):
-    target = _copyReal(tmpPath, REAL_NODE / name)
+    target = _copyReal(tmpPath, NODE_SDK / name)
     code, out = runTool("assert-generated.py", str(target), "--lang", "node")
     assert code == 0, out
 
@@ -202,10 +188,10 @@ def test_wildcardIsNotEvaluated(assertGenerated):
     assert assertGenerated.checkDeadImports(source, "X.java") == []
 
 
-@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java nao clonado")
+@requiresJavaSdk
 def test_deadImportInRealJavaIsDetected(tmpPath):
     """O Transfer.java de producao importa GsonEvent sem usar — o gate deve acusar."""
-    target = _copyReal(tmpPath, REAL_JAVA / "Transfer.java")
+    target = _copyReal(tmpPath, JAVA_SDK / "Transfer.java")
     code, out = runTool("assert-generated.py", str(target))
 
     assert code == 1

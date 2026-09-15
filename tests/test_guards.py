@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 
-from conftest import GENERATOR_SKIP, commandWorks, missingGeneratorDependency, missingJavacDependency
+from conftest import GENERATOR_SKIP, commandWorks, missingGeneratorDependency, missingJavacDependency, REPO_ROOT
 
 
 def _fakeBin(tmpPath: Path, name: str, script: str) -> Path:
@@ -62,6 +62,49 @@ def test_brokenJavacReportsJavac(tmpPath, monkeypatch):
     reason = missingJavacDependency()
     assert reason is not None
     assert "javac" in reason
+
+
+def test_noTestFileBindsTheReferenceToHome():
+    """A referencia resolvida vive num lugar so: o conftest, que delega aos tools.
+
+    Presa ao diretorio do usuario, a trava existe na maquina de quem escreveu e fica
+    inerte no CI —
+    foi o que aconteceu com o golden, que seguiu pulado mesmo depois do clone-sdk-ref.
+    """
+    needle = "Path" + ".home()"
+    offenders = [
+        path.name
+        for path in sorted((REPO_ROOT / "tests").rglob("*.py"))
+        if path.name != "conftest.py" and needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == [], f"resolucao de referencia espalhada: {', '.join(offenders)}"
+
+
+def test_noSourceHardcodesAPersonalCheckout():
+    """A referencia canonica e o clone em _references/, feito pelo setup do projeto.
+
+    Cravar o layout de diretorio de uma pessoa faz o projeto funcionar na maquina dela e
+    nao na dos outros. Quem quiser apontar para um clone proprio usa SDK_PYTHON,
+    SDK_JAVA ou SDK_NODE.
+    """
+    needle = "workspace" + "/bank"
+    searched = sorted((REPO_ROOT / "tools").glob("*.py")) + sorted((REPO_ROOT / "tests").rglob("*.py"))
+    searched.append(REPO_ROOT / "Makefile")
+
+    offenders = [
+        path.name for path in searched
+        if path.name != "test_guards.py" and needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == [], f"checkout pessoal cravado em: {', '.join(offenders)}"
+
+
+def test_referenceResolutionIsSharedNotDuplicated(conftest):
+    """Cada tool resolve a referencia que ele le; o teste delega, nao reimplementa."""
+    assert conftest.resolvedPythonSdk.__module__ == "conftest"
+    assert callable(conftest.resolvedJavaSdk)
+    assert callable(conftest.resolvedNodeSdk)
 
 
 def test_skipReasonNamesTheDependency():

@@ -4,11 +4,7 @@ import pytest
 import subprocess
 from pathlib import Path
 
-from conftest import REPO_ROOT, requiresGenerator, runTool
-
-SDK_PYTHON = Path.home() / "workspace/bank/sdk-python"
-VENDORED = REPO_ROOT / "_references/sdk-python"
-REAL_JAVA = REPO_ROOT / "_references/sdk-java/src/main/java/com/starkbank"
+from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresPythonSdk, runTool
 
 RESOURCE = "SplitProfile"
 LANGUAGE = "java"
@@ -49,11 +45,8 @@ def _commitDeclared(repo: Path) -> bool:
     return True
 
 
-@pytest.mark.skipif(
-    not ((SDK_PYTHON / "starkbank").is_dir() or (VENDORED / "starkbank").is_dir())
-    or not REAL_JAVA.is_dir(),
-    reason="referências do Stark Bank não resolvidas",
-)
+@requiresPythonSdk
+@requiresJavaSdk
 def test_targetResourceComesFromDiscoveryNotAList():
     code, out = runTool("list-gaps.py", "--json")
 
