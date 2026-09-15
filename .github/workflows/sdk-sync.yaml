@@ -44,11 +44,6 @@ jobs:
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
 
-      - name: Detect breaking changes
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 tools/breaking-change-detector.py --base "origin/$DEFAULT_BRANCH"
-
       - name: Resolve the Python SDK reference
         run: make clone-sdk-ref
 

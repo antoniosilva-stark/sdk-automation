@@ -406,3 +406,23 @@ def test_theSpecPullRequestIsNotDuplicated():
     prStep = next(step for step in steps if "gh pr create" in (step.get("run") or ""))
 
     assert "gh pr list" in prStep["run"], "PR de spec criada sem checar se ja existe"
+
+
+def test_theBreakingChangeGateLivesInThePullRequestOnly():
+    """BC protege o merge, e so a PR tem como aprova-lo.
+
+    Dentro do `sdk-sync` o mesmo gate vira impasse: para gerar seria preciso aprovar o BC,
+    a aprovacao acontece no fluxo da PR, e gerar e justamente como se testa a branch antes
+    de pedir merge. A geracao le a spec desta branch, seja ela mergeavel ou nao.
+    """
+    for path in workflowFiles():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        usa = [f"{jobName}/{step.get('name') or step.get('run')}"
+               for jobName, job in (workflow.get("jobs") or {}).items()
+               for step in (job.get("steps") or [])
+               if "breaking-change-detector" in (step.get("run") or "")]
+
+        if path.name == "validate-spec.yaml":
+            assert usa, "a PR precisa do gate de BC"
+            continue
+        assert usa == [], f"{path.name}: gate de BC fora da PR bloqueia sem caminho de aprovacao: {usa}"
