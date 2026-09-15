@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import yaml
 import argparse
@@ -179,6 +180,14 @@ def applyToSpec(specPath: Path, resource: str, relativePath: str, flags: list[st
     return "".join(lines)
 
 
+def writeAtomically(path: Path, text: str) -> None:
+    """A spec e a fonte da verdade do pipeline: morrer no meio de um write deixaria
+    todo mundo sem spec valida."""
+    staging = path.with_suffix(path.suffix + ".tmp")
+    staging.write_text(text, encoding="utf-8")
+    os.replace(staging, path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Aplica na spec o schema extraido do SDK Python")
     parser.add_argument("resource", help="nome da classe, ex: DictKey")
@@ -237,7 +246,7 @@ def main() -> int:
         return 2
 
     target.write_text(document, encoding="utf-8")
-    specPath.write_text(updated, encoding="utf-8")
+    writeAtomically(specPath, updated)
 
     emit(f"[OK] {target} gravado")
     action = "enriquecido" if declared else "criado"

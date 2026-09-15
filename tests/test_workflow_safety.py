@@ -384,3 +384,25 @@ def test_specPrUsesTheAppTokenNotTheDefaultOne():
     assert prStep is not None, "defasagem detectada e nenhuma PR de spec"
     assert "secrets.GITHUB_TOKEN" not in str(prStep)
     assert "steps.app-token.outputs.token" in str(prStep.get("env") or {})
+
+
+@pytest.mark.parametrize("path", workflowFiles(), ids=lambda p: p.name)
+def test_everyWorkflowDeclaresConcurrency(path):
+    """Dois dispatches do mesmo recurso competiam pela mesma branch no alvo.
+
+    Foi o que me obrigou a serializar os dois runs de idempotencia na mao em 2026-09-15.
+    """
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    assert "concurrency" in workflow, f"{path.name} sem concurrency"
+    assert "group" in workflow["concurrency"]
+
+
+def test_theSpecPullRequestIsNotDuplicated():
+    """O `sync` ja checava PR aberta antes de criar; o `drift` criava direto, entao dois
+    runs seguidos com o mesmo recurso defasado abririam duas PRs de spec.
+    """
+    steps = driftJob().get("steps") or []
+    prStep = next(step for step in steps if "gh pr create" in (step.get("run") or ""))
+
+    assert "gh pr list" in prStep["run"], "PR de spec criada sem checar se ja existe"

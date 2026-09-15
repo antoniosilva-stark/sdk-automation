@@ -202,6 +202,21 @@ def checkContract(source: str, contract: dict[str, list[str]], filePath: str,
     return (issues, applied, pending)
 
 
+def nodeSyntax(target: Path) -> tuple[bool, list[Issue]]:
+    """`node --check` e o equivalente do javac: o `mvn test-compile` do workflow so cobre Java,
+    entao sem isto JS quebrado passava o gate e virava PR."""
+    if not shutil.which("node"):
+        return (False, [])
+
+    result = subprocess.run(["node", "--check", str(target)], capture_output=True, text=True)
+    if result.returncode == 0:
+        return (True, [])
+
+    detalhe = next((line.strip() for line in result.stderr.splitlines()
+                    if line.strip() and not line.startswith(str(target))), "sintaxe inválida")
+    return (True, [Issue(str(target), 0, 0, CODE_SYNTAX, detalhe)])
+
+
 def javacWorks() -> bool:
     if not shutil.which("javac"):
         return False
@@ -289,6 +304,14 @@ def main() -> int:
             blocking.extend(syntaxIssues)
         else:
             skipped.append("verificação de sintaxe indisponível: javac ausente ou inoperante")
+
+    if language == "node" and target.suffix == ".js":
+        ran, syntaxIssues = nodeSyntax(target)
+        if ran:
+            executed.append("sintaxe (node)")
+            blocking.extend(syntaxIssues)
+        else:
+            skipped.append("verificação de sintaxe indisponível: node ausente")
 
     waiverPath = resolveWaivers(language, args.waivers)
     waivers = []

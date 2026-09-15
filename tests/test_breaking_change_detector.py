@@ -264,3 +264,40 @@ def test_theToolReportsAVerdictAgainstRealHistory():
     assert "verificando breaking changes" in out
     if code == 1:
         assert "regra violada, governance.md" in out
+
+
+def test_removedEnumValueIsDetected(detector):
+    """Tirar um valor de enum quebra quem passa aquele valor — nao estava em SHAPE_KEYS."""
+    previous = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week", "month"]}}))
+    current = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week"]}}))
+    changes = detector.detectBreakingChanges(current, previous)
+
+    assert [change["type"] for change in changes] == ["type_changed"]
+    assert changes[0]["rule"] == "type changes"
+
+
+def test_addedEnumValueIsNotBreaking(detector):
+    previous = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week"]}}))
+    current = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week", "month"]}}))
+
+    assert detector.detectBreakingChanges(current, previous) == []
+
+
+def test_parameterThatBecomesRequiredIsDetected(detector):
+    """Exigir parametro novo numa operacao existente quebra quem ja chama sem ele."""
+    antes = {"name": "cursor", "in": "query"}
+    depois = {"name": "cursor", "in": "query", "required": True}
+    previous = _spec({}, {"/widget": {"get": {"parameters": [antes]}}})
+    current = _spec({}, {"/widget": {"get": {"parameters": [depois]}}})
+    changes = detector.detectBreakingChanges(current, previous)
+
+    assert [change["type"] for change in changes] == ["param_became_required"]
+    assert changes[0]["rule"] == "required field added"
+
+
+def test_brandNewRequiredParameterIsDetected(detector):
+    previous = _spec({}, {"/widget": {"get": {"parameters": []}}})
+    current = _spec({}, {"/widget": {"get": {"parameters": [{"name": "taxId", "in": "query", "required": True}]}}})
+    changes = detector.detectBreakingChanges(current, previous)
+
+    assert [change["type"] for change in changes] == ["param_became_required"]

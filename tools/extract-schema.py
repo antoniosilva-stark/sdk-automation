@@ -217,6 +217,23 @@ def resolveType(text: str) -> dict | None:
     return dict(known) if known else None
 
 
+def reconcileRequired(fields: list[dict], defaults: dict[str, bool]) -> list[str]:
+    """Parametro sem default e obrigatorio, diga o docstring o que disser.
+
+    `SplitProfile` documenta `delay` e `interval` em "Parameters (optional)" e os recebe
+    posicionalmente: seguir a prosa afrouxaria o que o construtor exige.
+    """
+    corrigidos = []
+    for field in fields:
+        if field["section"] != SECTION_OPTIONAL:
+            continue
+        if defaults.get(field["pythonName"], True):
+            continue
+        field["section"] = SECTION_REQUIRED
+        corrigidos.append(field["name"])
+    return corrigidos
+
+
 def parseType(raw: str) -> dict:
     """Uniao no docstring vale a alternativa que o SDK sabe expressar.
 
@@ -421,6 +438,9 @@ def main() -> int:
     unknown = [f["pythonName"] for f in fields if f["pythonName"] not in defaults]
     if unknown:
         emit(f"[WARN] documentados mas ausentes no __init__: {', '.join(unknown)}")
+
+    for field in reconcileRequired(fields, defaults):
+        warn(f"[WARN] {args.resource}.{field}: documentado como opcional, posicional no __init__")
 
     document = buildDocument(args.resource, summary, fields, provenance(root, source))
     if args.out:

@@ -15,6 +15,10 @@ on:
 
 run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
+concurrency:
+  group: sdk-sync-${{ inputs.language }}-${{ inputs.resource }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -141,6 +145,11 @@ jobs:
           fi
           git commit -m "Refresh the $RESOURCE schema from the current sdk-python"
           git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "HEAD:refs/heads/$BRANCH"
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$OPEN" -gt 0 ]; then
+            echo "PR de spec ja aberta para $BRANCH — o push atualizou."
+            exit 0
+          fi
           gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
             --title "Refresh the $RESOURCE schema from the current sdk-python" \
             --body-file drift.log

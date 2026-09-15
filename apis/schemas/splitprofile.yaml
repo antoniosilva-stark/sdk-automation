@@ -32,6 +32,8 @@ components:
           description: "latest update datetime for the splitProfile. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
         - id
+        - interval
+        - delay
         - status
         - created
         - updated
@@ -51,3 +53,6 @@ components:
           items:
             type: string
           description: "list of strings for tagging"
+      required:
+        - interval
+        - delay

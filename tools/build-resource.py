@@ -127,19 +127,24 @@ def lintSpec(resource: str) -> int:
     return code
 
 
-def plannedPairs(resource: str, language: str) -> list[tuple[str, str]]:
+def plannedPairs(resource: str, language: str) -> dict[str, tuple[str, str]]:
+    """Pares por papel, nao por posicao: o papel e o primeiro segmento do caminho de origem,
+    que o `place-generated` monta a partir do proprio LAYOUTS."""
     code, output = runStep(
         "layout",
         [sys.executable, str(TOOLS_DIR / "place-generated.py"), resource, "--lang", language, "--list"],
         quiet=True,
     )
     if code != 0:
-        return []
-    return [
-        tuple(part.strip() for part in line.split("->"))
-        for line in output.splitlines()
-        if "->" in line
-    ]
+        return {}
+
+    pairs = {}
+    for line in output.splitlines():
+        if "->" not in line:
+            continue
+        source, target = (part.strip() for part in line.split("->"))
+        pairs[source.split("/", 1)[0]] = (source, target)
+    return pairs
 
 
 def generate(resource: str, run: dict, outputDir: Path) -> int:
@@ -270,8 +275,10 @@ def main() -> int:
         return 1
 
     pairs = plannedPairs(args.resource, args.lang)
-    if len(pairs) != len(runs):
-        emit(f"[ERROR] layout declara {len(pairs)} artefato(s) mas há {len(runs)} run(s) configurado(s)")
+    faltando = [run["role"] for run in runs if run["role"] not in pairs]
+    if faltando or len(pairs) != len(runs):
+        emit(f"[ERROR] layout e geradores discordam de papel: {len(pairs)} no layout,"
+             f" {len(runs)} configurado(s), sem par: {', '.join(faltando) or 'nenhum'}")
         return 1
 
     generatedDir = Path(tempfile.mkdtemp(prefix="build-resource-"))
@@ -293,7 +300,8 @@ def main() -> int:
 
     announceIntent(args.resource, args.lang, absent, len(runs))
 
-    for run, (source, _) in zip(runs, pairs):
+    for run in runs:
+        source, _ = pairs[run["role"]]
         artifact = generatedDir / source
         if not artifact.is_file():
             emit(f"[ERROR] gerador {run['role']} retornou 0 mas não produziu o artefato: {source}")

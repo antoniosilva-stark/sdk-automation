@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from pathlib import Path
 
-from conftest import runTool
+from conftest import REPO_ROOT, runTool
 
 
 WIDGET_MODULE = '''
@@ -264,3 +264,14 @@ def test_appliedResourcePassesTheLint(tmpPath):
 
     code, out = runTool("lint-spec.py", "--spec", str(spec), "--quiet", "--require", "Widget")
     assert code == 0, out
+
+
+def test_specIsReplacedAtomically(tmpPath):
+    """Escrita nao atomica deixa a spec pela metade se o processo morrer no meio, e a spec
+    e a fonte da verdade de todo o pipeline. O docstring do teste vizinho ja afirmava
+    atomicidade que o codigo nao tinha.
+    """
+    source = (REPO_ROOT / "tools/apply-schema.py").read_text(encoding="utf-8")
+
+    assert "os.replace" in source, "troca da spec tem de ser atomica"
+    assert "with_suffix" in source or "tmp" in source

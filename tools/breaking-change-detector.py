@@ -21,7 +21,7 @@ RULE_PARAM = "removes required param"
 RULE_TYPE = "type changes"
 RULE_REQUIRED = "required field added"
 
-SHAPE_KEYS = ("type", "format", "items")
+SHAPE_KEYS = ("type", "format", "items", "enum")
 
 
 def loadFast(text: str):
@@ -85,9 +85,12 @@ def resolveSchemas(spec: dict | None, load) -> dict:
 
 
 def shapeOf(property: dict | None) -> dict:
+    """Valor de enum que some quebra quem o envia; valor novo nao quebra ninguem."""
     if not isinstance(property, dict):
         return {}
     shape = {key: property[key] for key in SHAPE_KEYS if key in property}
+    if isinstance(shape.get("enum"), list):
+        shape["enum"] = sorted(str(value) for value in shape["enum"])
     items = shape.get("items")
     if isinstance(items, dict):
         shape["items"] = {key: items[key] for key in SHAPE_KEYS if key in items}
@@ -138,11 +141,31 @@ def removedRequiredParams(current: dict, previous: dict) -> list[dict]:
     return findings
 
 
+def newlyRequiredParams(current: dict, previous: dict) -> list[dict]:
+    """Parametro que passa a ser exigido quebra quem ja chama a operacao sem ele."""
+    findings = []
+    for path in sorted(set(previous) & set(current)):
+        for method in METHODS:
+            if method not in (previous[path] or {}) or method not in (current[path] or {}):
+                continue
+            before = requiredParams((previous[path] or {}).get(method))
+            after = requiredParams((current[path] or {}).get(method))
+            for name, where in sorted(set(after) - set(before), key=lambda key: str(key)):
+                findings.append({"type": "param_became_required", "severity": "MAJOR",
+                                 "rule": RULE_REQUIRED, "path": path, "method": method,
+                                 "param": name, "in": where})
+    return findings
+
+
 def removedSchemas(current: dict, previous: dict) -> list[dict]:
     return [
         {"type": "removed_schema", "severity": "MAJOR", "rule": RULE_SCHEMA, "schema": name}
         for name in sorted(set(previous) - set(current))
     ]
+
+
+def enumShrank(was: dict, now: dict) -> bool:
+    return set(was.get("enum") or []) - set(now.get("enum") or []) != set()
 
 
 def changedTypes(current: dict, previous: dict) -> list[dict]:
@@ -152,6 +175,9 @@ def changedTypes(current: dict, previous: dict) -> list[dict]:
         after = (current[name] or {}).get("properties") or {}
         for field in sorted(set(before) & set(after)):
             wasShape, isShape = shapeOf(before[field]), shapeOf(after[field])
+            if "enum" in wasShape and "enum" in isShape and not enumShrank(wasShape, isShape):
+                wasShape, isShape = dict(wasShape), dict(isShape)
+                wasShape.pop("enum"), isShape.pop("enum")
             if wasShape != isShape:
                 findings.append({"type": "type_changed", "severity": "MAJOR", "rule": RULE_TYPE,
                                  "schema": name, "field": field, "was": wasShape, "now": isShape})
@@ -186,6 +212,7 @@ def detectBreakingChanges(current: dict, previous: dict | None,
     return (removedPaths(currPaths, prevPaths)
             + removedOperations(currPaths, prevPaths)
             + removedRequiredParams(currPaths, prevPaths)
+            + newlyRequiredParams(currPaths, prevPaths)
             + removedSchemas(currSchemas, prevSchemas)
             + changedTypes(currSchemas, prevSchemas)
             + addedRequiredFields(currSchemas, prevSchemas))

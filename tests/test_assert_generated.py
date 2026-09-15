@@ -503,3 +503,25 @@ def test_waiverDoesNotApplyWhenSubstitutingProduction(tmpPath):
                                 "--waivers", str(waivers), "--strict", "--substitution")
     assert substituicao == 1
     assert "dispensa não vale em substituição" in out
+
+
+def test_nodeSyntaxIsCheckedLikeJava(tmpPath):
+    """Java tinha `javac`, Node nao tinha nada: JS quebrado passava o gate e virava PR.
+
+    O `mvn test-compile` do workflow tambem so cobre Java.
+    """
+    target = _write(tmpPath, "widget.js", "exports.get = async function ( { \n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--allow-missing-contract", "--strict")
+
+    assert code == 1
+    assert "SYNTAX" in out
+
+
+def test_validNodeSourcePassesTheSyntaxCheck(tmpPath):
+    target = _write(tmpPath, "widget.js", "const rest = require('../utils/rest.js');\nexports.get = async function (id) { return id; };\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--allow-missing-contract", "--strict")
+
+    assert code == 0, out
+    assert "sintaxe (node)" in out

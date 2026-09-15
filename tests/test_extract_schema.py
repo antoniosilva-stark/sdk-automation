@@ -563,3 +563,25 @@ def test_splitProfileDelayStaysInteger():
     schema = yaml.safe_load(out)["components"]["schemas"]["SplitProfile"]
     assert schema["properties"]["delay"]["type"] == "integer"
     assert schema["properties"]["interval"]["type"] == "string"
+
+
+@requiresPythonSdk
+def test_positionalParameterIsRequiredEvenWhenTheDocstringSaysOptional():
+    """`SplitProfile.__init__(self, delay, interval, ...)`: os dois sao posicionais, mas o
+    docstring os lista em "Parameters (optional)". A assinatura e a fonte mais confiavel
+    que a prosa — rerodar a ferramenta nao pode afrouxar o que o construtor exige.
+    """
+    code, out = runTool("extract-schema.py", "SplitProfile", "--from", str(PYTHON_SDK))
+    assert code == 0, out
+
+    schemas = yaml.safe_load(out)["components"]["schemas"]
+    assert set(schemas["SplitProfileCreate"].get("required") or []) == {"delay", "interval"}
+
+
+@requiresPythonSdk
+def test_defaultedParameterStaysOptional():
+    """`tags=None` tem default: continua opcional, senao a correcao viraria ruido."""
+    code, out = runTool("extract-schema.py", "SplitProfile", "--from", str(PYTHON_SDK))
+
+    schemas = yaml.safe_load(out)["components"]["schemas"]
+    assert "tags" not in (schemas["SplitProfileCreate"].get("required") or [])

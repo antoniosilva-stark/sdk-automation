@@ -24,6 +24,15 @@ def _languageInput() -> dict:
     return _dispatchInputs()["language"]
 
 
+def _loadPlaceGenerated():
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("place_generated", REPO_ROOT / "tools/place-generated.py")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _target(tmpPath: Path) -> Path:
     root = tmpPath / "target"
     root.mkdir(parents=True, exist_ok=True)
@@ -483,3 +492,20 @@ def test_resourceWithoutPageDoesNotImportSubResource(builtOnce):
 
     source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")
     assert "SubResource" not in source
+
+
+def test_rolesAreMatchedByNameNotByPosition(buildResource):
+    """`zip(runs, pairs)` parеava por posicao duas listas mantidas em arquivos diferentes:
+    reordenar GENERATORS ou LAYOUTS trocaria o artefato do papel sem nenhum erro.
+    """
+    source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
+
+    assert "zip(runs, pairs)" not in source
+    assert "plannedPairs" in source
+
+
+def test_layoutAndGeneratorsDeclareTheSameRoles(buildResource):
+    placeGenerated = _loadPlaceGenerated()
+    for language, runs in buildResource.GENERATORS.items():
+        layoutRoles = [role for role, _, _ in placeGenerated.LAYOUTS[language]]
+        assert [run["role"] for run in runs] == layoutRoles, language
