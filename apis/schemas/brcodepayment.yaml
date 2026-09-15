@@ -1,0 +1,110 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/brcodepayment/__brcodepayment.py
+components:
+  schemas:
+    BrcodePayment:
+      type: object
+      description: "When you initialize a BrcodePayment, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when payment is created. ex: \"5656565656565656\""
+        brcode:
+          type: string
+          description: "String loaded directly from the QR Code or copied from the invoice. ex: \"00020126580014br.gov.bcb.pix0136a629532e-7693-4846-852d-1bbff817b5a8520400005303986540510.005802BR5908T'Challa6009Sao Paulo62090505123456304B14A\""
+        taxId:
+          type: string
+          description: "receiver tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        description:
+          type: string
+          description: "Text to be displayed in your statement (min. 10 characters). ex: \"payment ABC\""
+        amount:
+          type: integer
+          format: int64
+          description: "If the BRCode does not provide an amount, this parameter is mandatory, else it is optional. ex: 23456 (= R$ 234.56)"
+        scheduled:
+          type: string
+          format: date-time
+          description: "payment scheduled date or datetime. ex: datetime.datetime(2020, 3, 10, 15, 17, 3)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of BrcodePayment.Rule objects for modifying payment behavior. ex: [Rule(key=\"resendingLimit\", value=5)]"
+        name:
+          type: string
+          description: "receiver name. ex: \"Jon Snow\""
+        status:
+          type: string
+          description: "current payment status. ex: \"success\" or \"failed\""
+        type:
+          type: string
+          description: "brcode type. ex: \"static\" or \"dynamic\""
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this payment. ex: [\"19827356981273\"]"
+        fee:
+          type: integer
+          description: "fee charged by this brcode payment. ex: 50 (= R$ 0.50)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - brcode
+        - taxId
+        - description
+        - name
+        - status
+        - type
+        - transactionIds
+        - fee
+        - updated
+        - created
+
+    BrcodePaymentCreate:
+      type: object
+      description: "BrcodePayment creation request"
+      properties:
+        brcode:
+          type: string
+          description: "String loaded directly from the QR Code or copied from the invoice. ex: \"00020126580014br.gov.bcb.pix0136a629532e-7693-4846-852d-1bbff817b5a8520400005303986540510.005802BR5908T'Challa6009Sao Paulo62090505123456304B14A\""
+        taxId:
+          type: string
+          description: "receiver tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        description:
+          type: string
+          description: "Text to be displayed in your statement (min. 10 characters). ex: \"payment ABC\""
+        amount:
+          type: integer
+          format: int64
+          description: "If the BRCode does not provide an amount, this parameter is mandatory, else it is optional. ex: 23456 (= R$ 234.56)"
+        scheduled:
+          type: string
+          format: date-time
+          description: "payment scheduled date or datetime. ex: datetime.datetime(2020, 3, 10, 15, 17, 3)"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of BrcodePayment.Rule objects for modifying payment behavior. ex: [Rule(key=\"resendingLimit\", value=5)]"
+      required:
+        - brcode
+        - taxId
+        - description

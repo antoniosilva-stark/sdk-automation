@@ -1,0 +1,38 @@
+[invoice/main]
+declaration public final class Invoice extends Resource  # o template nao emite `final`
+constructor public Invoice(Number amount, String due, String taxId, String name, Number expiration, Number fine, Number interest, List<Invoice.Description> descriptions, List<Invoice.Discount> discounts, List<Invoice.Rule> rules, List<Split> splits, String pdf, String link, String[] tags, Number nominalAmount, Number fineAmount, Number interestAmount, Number discountAmount, String id, String brcode, Integer fee, String[] transactionIds, String status, String created, String updated)  # construtor posicional depende de ordem de campo que o gerador nao garante
+signature public static InputStream qrcode(String id)  # operacao sem secao no template
+signature public static InputStream qrcode(String id, User user)  # operacao sem secao no template
+signature public static Payment payment(String id)  # sub-recurso Payment fora do alcance do template
+signature public static Payment payment(String id, User user)  # sub-recurso Payment fora do alcance do template
+inner public final static class Rule extends SubResource  # sub-objeto sem schema nomeado na spec; lote 2
+inner public final static class Discount extends SubResource  # sub-objeto descrito em prosa no docstring do Python, nao extraivel
+inner public final static class Description extends SubResource  # sub-objeto descrito em prosa no docstring do Python, nao extraivel
+inner public final static class Payment extends SubResource  # sub-objeto sem schema nomeado na spec; lote 2
+field public Number amount;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number expiration;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number fine;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number interest;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number nominalAmount;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number fineAmount;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number interestAmount;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public Number discountAmount;  # o SDK real usa a caixa abstrata Number; o gerador emite o tipo concreto do schema
+field public List<Invoice.Description> descriptions;  # a spec descreve o sub-objeto como object anonimo; sai List<Object>
+field public List<Invoice.Discount> discounts;  # a spec descreve o sub-objeto como object anonimo; sai List<Object>
+field public List<Invoice.Rule> rules;  # a spec descreve o sub-objeto como object anonimo; sai List<Object>
+field public List<Split> splits;  # a spec descreve o sub-objeto como object anonimo; sai List<Object>
+field public String[] tags;  # array Java vs List do gerador; o generator java nao expoe a opcao
+field public String[] transactionIds;  # array Java vs List do gerador; o generator java nao expoe a opcao
+
+[splitprofile/main]
+signature public static List<SplitProfile> put(List<?> splitProfiles)  # Rest.put nao existe no sdk-java @ c7f40b8 (decisao 43)
+signature public static List<SplitProfile> put(List<?> splitProfiles, User user)  # Rest.put nao existe no sdk-java @ c7f40b8 (decisao 43)
+field public String[] tags;  # array Java vs List do gerador; o generator java nao expoe a opcao
+
+[transaction/main]
+field public long amount;  # primitivo nao-nulo; o gerador so emite tipo caixa (sai Long)
+field public String[] tags;  # array Java vs List do gerador; o generator java nao expoe a opcao
+constructor public Transaction(long amount, String description, String externalId, String receiverId, String senderId, String[] tags, int fee, String created, String source, Long balance, String id)  # construtor posicional depende de ordem de campo que o gerador nao garante
+
+[transaction/test]
+signature public void testCreate() throws Exception  # exigiria montar payload de exemplo; nao geravel genericamente

@@ -1,0 +1,92 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/invoicepullrequest/__invoicepullrequest.py
+components:
+  schemas:
+    InvoicePullRequest:
+      type: object
+      description: "When you initialize an InvoicePullRequest, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when InvoicePullRequest is created. ex: \"5656565656565656\""
+        subscriptionId:
+          type: string
+          description: "Unique of the InvoicePullSubscription related to the invoice. ex: \"5656565656565656\""
+        invoiceId:
+          type: string
+          description: "Id of the invoice previously created to be sent for payment. ex: \"5656565656565656\""
+        due:
+          type: string
+          format: date-time
+          description: "payment scheduled date in UTC ISO format. ex: \"2023-10-28T17:59:26.249976+00:00\""
+        attemptType:
+          type: string
+          enum: ['default', 'retry']
+          description: "attempt type for the payment. Options: \"default\", \"retry\"."
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        externalId:
+          type: string
+          description: "a string that must be unique among all your InvoicePullRequests. Duplicated external_ids will cause failures. ex: \"my-external-id\""
+        displayDescription:
+          type: string
+          description: "Description to be shown to the payer. ex: \"Payment for services\""
+        status:
+          type: string
+          description: "current InvoicePullRequest status. ex: \"pending\", \"scheduled\", \"success\", \"failed\", \"canceled\""
+        installmentId:
+          type: string
+          description: "unique id of the installment related to this request. ex: \"5656565656565656\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the InvoicePullRequest. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the InvoicePullRequest. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - subscriptionId
+        - invoiceId
+        - due
+        - status
+        - installmentId
+        - created
+        - updated
+
+    InvoicePullRequestCreate:
+      type: object
+      description: "InvoicePullRequest creation request"
+      properties:
+        subscriptionId:
+          type: string
+          description: "Unique of the InvoicePullSubscription related to the invoice. ex: \"5656565656565656\""
+        invoiceId:
+          type: string
+          description: "Id of the invoice previously created to be sent for payment. ex: \"5656565656565656\""
+        due:
+          type: string
+          format: date-time
+          description: "payment scheduled date in UTC ISO format. ex: \"2023-10-28T17:59:26.249976+00:00\""
+        attemptType:
+          type: string
+          enum: ['default', 'retry']
+          description: "attempt type for the payment. Options: \"default\", \"retry\"."
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        externalId:
+          type: string
+          description: "a string that must be unique among all your InvoicePullRequests. Duplicated external_ids will cause failures. ex: \"my-external-id\""
+        displayDescription:
+          type: string
+          description: "Description to be shown to the payer. ex: \"Payment for services\""
+      required:
+        - subscriptionId
+        - invoiceId
+        - due

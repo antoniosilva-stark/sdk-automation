@@ -1,0 +1,101 @@
+{{#models}}{{#model}}import com.starkbank.{{classname}};
+{{#usesSettings}}import com.starkbank.Settings;
+{{/usesSettings}}{{#usesGenerator}}import com.starkbank.utils.Generator;
+{{/usesGenerator}}import org.junit.Test;
+import org.junit.Assert;
+
+{{#vendorExtensions.x-sdk-page}}import java.util.ArrayList;
+{{/vendorExtensions.x-sdk-page}}import java.util.HashMap;
+{{#vendorExtensions.x-sdk-page}}import java.util.List;
+{{/vendorExtensions.x-sdk-page}}
+
+
+public class Test{{classname}} {
+{{#vendorExtensions.x-sdk-query}}
+
+    @Test
+    public void testQuery() throws Exception {
+        Settings.user = utils.User.defaultProject();
+
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("limit", 3);
+        Generator<{{classname}}> {{classVarName}}s = {{classname}}.query(params);
+
+        int i = 0;
+        for ({{classname}} {{classVarName}} : {{classVarName}}s) {
+            i += 1;
+            Assert.assertNotNull({{classVarName}}.id);
+        }
+        System.out.println(i);
+    }
+{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-query}}{{#vendorExtensions.x-sdk-get}}
+
+    @Test
+    public void testGet() throws Exception {
+        Settings.user = utils.User.defaultProject();
+
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("limit", 1);
+        Generator<{{classname}}> {{classVarName}}s = {{classname}}.query(params);
+
+        for ({{classname}} {{classVarName}} : {{classVarName}}s) {
+            {{classname}} found = {{classname}}.get({{classVarName}}.id);
+            Assert.assertNotNull(found.id);
+            Assert.assertEquals(found.id, {{classVarName}}.id);
+        }
+    }
+{{/vendorExtensions.x-sdk-get}}{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-page}}
+
+    @Test
+    public void testPage() throws Exception {
+        Settings.user = utils.User.defaultProject();
+
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("limit", 2);
+        params.put("cursor", null);
+
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            {{classname}}.Page page = {{classname}}.page(params);
+            for ({{classname}} {{classVarName}} : page.{{classVarName}}s) {
+                if (ids.contains({{classVarName}}.id)) {
+                    throw new Exception("repeated id");
+                }
+                ids.add({{classVarName}}.id);
+            }
+            if (page.cursor == null) {
+                break;
+            }
+            params.put("cursor", page.cursor);
+        }
+    }
+{{/vendorExtensions.x-sdk-page}}
+{{^vendorExtensions.x-sdk-query}}
+
+    @Test
+    public void testConstruction() throws Exception {
+        HashMap<String, Object> data = new HashMap<>();
+        {{classname}} {{classVarName}} = new {{classname}}(data);
+
+        Assert.assertNotNull({{classVarName}});
+    }
+{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-log}}
+
+    @Test
+    public void testLogQuery() throws Exception {
+        Settings.user = utils.User.defaultProject();
+
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("limit", 3);
+        Generator<{{classname}}.Log> logs = {{classname}}.Log.query(params);
+
+        for ({{classname}}.Log log : logs) {
+            Assert.assertNotNull(log.id);
+        }
+    }
+{{/vendorExtensions.x-sdk-log}}
+}
+{{/model}}{{/models}}

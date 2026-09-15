@@ -1,0 +1,62 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/workspace/__workspace.py
+components:
+  schemas:
+    Workspace:
+      type: object
+      description: "Workspaces are bank accounts. They have independent balances, statements, operations and permissions. The only property that is shared between your workspaces is that they are linked to your organization, which carries your basic informations, such as tax ID, name, etc.."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when the workspace is created. ex: \"5656565656565656\""
+        username:
+          type: string
+          description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+        name:
+          type: string
+          description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""
+        allowedTaxIds:
+          type: array
+          items:
+            type: string
+          description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
+        status:
+          type: string
+          enum: ['active', 'closed', 'frozen', 'blocked']
+          description: "current Workspace status. Options: \"active\", \"closed\", \"frozen\" or \"blocked\""
+        organizationId:
+          type: string
+          description: "unique organization id returned when the organization is created. ex: \"5656565656565656\""
+        pictureUrl:
+          type: string
+          description: "public workspace image (png) URL. ex: \"https://storage.googleapis.com/api-ms-workspace-sbx.appspot.com/pictures/workspace/6284441752174592.png?20230208220551\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime of the workspace. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - username
+        - name
+        - status
+        - organizationId
+        - pictureUrl
+        - created
+
+    WorkspaceCreate:
+      type: object
+      description: "Workspace creation request"
+      properties:
+        username:
+          type: string
+          description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+        name:
+          type: string
+          description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""
+        allowedTaxIds:
+          type: array
+          items:
+            type: string
+          description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
+      required:
+        - username
+        - name

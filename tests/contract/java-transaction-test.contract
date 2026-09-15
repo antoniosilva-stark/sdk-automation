@@ -1,0 +1,15 @@
+# source:    _references/sdk-java/src/test/java/TestTransaction.java
+# extracted: 2026-09-11
+
+declaration public class TestTransaction
+require import com.starkbank.Transaction;
+require import com.starkbank.Settings;
+require import org.junit.Test;
+require import org.junit.Assert;
+
+signature public void testQuery() throws Exception
+signature public void testGet() throws Exception
+signature public void testPage() throws Exception
+field Settings.user = utils.User.defaultProject();
+
+signature public void testCreate() throws Exception

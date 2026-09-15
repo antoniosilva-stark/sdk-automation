@@ -1,0 +1,60 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/splitprofile/__splitprofile.py
+components:
+  schemas:
+    SplitProfile:
+      type: object
+      description: "When you create a Split, the entity SplitProfile will be automatically created, if you haven't create a Split yet, you can use the put method to create your SplitProfile."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when the splitProfile is created. ex: \"5656565656565656\""
+        interval:
+          type: string
+          enum: ['day', 'week', 'month']
+          description: "frequency of transfer, default \"week\". Options: \"day\", \"week\", \"month\""
+        delay:
+          type: integer
+          description: "how long the amount will stay at the workspace in milliseconds, ex: 604800"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        status:
+          type: string
+          description: "current splitProfile status. ex: \"created\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the splitProfile. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the splitProfile. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - interval
+        - delay
+        - status
+        - created
+        - updated
+
+    SplitProfileCreate:
+      type: object
+      description: "SplitProfile creation request"
+      properties:
+        interval:
+          type: string
+          enum: ['day', 'week', 'month']
+          description: "frequency of transfer, default \"week\". Options: \"day\", \"week\", \"month\""
+        delay:
+          type: integer
+          description: "how long the amount will stay at the workspace in milliseconds, ex: 604800"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - interval
+        - delay

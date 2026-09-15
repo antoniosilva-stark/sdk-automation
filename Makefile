@@ -1,11 +1,11 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python
+.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref refresh-sdk-ref reference
 
-# Local Stark Bank Python SDK clone used as field/type reference.
-# Falls back to cloning from GitHub when absent (CI).
-SDK_PYTHON ?= $(HOME)/workspace/bank/sdk-python
+BC_BASE ?= origin/development
+SDK_PYTHON ?=
+SDK_JAVA ?=
 
-# Colors for output
 GREEN := \033[0;32m
+RED := \033[0;31m
 BLUE := \033[0;34m
 NC := \033[0m # No Color
 
@@ -53,14 +53,40 @@ install-node: ## Install Node.js dependencies (npm)
 	npm install
 	@echo "$(GREEN)✅ Node.js dependencies installed$(NC)"
 
-clone-sdk-ref: ## Resolve the Python SDK reference (local clone, or clone from GitHub)
-	@echo "$(BLUE)Resolving Python SDK reference...$(NC)"
-	@if [ -d "$(SDK_PYTHON)/starkbank" ]; then \
-		echo "$(GREEN)✅ Python SDK reference: $(SDK_PYTHON)$(NC)"; \
+clone-sdk-ref: ## Clone the SDK references into _references/ (override with SDK_PYTHON / SDK_JAVA)
+	@mkdir -p _references
+	@$(MAKE) --no-print-directory reference REPO=sdk-python MARKER=starkbank OVERRIDE="$(SDK_PYTHON)"
+	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)"
+	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)"
+
+refresh-sdk-ref: ## Atualiza os clones em _references/ (override por symlink e preservado)
+	@for repo in sdk-python sdk-java sdk-node; do \
+		if [ -L "_references/$$repo" ]; then \
+			echo "$(BLUE)↷ $$repo: override, nao atualizado$(NC)"; \
+		elif [ -d "_references/$$repo/.git" ]; then \
+			if ! git -C "_references/$$repo" fetch --quiet --depth 1 origin HEAD \
+			  || ! git -C "_references/$$repo" checkout --quiet --detach FETCH_HEAD; then \
+				echo "$(RED)❌ $$repo: fetch falhou — gerar contra clone velho e pior que nao gerar$(NC)"; \
+				exit 1; \
+			fi; \
+			echo "$(GREEN)✅ $$repo: $$(git -C _references/$$repo rev-parse --short HEAD)$(NC)"; \
+		else \
+			echo "$(RED)❌ $$repo: sem clone em _references, rode make clone-sdk-ref$(NC)"; exit 1; \
+		fi; \
+	done
+
+reference: ## Internal: resolve one reference clone
+	@if [ -n "$(OVERRIDE)" ]; then \
+		if [ ! -d "$(OVERRIDE)/$(MARKER)" ]; then \
+			echo "$(RED)❌ $(REPO): $(OVERRIDE) nao contem $(MARKER)$(NC)"; exit 1; \
+		fi; \
+		ln -sfn "$(OVERRIDE)" _references/$(REPO); \
+		echo "$(GREEN)✅ $(REPO): $(OVERRIDE) (override)$(NC)"; \
+	elif [ -d "_references/$(REPO)/$(MARKER)" ]; then \
+		echo "$(GREEN)✅ $(REPO): _references/$(REPO)$(NC)"; \
 	else \
-		mkdir -p _references; \
-		[ -d "_references/sdk-python/starkbank" ] || git clone -q https://github.com/starkbank/sdk-python.git _references/sdk-python; \
-		echo "$(GREEN)✅ Python SDK reference: _references/sdk-python$(NC)"; \
+		git clone -q --depth 1 https://github.com/starkbank/$(REPO).git _references/$(REPO); \
+		echo "$(GREEN)✅ $(REPO): clonado em _references/$(REPO)$(NC)"; \
 	fi
 
 # ============================================
@@ -93,7 +119,7 @@ validate: ## Validate OpenAPI spec (Python)
 
 check-bc: ## Detect breaking changes (Python)
 	@echo "$(BLUE)Checking for breaking changes...$(NC)"
-	python3 tools/breaking-change-detector.py
+	python3 tools/breaking-change-detector.py --base "$(BC_BASE)"
 	@echo "$(GREEN)✅ Breaking change check passed$(NC)"
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)

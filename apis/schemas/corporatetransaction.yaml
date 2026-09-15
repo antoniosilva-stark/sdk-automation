@@ -1,0 +1,44 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/corporatetransaction/__corporatetransaction.py
+components:
+  schemas:
+    CorporateTransaction:
+      type: object
+      description: "The CorporateTransaction object created in your Workspace to represent each balance shift."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when CorporateTransaction is created. ex: \"5656565656565656\""
+        amount:
+          type: integer
+          format: int64
+          description: "CorporateTransaction value in cents. ex: 1234 (= R$ 12.34)"
+        balance:
+          type: integer
+          format: int64
+          description: "balance amount of the Workspace at the instant of the Transaction in cents. ex: 200 (= R$ 2.00)"
+        description:
+          type: string
+          description: "CorporateTransaction description. ex: \"Buying food\""
+        source:
+          type: string
+          description: "source of the transaction. ex: \"corporate-purchase/5656565656565656\""
+        tags:
+          type: string
+          description: "list of strings inherited from the source resource. ex: [\"tony\", \"stark\"]"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the CorporateTransaction. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - amount
+        - balance
+        - description
+        - source
+        - tags
+        - created
+
+    CorporateTransactionCreate:
+      type: object
+      description: "CorporateTransaction creation request"
+      properties: {}

@@ -1,0 +1,54 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/boletoholmes/__boletoholmes.py
+components:
+  schemas:
+    BoletoHolmes:
+      type: object
+      description: "When you initialize a BoletoHolmes, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when holmes is created. ex: \"5656565656565656\""
+        boletoId:
+          type: string
+          description: "investigated boleto entity ID. ex: \"5656565656565656\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        status:
+          type: string
+          description: "current holmes status. ex: \"solving\" or \"solved\""
+        result:
+          type: string
+          description: "result of boleto status investigation. ex: \"paid\" or \"cancelled\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the holmes. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the holmes. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - boletoId
+        - status
+        - result
+        - created
+        - updated
+
+    BoletoHolmesCreate:
+      type: object
+      description: "BoletoHolmes creation request"
+      properties:
+        boletoId:
+          type: string
+          description: "investigated boleto entity ID. ex: \"5656565656565656\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - boletoId

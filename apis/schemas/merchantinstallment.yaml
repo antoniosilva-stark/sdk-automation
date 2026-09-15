@@ -1,0 +1,91 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/merchantinstallment/__merchantinstallment.py
+components:
+  schemas:
+    MerchantInstallment:
+      type: object
+      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-installment"
+      properties:
+        id:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        amount:
+          type: integer
+          format: int64
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        due:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fee:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        purchaseId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        transactionIds:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - id
+
+    MerchantInstallmentCreate:
+      type: object
+      description: "MerchantInstallment creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        due:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fee:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        fundingType:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        network:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        purchaseId:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        status:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        transactionIds:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"

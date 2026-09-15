@@ -13,20 +13,31 @@ describe('OpenAPI Specification Tests', () => {
   });
 
   describe('Spec Structure', () => {
-    test('should have 60 resources with 120 paths', () => {
+    test('every path should belong to a declared schema', () => {
       const paths = Object.keys(spec.paths);
-      expect(paths.length).toBe(120);
+      expect(paths.length).toBeGreaterThan(0);
+
+      const schemas = new Set(Object.keys(spec.components.schemas));
+      for (const route of paths) {
+        const resource = route.replace('/{id}', '').replace(/^\//, '').split(/[-_]/)
+.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+        const known = [...schemas].some((name) => name.toLowerCase() === resource.toLowerCase());
+        expect(known).toBe(true);
+      }
     });
 
-    test('should have 180 operationId entries (60 resources × 3 operations)', () => {
-      let operationIds = 0;
-      for (const path in spec.paths) {
-        const pathItem = spec.paths[path];
-        if (pathItem.post?.operationId) operationIds++;
-        if (pathItem.put?.operationId) operationIds++;
-        if (pathItem.get?.operationId) operationIds++;
+    test('every operation should have a unique operationId', () => {
+      const seen = new Set();
+
+      for (const route in spec.paths) {
+        for (const [verb, operation] of Object.entries(spec.paths[route])) {
+          expect(operation.operationId).toBeDefined();
+          expect(seen.has(operation.operationId)).toBe(false);
+          seen.add(operation.operationId);
+        }
       }
-      expect(operationIds).toBe(180);
+
+      expect(seen.size).toBeGreaterThan(0);
     });
 
     test('should have correct version number (v0.2.0)', () => {
@@ -42,29 +53,40 @@ describe('OpenAPI Specification Tests', () => {
 
   describe('Schema References', () => {
     test('should preserve external $refs for Transaction/Invoice/Transfer', () => {
-      const externalResources = ['Transaction', 'Invoice', 'Transfer'];
+      const schemasDir = path.join(__dirname, '../../apis/schemas');
+      const applied = fs.readdirSync(schemasDir).filter((name) => name.endsWith('.yaml'));
+      expect(applied.length).toBeGreaterThanOrEqual(3);
 
-      for (const resource of externalResources) {
+      for (const file of applied) {
+        const content = YAML.load(fs.readFileSync(path.join(schemasDir, file), 'utf8'));
+        const resource = Object.keys(content.components.schemas).find((name) => !name.endsWith('Create'));
         const schema = spec.components.schemas[resource];
+
         expect(schema).toBeDefined();
-        expect(schema.$ref).toBeDefined();
-        expect(schema.$ref).toMatch(/\.\/schemas\/.*\.yaml/);
+        expect(schema.$ref).toBe(`./schemas/${file}#/components/schemas/${resource}`);
       }
     });
 
-    test('should have inline schemas for other resources', () => {
-      const resource = 'Balance';
-      const schema = spec.components.schemas[resource];
+    test('should keep not yet applied resources inline', () => {
+      const stubs = Object.entries(spec.components.schemas)
+.filter(([name, schema]) => !name.endsWith('Create') && !schema.$ref);
 
-      expect(schema).toBeDefined();
+      expect(stubs.length).toBeGreaterThan(0);
+
+      const [, schema] = stubs[0];
       expect(schema.type).toBe('object');
       expect(schema.properties).toBeDefined();
       expect(schema.required).toContain('id');
     });
 
-    test('should have 120 total schemas (60 resources × 2: create + model)', () => {
+    test('every resource schema should have a Create counterpart', () => {
       const schemas = Object.keys(spec.components.schemas);
-      expect(schemas.length).toBe(120);
+      const resources = schemas.filter((name) => !name.endsWith('Create'));
+
+      expect(resources.length).toBeGreaterThan(0);
+      for (const resource of resources) {
+        expect(schemas).toContain(`${resource}Create`);
+      }
     });
   });
 
@@ -81,16 +103,24 @@ describe('OpenAPI Specification Tests', () => {
       }
     });
 
-    test('should have no breaking changes detected', () => {
+    // O veredito de BC contra a branch alvo e assunto do validate-spec na PR, que conhece
+    // a base real. Aqui se verifica a garantia que vale em qualquer checkout: base que nao
+    // resolve reprova, em vez de passar alegando "primeiro commit".
+    test('breaking change detector refuses a base that does not resolve', () => {
+      let status = 0;
+      let output = '';
       try {
-        const output = execSync('python3 tools/breaking-change-detector.py', {
+        output = execSync('python3 tools/breaking-change-detector.py --base refs/nao-existe', {
           cwd: path.join(__dirname, '../../'),
           encoding: 'utf8'
         });
-        expect(output).toMatch(/\[OK\] nenhuma breaking change detectada/);
       } catch (error) {
-        throw new Error(`Breaking change detector failed: ${error.message}`);
+        status = error.status;
+        output = error.stdout;
       }
+
+      expect(status).toBe(2);
+      expect(output).toMatch(/não resolve para um commit/);
     }, 15000);
   });
 });

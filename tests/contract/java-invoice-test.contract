@@ -1,0 +1,14 @@
+# source:    _references/sdk-java/src/test/java/TestInvoice.java
+# extracted: 2026-09-11
+
+declaration public class TestInvoice
+require import com.starkbank.Invoice;
+require import com.starkbank.Settings;
+require import org.junit.Test;
+require import org.junit.Assert;
+
+signature public void testQuery() throws Exception
+signature public void testGet() throws Exception
+signature public void testPage() throws Exception
+field Settings.user = utils.User.defaultProject();
+signature public void testLogQuery() throws Exception

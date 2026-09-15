@@ -2,21 +2,7 @@ import shutil
 import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, requiresJavac, runTool
-
-WORKSPACE = Path.home() / "workspace"
-
-
-def _resolveSdk(*candidates: str) -> Path | None:
-    for candidate in candidates:
-        path = WORKSPACE / candidate
-        if path.is_dir():
-            return path
-    return None
-
-
-REAL_JAVA = _resolveSdk("bank/sdk-java/src/main/java/com/starkbank", "sdk-java/src/main/java/com/starkbank")
-REAL_NODE = _resolveSdk("bank/sdk-node/sdk", "sdk-node/sdk")
+from conftest import JAVA_SDK, NODE_SDK, REPO_ROOT, requiresJavaSdk, requiresJavac, requiresNodeSdk, runTool
 
 CLEAN_JAVA = """package com.starkbank;
 
@@ -53,14 +39,14 @@ def _copyReal(tmpPath: Path, source: Path) -> Path:
     return target
 
 
-def test_arquivoLimpoPassa(tmpPath):
+def test_cleanFilePasses(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target))
     assert code == 0
     assert "[OK]" in out
 
 
-def test_relataVerificacoesExecutadas(tmpPath):
+def test_reportsTheChecksItRan(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target))
     assert "verificações executadas" in out
@@ -68,13 +54,13 @@ def test_relataVerificacoesExecutadas(tmpPath):
 
 
 @requiresJavac
-def test_sintaxeRelatadaQuandoJavacFunciona(tmpPath):
+def test_syntaxIsReportedWhenJavacWorks(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target))
     assert "sintaxe (javac)" in out
 
 
-def test_sintaxeNaoRelatadaQuandoJavacInoperante(tmpPath):
+def test_syntaxIsNotReportedWhenJavacIsBroken(tmpPath):
     fakeBin = tmpPath / "bin"
     fakeBin.mkdir()
     fake = fakeBin / "javac"
@@ -88,68 +74,68 @@ def test_sintaxeNaoRelatadaQuandoJavacInoperante(tmpPath):
     assert code == 0
 
 
-@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java não clonado")
+@requiresJavaSdk
 @pytest.mark.parametrize("name", ["Invoice.java", "Transaction.java"])
-def test_javaRealDeProducaoPassa(tmpPath, name):
-    target = _copyReal(tmpPath, REAL_JAVA / name)
+def test_realProductionJavaPasses(tmpPath, name):
+    target = _copyReal(tmpPath, JAVA_SDK / name)
     code, out = runTool("assert-generated.py", str(target))
     assert code == 0, out
 
 
-@pytest.mark.skipif(REAL_NODE is None, reason="sdk-node não clonado")
+@requiresNodeSdk
 @pytest.mark.parametrize("name", ["transfer/transfer.js", "transaction/transaction.js"])
-def test_nodeRealDeProducaoPassa(tmpPath, name):
-    target = _copyReal(tmpPath, REAL_NODE / name)
+def test_realProductionNodePasses(tmpPath, name):
+    target = _copyReal(tmpPath, NODE_SDK / name)
     code, out = runTool("assert-generated.py", str(target), "--lang", "node")
     assert code == 0, out
 
 
-def test_assinaturaAlinhadaNaoEhFalsoPositivo(assertGenerated):
+def test_wrappedSignatureIsNotAFalsePositive(assertGenerated):
     source = "    public Invoice(Number amount, String due,\n                   String taxId,  String name) {\n"
     assert assertGenerated.checkEmptyTokens(source, "x.java") == []
 
 
-def test_metodoSemArgumentosNaoEhFalsoPositivo(assertGenerated):
+def test_methodWithoutArgumentsIsNotAFalsePositive(assertGenerated):
     source = "    public static Generator<Invoice> query() throws Exception {\n"
     assert assertGenerated.checkEmptyTokens(source, "x.java") == []
 
 
-def test_placeholderResidualReprova(tmpPath):
+def test_leftoverPlaceholderFails(tmpPath):
     target = _write(tmpPath, "Widget.java", "public class {{classname}} extends Resource {}\n")
     code, out = runTool("assert-generated.py", str(target))
     assert code == 1
     assert "PLACEHOLDER" in out
 
 
-def test_identificadorPerdidoReprova(assertGenerated):
+def test_droppedIdentifierFails(assertGenerated):
     issues = assertGenerated.checkEmptyTokens("        for (Object  : items) {\n", "x.java")
     assert len(issues) == 1
     assert issues[0].code == "EMPTY_TOKEN"
 
 
-def test_slotVazioReprova(assertGenerated):
+def test_emptySlotFails(assertGenerated):
     issues = assertGenerated.checkEmptyTokens("            if ( instanceof Map)\n", "x.java")
     assert len(issues) == 1
 
 
-def test_argumentoVazioReprova(assertGenerated):
+def test_emptyArgumentFails(assertGenerated):
     issues = assertGenerated.checkEmptyTokens("        return Rest.put(data, , user);\n", "x.java")
     assert len(issues) == 1
 
 
-def test_arquivoInexistenteRetornaDois():
+def test_missingFileReturnsTwo():
     code, out = runTool("assert-generated.py", "/tmp/nao-existe-mesmo.java")
     assert code == 2
     assert "[ERROR]" in out
 
 
-def test_contratoIgnoraComentarios(assertGenerated, tmpPath):
+def test_contractIgnoresComments(assertGenerated, tmpPath):
     contract = _write(tmpPath, "x.contract", "# comentario\n\n## secao\nsignature public static void go()\n")
     parsed = assertGenerated.parseContract(contract)
     assert parsed["signature"] == ["public static void go()"]
 
 
-def test_gapDeContratoNaoReprovaSemStrict(tmpPath):
+def test_contractGapDoesNotFailWithoutStrict(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "signature public static void ausente()\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract))
@@ -157,7 +143,7 @@ def test_gapDeContratoNaoReprovaSemStrict(tmpPath):
     assert "gap(s) de contrato" in out
 
 
-def test_gapDeContratoReprovaComStrict(tmpPath):
+def test_contractGapFailsWithStrict(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "signature public static void ausente()\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
@@ -165,14 +151,14 @@ def test_gapDeContratoReprovaComStrict(tmpPath):
     assert "CONTRACT_GAP" in out
 
 
-def test_assinaturaPresenteNaoEhGap(tmpPath):
+def test_presentSignatureIsNotAGap(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "signature public static Widget get(String id)\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
     assert code == 0, out
 
 
-def test_importDuplicadoReprova(assertGenerated):
+def test_duplicateImportFails(assertGenerated):
     source = "import java.util.List;\nimport java.util.List;\nclass X { List<String> a; }\n"
     issues = assertGenerated.checkDeadImports(source, "X.java")
     assert len(issues) == 1
@@ -180,32 +166,32 @@ def test_importDuplicadoReprova(assertGenerated):
     assert "duplicado" in issues[0].message
 
 
-def test_importNaoUsadoReprova(assertGenerated):
+def test_unusedImportFails(assertGenerated):
     source = "import java.time.OffsetDateTime;\nclass X { String a; }\n"
     issues = assertGenerated.checkDeadImports(source, "X.java")
     assert len(issues) == 1
     assert "nao usado: java.time.OffsetDateTime" in issues[0].message
 
 
-def test_importUsadoNaoEhReprovado(assertGenerated):
+def test_usedImportIsNotFlagged(assertGenerated):
     source = "import java.util.List;\nimport java.util.Map;\nclass X { List<String> a; Map<String,Object> b; }\n"
     assert assertGenerated.checkDeadImports(source, "X.java") == []
 
 
-def test_importDeTipoUsadoSoEmGenericoPassa(assertGenerated):
+def test_typeImportUsedOnlyInGenericsPasses(assertGenerated):
     source = "import java.util.ArrayList;\nclass X { void f() { new ArrayList<>(); } }\n"
     assert assertGenerated.checkDeadImports(source, "X.java") == []
 
 
-def test_wildcardNaoEhAvaliado(assertGenerated):
+def test_wildcardIsNotEvaluated(assertGenerated):
     source = "import java.util.*;\nclass X { List<String> a; }\n"
     assert assertGenerated.checkDeadImports(source, "X.java") == []
 
 
-@pytest.mark.skipif(REAL_JAVA is None, reason="sdk-java nao clonado")
-def test_importMortoNoJavaRealEhDetectado(tmpPath):
+@requiresJavaSdk
+def test_deadImportInRealJavaIsDetected(tmpPath):
     """O Transfer.java de producao importa GsonEvent sem usar — o gate deve acusar."""
-    target = _copyReal(tmpPath, REAL_JAVA / "Transfer.java")
+    target = _copyReal(tmpPath, JAVA_SDK / "Transfer.java")
     code, out = runTool("assert-generated.py", str(target))
 
     assert code == 1
@@ -215,7 +201,7 @@ def test_importMortoNoJavaRealEhDetectado(tmpPath):
 CONTRACT_DIR = Path(__file__).resolve().parent / "contract"
 
 
-def test_todoKindUsadoNosContratosEstaDeclarado(assertGenerated):
+def test_everyKindUsedInContractsIsDeclared(assertGenerated):
     usados = set()
     for path in sorted(CONTRACT_DIR.glob("*.contract")):
         for raw in path.read_text(encoding="utf-8").splitlines():
@@ -223,24 +209,30 @@ def test_todoKindUsadoNosContratosEstaDeclarado(assertGenerated):
             if not line or line.startswith("#"):
                 continue
             usados.add(line.split(" ")[0])
-    declarados = set(assertGenerated.CONTRACT_KINDS) | set(assertGenerated.CONTRACT_NOTES)
+    declarados = set(assertGenerated.CONTRACT_KINDS)
     desconhecidos = usados - declarados
     assert desconhecidos == set(), f"kind usado e nao declarado: {sorted(desconhecidos)}"
 
 
-def test_kindDesconhecidoReprovaNoParse(assertGenerated, tmpPath):
+def test_inlineCommentIsNotPartOfTheExpectedString(assertGenerated, tmpPath):
+    """O contrato e a dispensa tem que concordar sobre onde a string esperada termina."""
+    contract = _write(tmpPath, "x.contract", "field public Long amount;  # anotacao\n")
+    assert assertGenerated.parseContract(contract)["field"] == ["public Long amount;"]
+
+
+def test_unknownKindFailsTheParse(assertGenerated, tmpPath):
     contract = _write(tmpPath, "x.contract", "shape isto nao e um kind\n")
     with pytest.raises(ValueError, match="kind desconhecido"):
         assertGenerated.parseContract(contract)
 
 
-def test_kindSemValorReprovaNoParse(assertGenerated, tmpPath):
+def test_kindWithoutValueFailsTheParse(assertGenerated, tmpPath):
     contract = _write(tmpPath, "x.contract", "signature\n")
     with pytest.raises(ValueError, match="sem valor"):
         assertGenerated.parseContract(contract)
 
 
-def test_contratoInvalidoRetornaDoisNaCli(tmpPath):
+def test_invalidContractReturnsTwoOnTheCli(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "inexistente alguma coisa\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract))
@@ -248,14 +240,30 @@ def test_contratoInvalidoRetornaDoisNaCli(tmpPath):
     assert "contrato inválido" in out
 
 
-def test_fieldPresenteNoFonteNaoEhGap(tmpPath):
+def test_noMessageClaimsACheckItDoesNotRun(tmpPath):
+    """A tool afirmava "compilacao contra o SDK real ... roda no CI" e o CI nao compilava.
+
+    Mesma classe do achado 7 do code-review: registro afirmando cobertura inexistente.
+    A compilacao acontece no workflow, contra o checkout do alvo — nunca aqui, que ve
+    um arquivo solto sem o pom nem o classpath do SDK.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target))
+
+    assert code == 0, out
+    assert "roda no CI" not in out
+    assert "compilação contra o SDK real" in out
+    assert "fora do alcance desta verificação" in out
+
+
+def test_fieldPresentInTheSourceIsNotAGap(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "field public String status;\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
     assert code == 0, out
 
 
-def test_fieldAusenteEhGap(tmpPath):
+def test_missingFieldIsAGap(tmpPath):
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "field public List<Widget.Rule> rules;\n")
     code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
@@ -263,7 +271,41 @@ def test_fieldAusenteEhGap(tmpPath):
     assert "field ausente" in out
 
 
-def test_requireAusenteEhGap(tmpPath):
+def test_divergentTypeIsAGapAndSaysWhatCameOut(tmpPath):
+    """O gap que passou batido: Transaction gerado tinha Integer amount, real tem long.
+
+    Acusar so "ausente" obrigava a abrir os dois arquivos para descobrir que o campo
+    existe com outro tipo.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+    assert code == 1
+    assert "field divergente" in out
+    assert "public long status;" in out
+    assert "public String status;" in out
+
+
+def test_fieldWithPrefixNameDoesNotSatisfyTheContract(tmpPath):
+    """statusCode nao pode passar por status."""
+    source = CLEAN_JAVA.replace("public String status;", "public String statusCode;")
+    target = _write(tmpPath, "Widget.java", source)
+    contract = _write(tmpPath, "widget.contract", "field public String status;\n")
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+    assert code == 1
+    assert "field ausente" in out
+
+
+def test_todoNoLongerParsesAsAKind(assertGenerated, tmpPath):
+    """A dispensa versionada substituiu o `todo`: divergencia tolerada agora tem motivo e dono."""
+    contract = _write(tmpPath, "widget.contract", "todo field public long status;\n")
+    with pytest.raises(ValueError, match="kind desconhecido"):
+        assertGenerated.parseContract(contract)
+
+
+def test_missingRequireIsAGap(tmpPath):
     target = _write(tmpPath, "widget.js", "const a = 1;\n")
     contract = _write(tmpPath, "widget.contract", "require const rest = require('../utils/rest.js')\n")
     code, out = runTool("assert-generated.py", str(target), "--lang", "node",
@@ -272,7 +314,118 @@ def test_requireAusenteEhGap(tmpPath):
     assert "require ausente" in out
 
 
-def test_papelResolveContratoProprio(assertGenerated, tmpPath):
+def test_everyFieldInRealContractsEndsWithSemicolon(assertGenerated):
+    """Sem o `;` a entrada casa por prefixo: `public String status` passaria por
+    `public String statusCode;`, e o contrato afirmaria paridade que não existe."""
+    contracts = sorted(Path(assertGenerated.CONTRACT_DIR).glob("*.contract"))
+    assert contracts
+
+    for contract in contracts:
+        entries = assertGenerated.parseContract(contract)
+        for entry in entries["field"]:
+            assert entry.endswith(";"), f"{contract.name}: {entry}"
+
+
+def test_fieldCoverageReachesResourcesWithJavaContract(assertGenerated):
+    """Contrato sem entrada de campo não pega divergência de tipo — foi assim que
+    `Integer amount` contra `long amount` passou até 2026-09-11."""
+    for name in ("java-transaction", "java-invoice"):
+        entries = assertGenerated.parseContract(Path(assertGenerated.CONTRACT_DIR) / f"{name}.contract")
+        declared = [e for e in entries["field"] if e.startswith("public ")]
+        assert len(declared) >= 5, f"{name}: {len(declared)} campos declarados"
+
+
+def test_waiverNeedsAReason(assertGenerated, tmpPath):
+    """Dispensa sem motivo e supressao anonima: em 3 meses ninguem sabe por que esta ali."""
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public long status;\n")
+
+    with pytest.raises(ValueError, match="sem motivo"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverRejectsWildcard(assertGenerated, tmpPath):
+    """Curinga vira supressao em bloco: dispensa e string exata."""
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public * status;  # motivo\n")
+
+    with pytest.raises(ValueError, match="curinga"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverNeedsASection(assertGenerated, tmpPath):
+    waivers = _write(tmpPath, "java.waivers", "field public long status;  # motivo\n")
+
+    with pytest.raises(ValueError, match="seção"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverIsScopedByResourceAndRole(assertGenerated, tmpPath):
+    waivers = _write(
+        tmpPath, "java.waivers",
+        "[widget/main]\nfield public long status;  # motivo do main\n\n"
+        "[widget/test]\nsignature public void testCreate()  # motivo do test\n",
+    )
+    parsed = assertGenerated.parseWaivers(waivers)
+
+    assert [entry["value"] for entry in parsed[("widget", "main")]] == ["public long status;"]
+    assert parsed[("widget", "test")][0]["reason"] == "motivo do test"
+
+
+def test_waivedGapIsAnnouncedNotBlocking(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public long status;  # primitivo nao alcancavel\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 0, out
+    assert "dispensado" in out
+    assert "primitivo nao alcancavel" in out
+
+
+def test_gapWithoutWaiverStillBlocks(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public String other;  # outro item\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 1
+    assert "field divergente" in out or "field ausente" in out
+
+
+def test_unusedWaiverIsReported(tmpPath):
+    """Dispensa obsoleta nao e ruido: item dispensado NAO e verificado, entao ela
+    desliga a cobertura daquele item sem ninguem perceber."""
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public String status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public String status;  # ja resolvido\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 0, out
+    assert "dispensa não utilizada" in out
+    assert "public String status;" in out
+
+
+def test_realWaiverFilesParseAndCarryReasons(assertGenerated):
+    """As 50 dispensas migradas dos contratos: toda uma com motivo."""
+    files = sorted(Path(assertGenerated.WAIVER_DIR).glob("*.waivers"))
+    assert files
+
+    total = 0
+    for path in files:
+        for entries in assertGenerated.parseWaivers(path).values():
+            for entry in entries:
+                assert entry["reason"], f"{path.name}: {entry['value']} sem motivo"
+                total += 1
+
+    assert total >= 45
+
+
+def test_roleResolvesItsOwnContract(assertGenerated, tmpPath):
     resolved = {
         role: assertGenerated.resolveContract(Path("Transfer.js"), "node", None, role)
         for role in ("impl", "barrel", "types")
@@ -281,34 +434,94 @@ def test_papelResolveContratoProprio(assertGenerated, tmpPath):
     assert len({path.name for path in resolved.values()}) == 3, resolved
 
 
-def test_semPapelCaiNoContratoDoRecurso(assertGenerated):
+def test_withoutRoleItFallsBackToTheResourceContract(assertGenerated):
     resolved = assertGenerated.resolveContract(Path("Invoice.java"), "java", None, None)
     assert resolved is not None
     assert resolved.name == "java-invoice.contract"
 
 
-def test_papelSemContratoProprioCaiNoFallback(assertGenerated):
+def test_roleWithoutOwnContractFallsBack(assertGenerated):
     resolved = assertGenerated.resolveContract(Path("Invoice.java"), "java", None, "main")
     assert resolved.name == "java-invoice.contract"
 
 
-def test_contratoAusenteContinuaAnunciado(tmpPath):
+def test_missingRulerBlocks(tmpPath):
+    """Foi esta linha que deixou a PR que sobrescreveu produção sobrescrever producao: `Deposit` nao tinha regua."""
     target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target), "--strict")
-    assert code == 0
-    assert "sem contrato para este recurso" in out
+
+    assert code == 1
+    assert "MISSING_CONTRACT" in out
 
 
-def test_todoNaoEhGapMasEhAnunciado(tmpPath):
-    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
-    contract = _write(tmpPath, "widget.contract", "todo signature public static void futuro()\n")
-    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+def test_missingRulerIsAllowedOnlyWhenDeclared(tmpPath):
+    target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target), "--strict", "--allow-missing-contract")
+
     assert code == 0, out
-    assert "paridade pendente, nao verificada" in out
-    assert "CONTRACT_GAP" not in out
+    assert "recurso sem arquivo real no SDK alvo" in out
 
 
-def test_buildResourcePassaStrictERole(buildResource, tmpPath):
+def test_missingRulerWithoutStrictIsOnlyAWarning(tmpPath):
+    """Modo consultivo continua sendo consultivo: quem bloqueia e o --strict do pipeline."""
+    target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target))
+
+    assert code == 0, out
+    assert "sem contrato" in out
+
+
+def test_noContractStillCarriesATodo():
+    """Guarda da migracao: `todo` nos contratos voltaria a esconder divergencia sem motivo."""
+    carregam = [path.name for path in sorted(CONTRACT_DIR.glob("*.contract"))
+                if any(line.startswith("todo ")
+                       for line in path.read_text(encoding="utf-8").splitlines())]
+    assert carregam == [], f"todo sobrevivente, migre para tests/waivers: {carregam}"
+
+
+def test_buildResourcePassesStrictAndRole(buildResource, tmpPath):
     source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
     assert '"--strict"' in source
     assert '"--role", role' in source
+
+
+def test_waiverDoesNotApplyWhenSubstitutingProduction(tmpPath):
+    """Dispensa diz "o gerado pode nao ter isto" — aceitavel em arquivo novo, regressao em
+    arquivo que ja existe. Foi exatamente o que a PR que sobrescreveu produção fez com o `Deposit`.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "declaration public final class Widget extends Resource\n")
+    waivers = _write(tmpPath, "java.waivers",
+                     "[widget/main]\ndeclaration public final class Widget extends Resource  # o template nao emite final\n")
+
+    lacuna, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                          "--waivers", str(waivers), "--strict")
+    assert lacuna == 0, out
+    assert "dispensado" in out
+
+    substituicao, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                                "--waivers", str(waivers), "--strict", "--substitution")
+    assert substituicao == 1
+    assert "dispensa não vale em substituição" in out
+
+
+def test_nodeSyntaxIsCheckedLikeJava(tmpPath):
+    """Java tinha `javac`, Node nao tinha nada: JS quebrado passava o gate e virava PR.
+
+    O `mvn test-compile` do workflow tambem so cobre Java.
+    """
+    target = _write(tmpPath, "widget.js", "exports.get = async function ( { \n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--allow-missing-contract", "--strict")
+
+    assert code == 1
+    assert "SYNTAX" in out
+
+
+def test_validNodeSourcePassesTheSyntaxCheck(tmpPath):
+    target = _write(tmpPath, "widget.js", "const rest = require('../utils/rest.js');\nexports.get = async function (id) { return id; };\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--allow-missing-contract", "--strict")
+
+    assert code == 0, out
+    assert "sintaxe (node)" in out

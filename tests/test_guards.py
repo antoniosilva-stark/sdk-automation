@@ -1,7 +1,8 @@
+import ast
 import shutil
 from pathlib import Path
 
-from conftest import GENERATOR_SKIP, commandWorks, missingGeneratorDependency, missingJavacDependency
+from conftest import GENERATOR_SKIP, commandWorks, missingGeneratorDependency, missingJavacDependency, REPO_ROOT
 
 
 def _fakeBin(tmpPath: Path, name: str, script: str) -> Path:
@@ -13,24 +14,24 @@ def _fakeBin(tmpPath: Path, name: str, script: str) -> Path:
     return root
 
 
-def test_commandWorksAceitaComandoQueSaiZero(tmpPath, monkeypatch):
+def test_commandWorksAcceptsCommandExitingZero(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "probe", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
     assert commandWorks("probe") is True
 
 
-def test_commandWorksRejeitaComandoQueSaiNaoZero(tmpPath, monkeypatch):
+def test_commandWorksRejectsCommandExitingNonZero(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "probe", "#!/bin/sh\nexit 1\n")
     monkeypatch.setenv("PATH", str(root))
     assert commandWorks("probe") is False
 
 
-def test_commandWorksRejeitaComandoAusente(tmpPath, monkeypatch):
+def test_commandWorksRejectsMissingCommand(tmpPath, monkeypatch):
     monkeypatch.setenv("PATH", str(tmpPath))
     assert commandWorks("nao-existe-mesmo") is False
 
 
-def test_javaPresenteMasInoperanteAcusaJre(tmpPath, monkeypatch):
+def test_javaPresentButBrokenReportsJre(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 1\n")
     _fakeBin(tmpPath, "npx", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
@@ -40,14 +41,14 @@ def test_javaPresenteMasInoperanteAcusaJre(tmpPath, monkeypatch):
     assert "JRE" in reason
 
 
-def test_npxAusenteAcusaNpx(tmpPath, monkeypatch):
+def test_missingNpxReportsNpx(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
 
     assert missingGeneratorDependency() == "npx ausente"
 
 
-def test_ambienteCompletoNaoPula(tmpPath, monkeypatch):
+def test_completeEnvironmentDoesNotSkip(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 0\n")
     _fakeBin(tmpPath, "npx", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
@@ -55,7 +56,7 @@ def test_ambienteCompletoNaoPula(tmpPath, monkeypatch):
     assert missingGeneratorDependency() is None
 
 
-def test_javacInoperanteAcusaJavac(tmpPath, monkeypatch):
+def test_brokenJavacReportsJavac(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "javac", "#!/bin/sh\nexit 1\n")
     monkeypatch.setenv("PATH", str(root))
 
@@ -64,8 +65,135 @@ def test_javacInoperanteAcusaJavac(tmpPath, monkeypatch):
     assert "javac" in reason
 
 
-def test_razaoDoSkipNomeiaADependencia():
+def test_noTestFileBindsTheReferenceToHome():
+    """A referencia resolvida vive num lugar so: o conftest, que delega aos tools.
+
+    Presa ao diretorio do usuario, a trava existe na maquina de quem escreveu e fica
+    inerte no CI —
+    foi o que aconteceu com o golden, que seguiu pulado mesmo depois do clone-sdk-ref.
+    """
+    needle = "Path" + ".home()"
+    offenders = [
+        path.name
+        for path in sorted((REPO_ROOT / "tests").rglob("*.py"))
+        if path.name != "conftest.py" and needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == [], f"resolucao de referencia espalhada: {', '.join(offenders)}"
+
+
+def test_noSourceHardcodesAPersonalCheckout():
+    """A referencia canonica e o clone em _references/, feito pelo setup do projeto.
+
+    Cravar o layout de diretorio de uma pessoa faz o projeto funcionar na maquina dela e
+    nao na dos outros. Quem quiser apontar para um clone proprio usa SDK_PYTHON,
+    SDK_JAVA ou SDK_NODE.
+    """
+    needle = "workspace" + "/bank"
+    searched = sorted((REPO_ROOT / "tools").glob("*.py")) + sorted((REPO_ROOT / "tests").rglob("*.py"))
+    searched.append(REPO_ROOT / "Makefile")
+
+    offenders = [
+        path.name for path in searched
+        if path.name != "test_guards.py" and needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == [], f"checkout pessoal cravado em: {', '.join(offenders)}"
+
+
+def test_referenceResolutionIsSharedNotDuplicated(conftest):
+    """Cada tool resolve a referencia que ele le; o teste delega, nao reimplementa."""
+    assert conftest.resolvedPythonSdk.__module__ == "conftest"
+    assert callable(conftest.resolvedJavaSdk)
+    assert callable(conftest.resolvedNodeSdk)
+
+
+def test_skipReasonNamesTheDependency():
     if GENERATOR_SKIP is None:
         assert shutil.which("npx")
         return
     assert "npx" in GENERATOR_SKIP or "JRE" in GENERATOR_SKIP
+
+def test_everyBuildResourceCallIsGuardedByTheGeneratorMark():
+    """Teste que espera o build chegar ao gerador precisa do marcador: sem JRE ele reprova
+    enquanto as irmas dele pulam. Quem aborta antes de gerar — linguagem invalida, destino
+    ausente, lint reprovado — nao precisa.
+    """
+    source = (REPO_ROOT / "tests/test_build_resource.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lines = source.splitlines()
+
+    desguardados = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        body = "\n".join(lines[node.lineno - 1:node.end_lineno])
+        if 'runTool("build-resource.py"' not in body:
+            continue
+        chegaAoGerador = "assert code == 0" in body or "read_text" in body
+        if not chegaAoGerador:
+            continue
+        marks = {decorator.id for decorator in node.decorator_list if isinstance(decorator, ast.Name)}
+        if "requiresGenerator" not in marks:
+            desguardados.append(node.name)
+
+    assert desguardados == [], f"chamam o gerador sem @requiresGenerator: {desguardados}"
+
+
+def test_noToolParsesYamlWithThePurePythonLoader():
+    """A spec tem 7.131 linhas: o parser puro custa 138 ms contra 18 ms do libyaml.
+
+    Cada ferramenta e um processo novo, entao o custo aparece em toda invocacao —
+    `yaml.safe_load` num tool derruba isso de volta sem ninguem notar.
+    """
+    lentos = []
+    for path in sorted((REPO_ROOT / "tools").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "yaml.safe_load(" in source:
+            lentos.append(path.name)
+        if "yaml.load(" in source and "CSafeLoader" not in source:
+            lentos.append(f"{path.name} (sem fallback declarado)")
+
+    assert lentos == [], f"parse lento de YAML: {lentos}"
+
+
+def test_theFastLoaderIsActuallyAvailableHere():
+    """Se o libyaml sair do ambiente, o fallback mantem tudo correto — mas 8x mais lento.
+
+    Este teste nao e correcao, e aviso: falhar aqui explica uma suite subitamente lenta.
+    """
+    import yaml
+
+    assert hasattr(yaml, "CSafeLoader"), "libyaml ausente: PyYAML instalado sem a extensao C"
+
+
+def test_everyFastLoaderActuallyRuns():
+    """`yaml` estava importado dentro da funcao em coverage-report: o texto passava na
+    guarda acima e o tool quebrava com NameError so na execucao.
+    """
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    quebrados = []
+    for path in sorted((REPO_ROOT / "tools").glob("*.py")):
+        if "def loadFast" not in path.read_text(encoding="utf-8"):
+            continue
+        spec = spec_from_file_location(path.stem.replace("-", "_"), path)
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        try:
+            assert module.loadFast("componente: valor") == {"componente": "valor"}
+        except Exception as error:
+            quebrados.append(f"{path.name}: {type(error).__name__} {error}")
+
+    assert quebrados == [], f"loadFast quebrado: {quebrados}"
+
+
+def test_referenceRefreshFailsInsteadOfSwallowing():
+    """O status de um `for` e o da ultima iteracao: com `&&`, fetch que falha some,
+    e o detector de defasagem compara contra clone velho reportando "em sincronia".
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    bloco = makefile.split("refresh-sdk-ref:")[1].split("\nreference:")[0]
+
+    assert "exit 1" in bloco
+    assert "if ! git" in bloco, "falha de fetch tem de abortar, nao seguir para o proximo repo"

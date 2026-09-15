@@ -5,15 +5,30 @@ import argparse
 from pathlib import Path
 from dataclasses import dataclass
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
 CREATE_SUFFIX = "Create"
 
 CODE_SCAFFOLDING = "SCAFFOLDING"
 CODE_UNDECLARED = "UNDECLARED"
 CODE_ID_ORDER = "ID_ORDER"
+CODE_NO_OPERATION = "NO_OPERATION"
+CODE_NO_PROVENANCE = "NO_PROVENANCE"
+CODE_NO_ID = "NO_ID"
+PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
 MIN_CREATE_PROPS = 1
+
+OPERATION_FLAGS = (
+    "x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
+    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-data-only",
+)
+WRITE_FLAGS = ("x-sdk-create", "x-sdk-put")
 
 _SCHEMA_LINE = re.compile(r"^    ([A-Za-z][A-Za-z0-9]*):", re.M)
 
@@ -34,6 +49,7 @@ class ResourceReport:
     readProps: int
     createProps: int
     subObjects: int
+    operations: list[str]
     reasons: list[tuple[str, str]]
 
     @property
@@ -41,12 +57,17 @@ class ResourceReport:
         return not self.reasons
 
 
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
+
+
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
 
 
 def loadYaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    return loadFast(path.read_text(encoding="utf-8"))
 
 
 def resolveRef(ref: str, specPath: Path) -> dict:
@@ -66,12 +87,39 @@ def resolveRef(ref: str, specPath: Path) -> dict:
     return node
 
 
-def schemaProps(schema: dict | None, specPath: Path) -> dict:
+def refFile(schema: dict | None, specPath: Path) -> Path | None:
+    ref = schema.get("$ref") if isinstance(schema, dict) else None
+    if not ref or "#" not in ref:
+        return None
+    filePart, _ = ref.split("#", 1)
+    target = (specPath.parent / filePart).resolve()
+    return target if target.is_file() else None
+
+
+def declaresProvenance(path: Path) -> bool:
+    first = path.read_text(encoding="utf-8").splitlines()[:1]
+    return bool(first) and first[0].startswith(PROVENANCE_PREFIX) and "@desconhecido" not in first[0]
+
+
+def resolveSchema(schema: dict | None, specPath: Path) -> dict:
     if not isinstance(schema, dict):
         return {}
-    if "$ref" in schema:
-        return schemaProps(resolveRef(schema["$ref"], specPath), specPath)
-    return schema.get("properties") or {}
+
+    ref = schema.get("$ref")
+    if not ref:
+        return schema
+
+    merged = dict(resolveSchema(resolveRef(ref, specPath), specPath))
+    merged.update({key: value for key, value in schema.items() if key != "$ref"})
+    return merged
+
+
+def schemaProps(schema: dict | None, specPath: Path) -> dict:
+    return resolveSchema(schema, specPath).get("properties") or {}
+
+
+def declaredOperations(schema: dict) -> list[str]:
+    return [flag for flag in OPERATION_FLAGS if schema.get(flag)]
 
 
 def countSubObjects(props: dict) -> int:
@@ -97,17 +145,35 @@ def schemaLines(specPath: Path) -> dict[str, int]:
 
 
 def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, int]) -> ResourceReport:
-    readProps = schemaProps(schemas.get(name), specPath)
+    readSchema = resolveSchema(schemas.get(name), specPath)
+    readProps = readSchema.get("properties") or {}
     createProps = schemaProps(schemas.get(name + CREATE_SUFFIX), specPath)
+    operations = declaredOperations(readSchema)
+    writes = [flag for flag in WRITE_FLAGS if readSchema.get(flag)]
 
     reasons: list[tuple[str, str]] = []
     names = list(readProps)
+    schemaFile = refFile(schemas.get(name), specPath)
+    if schemaFile and not declaresProvenance(schemaFile):
+        reasons.append((CODE_NO_PROVENANCE,
+                        f"{schemaFile.name} não declara de qual commit do sdk-python veio"))
+    if not operations:
+        reasons.append((CODE_NO_OPERATION, f"nenhuma operação declarada — use uma de {', '.join(OPERATION_FLAGS)}"))
+    if names and "id" not in names:
+        reasons.append((CODE_NO_ID,
+                        "schema sem 'id': o template emite 'extends Resource' com 'super(null)'"
+                        " e nao declara a primeira propriedade — no SDK real esses recursos sao"
+                        " SubResource, que ainda nao tem template"))
     if "id" in names and names[0] != "id":
         reasons.append((CODE_ID_ORDER, f"'id' deve ser a primeira propriedade, mas veio depois de '{names[0]}'"))
     if len(readProps) < MIN_READ_PROPS:
         reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
-    if len(createProps) < MIN_CREATE_PROPS:
-        reasons.append((CODE_SCAFFOLDING, f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS})"))
+    if writes and len(createProps) < MIN_CREATE_PROPS:
+        reasons.append((
+            CODE_SCAFFOLDING,
+            f"{name}{CREATE_SUFFIX} tem {len(createProps)} propriedades (mínimo {MIN_CREATE_PROPS}) "
+            f"porque {writes[0]} está declarado",
+        ))
 
     return ResourceReport(
         name=name,
@@ -115,6 +181,7 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
         readProps=len(readProps),
         createProps=len(createProps),
         subObjects=countSubObjects(readProps),
+        operations=operations,
         reasons=reasons,
     )
 
@@ -132,14 +199,15 @@ def reportInventory(reports: list[ResourceReport]) -> None:
     emit(f"[OK] gerável ({len(generatable)}):")
     for report in generatable:
         subObjects = f", {report.subObjects} sub-objeto(s)" if report.subObjects else ""
-        emit(f"  {report.name} — {report.readProps} props / {report.createProps} create{subObjects}")
+        operations = ", ".join(flag.removeprefix("x-sdk-") for flag in report.operations)
+        emit(f"  {report.name} — {report.readProps} props / {report.createProps} create{subObjects} [{operations}]")
 
     emit("")
     emit(f"[WARN] scaffolding ({len(scaffolding)}):")
     for report in scaffolding[:5]:
         emit(f"  {report.name} — {report.reasons[0][1]}")
     if len(scaffolding) > 5:
-        emit(f"  ... e mais {len(scaffolding) - 5}")
+        emit(f"... e mais {len(scaffolding) - 5}")
 
 
 def requiredIssues(reports: list[ResourceReport], required: set[str], specPath: Path) -> list[Issue]:
