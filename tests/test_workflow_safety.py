@@ -65,30 +65,30 @@ def untrustedInRun(workflow: dict) -> list[str]:
     return found
 
 
-def test_encontraOsWorkflows():
+def test_findsTheWorkflows():
     assert len(workflowFiles()) >= 2, "glob nao achou workflow — teste seria vacuo"
 
 
 @pytest.mark.parametrize("path", workflowFiles(), ids=lambda p: p.name)
-def test_nenhumaEntradaNaoConfiavelDentroDeRun(path):
+def test_noUntrustedInputInsideRun(path):
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     found = untrustedInRun(workflow)
     assert found == [], f"{path.name}: entrada interpolada em run:\n  " + "\n  ".join(found)
 
 
-def test_detectorPegaInjecaoConhecida():
+def test_detectorCatchesKnownInjection():
     assert untrustedInRun(yaml.safe_load(INJECTION_SAMPLE)) == ["build/Unsafe: inputs.resource"]
 
 
-def test_detectorAceitaEntradaViaEnv():
+def test_detectorAcceptsInputViaEnv():
     assert untrustedInRun(yaml.safe_load(ENV_SAMPLE)) == []
 
 
-def test_detectorIgnoraExpressaoForaDeRun():
+def test_detectorIgnoresExpressionOutsideRun():
     assert untrustedInRun(yaml.safe_load(OUTSIDE_RUN_SAMPLE)) == []
 
 
-def test_detectorEnxergaTodosOsStepsComRun():
+def test_detectorSeesEveryStepWithRun():
     workflow = yaml.safe_load((WORKFLOW_DIR / "sdk-sync.yaml").read_text(encoding="utf-8"))
     assert len(runBlocks(workflow)) >= 5
 
@@ -105,7 +105,7 @@ def stepIndex(steps: list[dict], needle: str, field: str) -> int:
     return -1
 
 
-def test_geradorRodaAntesDoTokenExistir():
+def test_generatorRunsBeforeTheTokenExists():
     steps = syncSteps()
     build = stepIndex(steps, "build-resource.py", "run")
     token = stepIndex(steps, "create-github-app-token", "uses")
@@ -115,7 +115,7 @@ def test_geradorRodaAntesDoTokenExistir():
     assert build < token, "gerador roda com o token do App em disco"
 
 
-def test_alvoEhCompiladoAntesDoCommit():
+def test_targetIsCompiledBeforeTheCommit():
     """O sdk-java nao tem CI nenhuma: este gate e o unico que pega Java que nao compila.
 
     Tem de rodar depois do copy, porque so ali o pom.xml do alvo e o gerado coexistem,
@@ -131,7 +131,7 @@ def test_alvoEhCompiladoAntesDoCommit():
     assert copy < build < commit, "compilacao fora da janela entre copy e commit"
 
 
-def test_compilacaoCobreOTesteGeradoENaoExecutaNada():
+def test_compilationCoversGeneratedTestAndRunsNothing():
     """`mvn compile` nao compila src/test — o teste gerado passaria sem verificacao.
 
     E `mvn test` exigiria PROJECT_ID/PROJECT_PRIVATE_KEY de sandbox, que este repo
@@ -146,20 +146,20 @@ def test_compilacaoCobreOTesteGeradoENaoExecutaNada():
         assert not re.search(r"mvn\s+(?:-\S+\s+)*test(?![-\w])", script), "mvn test pede credencial de sandbox"
 
 
-def test_checkoutDoProprioRepoNaoPersisteCredencial():
+def test_ownRepoCheckoutDoesNotPersistCredentials():
     first = syncSteps()[0]
     assert "actions/checkout" in first["uses"]
     assert first.get("with", {}).get("persist-credentials") is False
 
 
-def test_buildNaoEscreveDiretoNoAlvo():
+def test_buildDoesNotWriteStraightIntoTheTarget():
     steps = syncSteps()
     build = steps[stepIndex(steps, "build-resource.py", "run")]
     assert "--into staging" in build["run"]
     assert "--into target" not in build["run"]
 
 
-def test_nenhumaSubstituicaoDeComandoDentroDeTeste():
+def test_noCommandSubstitutionInsideTest():
     offenders = []
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -170,7 +170,7 @@ def test_nenhumaSubstituicaoDeComandoDentroDeTeste():
     assert offenders == [], "falha de comando engolida dentro de [ ]:\n  " + "\n  ".join(offenders)
 
 
-def test_todoJobDeclaraPermissions():
+def test_everyJobDeclaresPermissions():
     missing = []
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -180,14 +180,14 @@ def test_todoJobDeclaraPermissions():
     assert missing == [], "job sem permissions declarado: " + ", ".join(missing)
 
 
-def test_nenhumJobPedeWriteAll():
+def test_noJobAsksForWriteAll():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for jobName, job in (workflow.get("jobs") or {}).items():
             assert job.get("permissions") != "write-all", f"{path.name}/{jobName}"
 
 
-def test_comentarioEmPrCondicionaAStepEspecifico():
+def test_prCommentIsConditionedOnASpecificStep():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for jobName, job in (workflow.get("jobs") or {}).items():
@@ -217,7 +217,7 @@ def actionRefs() -> list[tuple[str, str]]:
     return refs
 
 
-def test_acaoQueRecebeChavePrivadaEhPinadaPorSha():
+def test_actionReceivingPrivateKeyIsPinnedBySha():
     for fileName, uses in actionRefs():
         if not any(name in uses for name in SECRET_BEARING):
             continue
@@ -225,7 +225,7 @@ def test_acaoQueRecebeChavePrivadaEhPinadaPorSha():
         assert _SHA.match(ref), f"{fileName}: {uses} nao esta pinada por SHA"
 
 
-def test_todoWorkflowUsaAMesmaMajorDeNode():
+def test_everyWorkflowUsesTheSameNodeMajor():
     versions = set()
     for path in workflowFiles():
         for match in re.finditer(r"node-version:\s*'(\d+)'", path.read_text(encoding="utf-8")):
@@ -233,7 +233,7 @@ def test_todoWorkflowUsaAMesmaMajorDeNode():
     assert len(versions) <= 1, f"majors divergentes entre workflows: {sorted(versions)}"
 
 
-def test_quemRodaTesteResolveAReferenciaAntes():
+def test_whoeverRunsTestsResolvesTheReferenceFirst():
     """47 testes pytest ficavam skipped no CI por falta de _references/sdk-python.
 
     O golden, o teste de gap e o de cobertura estavam entre eles: o CI nao verificava
@@ -254,7 +254,7 @@ def test_quemRodaTesteResolveAReferenciaAntes():
             assert cloneIndex < testIndex
 
 
-def test_quemRodaNpmCiConfiguraONode():
+def test_whoeverRunsNpmCiSetsUpNode():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for jobName, job in (workflow.get("jobs") or {}).items():
@@ -264,7 +264,7 @@ def test_quemRodaNpmCiConfiguraONode():
             assert not usesNpm or setsNode, f"{path.name}/{jobName}: npm ci sem setup-node"
 
 
-def test_nenhumGitAddAmplo():
+def test_noBroadGitAdd():
     offenders = []
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -275,7 +275,7 @@ def test_nenhumGitAddAmplo():
     assert offenders == [], "git add amplo:\n  " + "\n  ".join(offenders)
 
 
-def test_baseEhConfirmadaContraORemotoNaoApenasContraHead():
+def test_baseIsConfirmedAgainstTheRemoteNotJustHead():
     steps = syncSteps()
     base = steps[stepIndex(steps, 'echo "base=$BASE"', "run")]
     script = base["run"]

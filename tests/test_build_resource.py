@@ -23,53 +23,53 @@ def _target(tmpPath: Path) -> Path:
     return root
 
 
-def test_generatorsContemJavaENode(buildResource):
+def test_generatorsContainJavaAndNode(buildResource):
     assert set(buildResource.GENERATORS) == {"java", "node"}
 
 
-def test_javaTemDoisRunsNodeTemTres(buildResource):
+def test_javaHasTwoRunsNodeHasThree(buildResource):
     assert len(buildResource.GENERATORS["java"]) == 2
     assert len(buildResource.GENERATORS["node"]) == 3
 
 
-def test_papeisDoJavaCobremRecursoETeste(buildResource):
+def test_javaRolesCoverResourceAndTest(buildResource):
     assert [run["role"] for run in buildResource.GENERATORS["java"]] == ["main", "test"]
 
 
-def test_papeisDoNodeCobremImplBarrelTypes(buildResource):
+def test_nodeRolesCoverImplBarrelTypes(buildResource):
     papeis = [run["role"] for run in buildResource.GENERATORS["node"]]
     assert papeis == ["impl", "barrel", "types"]
 
 
-def test_workflowOfereceTodaLinguagemComGerador(buildResource):
+def test_workflowOffersEveryLanguageWithAGenerator(buildResource):
     assert set(buildResource.GENERATORS) <= set(_languageInput()["options"])
 
 
-def test_workflowNaoOfereceLinguagemSemGerador(buildResource):
+def test_workflowDoesNotOfferLanguageWithoutGenerator(buildResource):
     assert set(_languageInput()["options"]) <= set(buildResource.GENERATORS)
 
 
-def test_defaultDoWorkflowEhUmaLinguagemOferecida():
+def test_workflowDefaultIsAnOfferedLanguage():
     language = _languageInput()
     assert language["default"] in language["options"]
 
 
-def test_dispatchPedeApenasRecursoELinguagem():
+def test_dispatchAsksOnlyForResourceAndLanguage():
     assert set(_dispatchInputs()) == {"resource", "language"}
 
 
-def test_dispatchNaoPedeDestinoNemBase():
+def test_dispatchAsksForNeitherTargetNorBase():
     raw = WORKFLOW.read_text(encoding="utf-8")
     for derived in ("inputs.owner", "inputs.repo", "inputs.base"):
         assert derived not in raw
 
 
-def test_ownerVemDoRepositorioQueExecuta():
+def test_ownerComesFromTheRunningRepository():
     raw = WORKFLOW.read_text(encoding="utf-8")
     assert "github.repository_owner" in raw
 
 
-def test_baseNaoEhFixadaNoWorkflow():
+def test_baseIsNotHardcodedInTheWorkflow():
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["sync"]["steps"]
 
@@ -81,61 +81,61 @@ def test_baseNaoEhFixadaNoWorkflow():
     assert "ref" not in (checkout.get("with") or {}), "ref fixo reintroduz o defeito nº12"
 
 
-def test_typescriptAxiosNaoEhUsado(buildResource):
+def test_typescriptAxiosIsNotUsed(buildResource):
     geradores = {run["generator"] for runs in buildResource.GENERATORS.values() for run in runs}
     assert "typescript-axios" not in geradores
 
 
-def test_linguagemSemGeradorRetornaDois(tmpPath):
+def test_languageWithoutGeneratorReturnsTwo(tmpPath):
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "cobol",
                         "--into", str(_target(tmpPath)))
     assert code == 2
     assert "linguagem sem gerador configurado" in out
 
 
-def test_destinoInexistenteRetornaDois(tmpPath):
+def test_missingDestinationReturnsTwo(tmpPath):
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java",
                         "--into", str(tmpPath / "nao-existe"))
     assert code == 2
     assert "destino não é um diretório" in out
 
 
-def test_recursoScaffoldingAbortaNoLint(tmpPath):
+def test_scaffoldingResourceAbortsAtTheLint(tmpPath):
     code, out = runTool("build-resource.py", "Account", "--lang", "java",
                         "--into", str(_target(tmpPath)))
     assert code == 1
     assert "SCAFFOLDING" in out
 
 
-def test_recursoInexistenteAbortaNoLint(tmpPath):
+def test_unknownResourceAbortsAtTheLint(tmpPath):
     code, out = runTool("build-resource.py", "NaoExisteNaSpec", "--lang", "java",
                         "--into", str(_target(tmpPath)))
     assert code == 1
     assert "UNDECLARED" in out
 
 
-def test_lintVemAntesDoGenerate(tmpPath):
+def test_lintComesBeforeGenerate(tmpPath):
     code, out = runTool("build-resource.py", "Account", "--lang", "java",
                         "--into", str(_target(tmpPath)))
     assert "lint-spec" in out
     assert "generate" not in out
 
 
-def test_validacaoDeArgumentoVemAntesDoLint(tmpPath):
+def test_argumentValidationComesBeforeTheLint(tmpPath):
     code, out = runTool("build-resource.py", "Account", "--lang", "cobol",
                         "--into", str(_target(tmpPath)))
     assert code == 2
     assert "lint-spec" not in out
 
 
-def test_nadaEhEscritoQuandoLintReprova(tmpPath):
+def test_nothingIsWrittenWhenTheLintFails(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Account", "--lang", "java", "--into", str(target))
     assert list(target.rglob("*")) == []
 
 
 @requiresGenerator
-def test_pilotoProduzArtefatoVerificado(tmpPath):
+def test_pilotProducesAVerifiedArtifact(tmpPath):
     target = _target(tmpPath)
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
 
@@ -154,7 +154,7 @@ def test_pilotoProduzArtefatoVerificado(tmpPath):
 
 
 @requiresGenerator
-def test_geradoNaoChamaRestPutQueNaoExisteNoSdkJava(tmpPath):
+def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(tmpPath):
     """`Rest.java` do sdk-java @ c7f40b8 nao tem `put` de entidade — so `patch` e `putRaw`.
 
     Gerar `put` produzia arquivo que nao compila, e o alvo nao tem CI para pegar.
@@ -171,7 +171,7 @@ def test_geradoNaoChamaRestPutQueNaoExisteNoSdkJava(tmpPath):
 
 
 @requiresGenerator
-def test_duasExecucoesProduzemOMesmoConteudo(tmpPath):
+def test_twoRunsProduceTheSameContent(tmpPath):
     target = _target(tmpPath)
     args = ("SplitProfile", "--lang", "java", "--into", str(target))
 
@@ -190,7 +190,7 @@ NODE_ARTIFACTS = (
 
 
 @requiresGenerator
-def test_nodeProduzOsTresArtefatos(tmpPath):
+def test_nodeProducesTheThreeArtifacts(tmpPath):
     target = _target(tmpPath)
     code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
 
@@ -200,7 +200,7 @@ def test_nodeProduzOsTresArtefatos(tmpPath):
 
 
 @requiresGenerator
-def test_nodeUsaOShapeDeFuncoesDeModulo(tmpPath):
+def test_nodeUsesTheModuleFunctionShape(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
@@ -212,7 +212,7 @@ def test_nodeUsaOShapeDeFuncoesDeModulo(tmpPath):
 
 
 @requiresGenerator
-def test_nodeAplicaCheckDatetimeEmCampoDeData(tmpPath):
+def test_nodeAppliesCheckDatetimeOnDateFields(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
@@ -221,7 +221,7 @@ def test_nodeAplicaCheckDatetimeEmCampoDeData(tmpPath):
 
 
 @requiresGenerator
-def test_nodeBarrelSoExportaOperacaoDeclarada(tmpPath):
+def test_nodeBarrelExportsOnlyDeclaredOperations(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
     barrel = (target / "sdk/transaction/index.js").read_text(encoding="utf-8")
@@ -232,7 +232,7 @@ def test_nodeBarrelSoExportaOperacaoDeclarada(tmpPath):
 
 
 @requiresGenerator
-def test_testeGeradoAcompanhaORecurso(tmpPath):
+def test_generatedTestAccompaniesTheResource(tmpPath):
     """Os 42 recursos do sdk-java tem TestX.java sem excecao: PR sem teste e PR incompleto,
     e e onde a intervencao humana voltaria."""
     target = _target(tmpPath)
@@ -250,7 +250,7 @@ def test_testeGeradoAcompanhaORecurso(tmpPath):
 
 
 @requiresGenerator
-def test_testeGeradoSoExercitaOperacaoDeclarada(tmpPath):
+def test_generatedTestExercisesOnlyDeclaredOperations(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "DictKey", "--lang", "java", "--into", str(target))
     source = (target / "src/test/java/TestDictKey.java").read_text(encoding="utf-8")
@@ -261,7 +261,7 @@ def test_testeGeradoSoExercitaOperacaoDeclarada(tmpPath):
 
 
 @requiresGenerator
-def test_oDoisArtefatosJavaSaoPosicionados(tmpPath):
+def test_bothJavaArtifactsArePlaced(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
 
@@ -270,7 +270,7 @@ def test_oDoisArtefatosJavaSaoPosicionados(tmpPath):
 
 
 @requiresGenerator
-def test_deleteEPdfSaemQuandoDeclarados(tmpPath):
+def test_deleteAndPdfAreEmittedWhenDeclared(tmpPath):
     """Transfer exporta delete e pdf no SDK Python, e os dois tem primitivo no Rest real:
     Rest.delete(data, id, user) e Rest.getContent(data, id, "pdf", user, ...)."""
     target = _target(tmpPath)
@@ -287,7 +287,7 @@ def test_deleteEPdfSaemQuandoDeclarados(tmpPath):
 
 
 @requiresGenerator
-def test_updateSaiQuandoDeclarado(tmpPath):
+def test_updateIsEmittedWhenDeclared(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
@@ -297,7 +297,7 @@ def test_updateSaiQuandoDeclarado(tmpPath):
 
 
 @requiresGenerator
-def test_cancelSaiQuandoDeclarado(tmpPath):
+def test_cancelIsEmittedWhenDeclared(tmpPath):
     """cancel e Rest.delete com outro nome (InvoicePullRequest.java:355).
 
     CorporateCard exporta update e cancel no Python, entao exercita as duas flags.
@@ -313,7 +313,7 @@ def test_cancelSaiQuandoDeclarado(tmpPath):
 
 
 @requiresGenerator
-def test_recursoSoDeLeituraNaoCarregaImportMorto(tmpPath):
+def test_readOnlyResourceCarriesNoDeadImport(tmpPath):
     """Balance, CardMethod, CorporateBalance e PaymentPreview so expoem get/query.
 
     Generator, ArrayList e List so existem para query/create/page/log — sem condicionar,
@@ -332,7 +332,7 @@ def test_recursoSoDeLeituraNaoCarregaImportMorto(tmpPath):
 
 
 @requiresGenerator
-def test_semAFlagNaoSaiInputStreamMorto(tmpPath):
+def test_withoutTheFlagNoDeadInputStreamIsEmitted(tmpPath):
     """Recurso sem pdf nao pode carregar import de InputStream — o gate reprova import morto."""
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target))
@@ -343,7 +343,7 @@ def test_semAFlagNaoSaiInputStreamMorto(tmpPath):
 
 
 @requiresGenerator
-def test_logSaiComoClasseInternaQuandoDeclarado(tmpPath):
+def test_logIsEmittedAsInnerClassWhenDeclared(tmpPath):
     """No sdk-java o Log nao e arquivo proprio: e classe interna do recurso, com
     ClassData(Log.class, "InvoiceLog"), e o endpoint /invoice/log sai do Api.endpoint."""
     target = _target(tmpPath)
@@ -359,7 +359,7 @@ def test_logSaiComoClasseInternaQuandoDeclarado(tmpPath):
 
 
 @requiresGenerator
-def test_recursoSemLogNaoGanhaClasseInterna(tmpPath):
+def test_resourceWithoutLogGetsNoInnerClass(tmpPath):
     """Transaction nao tem log/ no SDK Python — gerar Log ali seria inventar recurso."""
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target))
@@ -369,7 +369,7 @@ def test_recursoSemLogNaoGanhaClasseInterna(tmpPath):
 
 
 @requiresGenerator
-def test_pageSaiQuandoASpecDeclara(tmpPath):
+def test_pageIsEmittedWhenTheSpecDeclaresIt(tmpPath):
     """Todo recurso real do Stark Bank tem page(); a spec não declarava em nenhum.
 
     O template sempre soube produzir — faltava a flag, então nenhum SDK gerado
@@ -384,7 +384,7 @@ def test_pageSaiQuandoASpecDeclara(tmpPath):
 
 
 @requiresGenerator
-def test_nodeTypesUsaDeclareModule(tmpPath):
+def test_nodeTypesUsesDeclareModule(tmpPath):
     target = _target(tmpPath)
     runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
     types = (target / "types/transaction/transaction.d.ts").read_text(encoding="utf-8")
@@ -394,7 +394,7 @@ def test_nodeTypesUsaDeclareModule(tmpPath):
     assert "&lt;" not in types
 
 
-def test_geradorQueRetornaZeroSemProduzirEhAcusado(tmpPath):
+def test_generatorReturningZeroWithoutOutputIsReported(tmpPath):
     fakeBin = tmpPath / "bin"
     fakeBin.mkdir()
     fake = fakeBin / "npx"
@@ -410,7 +410,7 @@ def test_geradorQueRetornaZeroSemProduzirEhAcusado(tmpPath):
     assert "SplitProfile.java" in out
 
 
-def test_nadaEhPosicionadoQuandoOGeradorNaoProduz(tmpPath):
+def test_nothingIsPlacedWhenTheGeneratorProducesNothing(tmpPath):
     fakeBin = tmpPath / "bin"
     fakeBin.mkdir()
     fake = fakeBin / "npx"

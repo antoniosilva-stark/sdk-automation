@@ -40,17 +40,17 @@ def _json(tmpPath: Path, modules: dict, javaClasses: list[str]) -> dict:
     return json.loads(out)
 
 
-def test_recursoAusenteNoJavaEhGap(tmpPath):
+def test_resourceMissingInJavaIsAGap(tmpPath):
     report = _json(tmpPath, {"widget": [("widget", "Widget")]}, [])
     assert report["gaps"] == ["Widget"]
 
 
-def test_recursoPresenteNosDoisNaoEhGap(tmpPath):
+def test_resourcePresentInBothIsNotAGap(tmpPath):
     report = _json(tmpPath, {"widget": [("widget", "Widget")]}, ["Widget"])
     assert report["gaps"] == []
 
 
-def test_classeDeAutenticacaoNaoEhGapNemExtra(tmpPath):
+def test_authenticationClassIsNeitherGapNorExtra(tmpPath):
     """User, Project, Organization e afins vivem no starkcore do lado Python.
 
     Sem a exclusao explicita, davam 6 falsos positivos no sentido inverso.
@@ -59,7 +59,7 @@ def test_classeDeAutenticacaoNaoEhGapNemExtra(tmpPath):
     assert report["extras"] == []
 
 
-def test_subObjetoQueEhClasseInternaNoJavaNaoEhGap(tmpPath):
+def test_subObjectThatIsInnerClassInJavaIsNotAGap(tmpPath):
     """invoice/__payment.py declara Payment, que no Java e Invoice.Payment — classe
     interna, sem arquivo proprio. Tratar como gap mandaria gerar recurso inexistente."""
     modules = {"invoice": [("invoice", "Invoice"), ("payment", "Payment")]}
@@ -69,7 +69,7 @@ def test_subObjetoQueEhClasseInternaNoJavaNaoEhGap(tmpPath):
     assert "Payment" in report["subObjects"]
 
 
-def test_moduloSecundarioComArquivoProprioContaComoPresente(tmpPath):
+def test_secondaryModuleWithOwnFileCountsAsPresent(tmpPath):
     """paymentpreview/__boletopreview.py declara BoletoPreview, que no Java TEM arquivo
     proprio. E o lado Java que discrimina, nao um palpite sobre o nome."""
     modules = {"paymentpreview": [("paymentpreview", "PaymentPreview"), ("boletopreview", "BoletoPreview")]}
@@ -79,7 +79,7 @@ def test_moduloSecundarioComArquivoProprioContaComoPresente(tmpPath):
     assert report["subObjects"] == []
 
 
-def test_diretorioSemClasseEhAnunciadoEnaoSilenciado(tmpPath):
+def test_directoryWithoutClassIsAnnouncedNotSilenced(tmpPath):
     """request/__request.py nao declara classe — e passthrough de HTTP cru.
 
     Sumir com ele em silencio esconderia um recurso que a automacao nao cobre.
@@ -90,21 +90,21 @@ def test_diretorioSemClasseEhAnunciadoEnaoSilenciado(tmpPath):
     assert "request" in report["withoutClass"]
 
 
-def test_extraDoJavaEhAnunciadoSemVirarTrabalho(tmpPath):
+def test_javaOnlyExtraIsAnnouncedWithoutBecomingWork(tmpPath):
     report = _json(tmpPath, {"widget": [("widget", "Widget")]}, ["Widget", "VerifiedAccount"])
 
     assert report["gaps"] == []
     assert report["extras"] == ["VerifiedAccount"]
 
 
-def test_saidaHumanaListaOGap(tmpPath):
+def test_humanOutputListsTheGap(tmpPath):
     code, out = _run(tmpPath, {"widget": [("widget", "Widget")]}, [])
     assert code == 0
     assert "Widget" in out
     assert "[INFO]" in out
 
 
-def test_raizInvalidaRetornaDois(tmpPath):
+def test_invalidRootReturnsTwo(tmpPath):
     code, out = runTool("list-gaps.py", "--python", str(tmpPath / "nao-existe"), "--java", str(tmpPath))
     assert code == 2
     assert "[ERROR]" in out
@@ -112,7 +112,7 @@ def test_raizInvalidaRetornaDois(tmpPath):
 
 @pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
 @pytest.mark.skipif(not REAL_JAVA.is_dir(), reason="sdk-java não clonado em _references/")
-def test_gapRealEhApenasSplitProfile():
+def test_realGapIsOnlySplitProfile():
     """Se devolver mais que isto, a premissa do gap unico caiu e o plano da Entrega 6 muda."""
     code, out = runTool("list-gaps.py", "--json")
     assert code == 0, out

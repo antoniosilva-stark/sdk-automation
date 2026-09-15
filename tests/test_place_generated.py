@@ -29,7 +29,7 @@ def _targetRepo(tmpPath: Path) -> Path:
     return root
 
 
-def test_posicionaArquivoJava(tmpPath):
+def test_placesTheJavaFile(tmpPath):
     generated = _generated(tmpPath, body="class SplitProfile {}\n")
     repo = _targetRepo(tmpPath)
 
@@ -42,7 +42,7 @@ def test_posicionaArquivoJava(tmpPath):
     assert placed.read_text(encoding="utf-8") == "class SplitProfile {}\n"
 
 
-def test_posicionaOsDoisArtefatosJava(tmpPath):
+def test_placesBothJavaArtifacts(tmpPath):
     """O layout do Java passou a declarar recurso e teste; posicionar so um deixaria
     PR incompleta, que e o padrao que o sdk-java rejeita."""
     generated = _generated(tmpPath, body="class SplitProfile {}\n")
@@ -56,14 +56,14 @@ def test_posicionaOsDoisArtefatosJava(tmpPath):
     assert (repo / JAVA_TEST_TARGET).read_text(encoding="utf-8") == "class TestSplitProfile {}\n"
 
 
-def test_targetsDeclaraOsDoisCaminhos():
+def test_targetsDeclaresBothPaths():
     code, out = runTool("place-generated.py", "SplitProfile", "--lang", "java", "--targets")
 
     assert code == 0
     assert out.split() == [JAVA_TARGET, JAVA_TEST_TARGET]
 
 
-def test_criaDiretoriosIntermediarios(tmpPath):
+def test_createsIntermediateDirectories(tmpPath):
     generated = _generated(tmpPath)
     repo = _targetRepo(tmpPath)
 
@@ -74,7 +74,7 @@ def test_criaDiretoriosIntermediarios(tmpPath):
     assert (repo / "src/main/java/com/starkbank").is_dir()
 
 
-def test_sobrescreveArquivoExistente(tmpPath):
+def test_overwritesExistingFile(tmpPath):
     generated = _generated(tmpPath, body="novo\n")
     repo = _targetRepo(tmpPath)
     existing = repo / JAVA_TARGET
@@ -88,7 +88,7 @@ def test_sobrescreveArquivoExistente(tmpPath):
     assert existing.read_text(encoding="utf-8") == "novo\n"
 
 
-def test_idempotenteEmDuasExecucoes(tmpPath):
+def test_idempotentAcrossTwoRuns(tmpPath):
     generated = _generated(tmpPath, body="estavel\n")
     repo = _targetRepo(tmpPath)
     args = ("SplitProfile", "--lang", "java", "--from", str(generated), "--to", str(repo))
@@ -101,83 +101,83 @@ def test_idempotenteEmDuasExecucoes(tmpPath):
     assert (repo / JAVA_TARGET).read_text(encoding="utf-8") == content
 
 
-def test_varNameDerivaNomeDoDiretorio(placeGenerated):
+def test_varNameDerivesTheDirectoryName(placeGenerated):
     assert placeGenerated.varName("SplitProfile") == "splitProfile"
     assert placeGenerated.varName("Invoice") == "invoice"
 
 
-def test_repoImprimeORepositorioAlvo():
+def test_repoPrintsTheTargetRepository():
     for language, expected in (("java", "sdk-java"), ("node", "sdk-node")):
         code, out = runTool("place-generated.py", "--lang", language, "--repo")
         assert (code, out.strip()) == (0, expected)
 
 
-def test_repoNaoExigeResource():
+def test_repoDoesNotRequireResource():
     code, out = runTool("place-generated.py", "--lang", "java", "--repo")
     assert code == 0
     assert "obrigatório" not in out
 
 
-def test_repoDeLinguagemSemAlvoRetornaDois():
+def test_repoOfLanguageWithoutTargetReturnsTwo():
     code, out = runTool("place-generated.py", "--lang", "cobol", "--repo")
     assert code == 2
     assert "linguagem sem repositório alvo mapeado" in out
 
 
-def test_resourceAusenteForaDosModosDeConsultaRetornaDois():
+def test_missingResourceOutsideQueryModesReturnsTwo():
     code, out = runTool("place-generated.py", "--lang", "java", "--list")
     assert code == 2
     assert "resource é obrigatório fora dos modos --repo e --slug" in out
 
 
-def test_slugDerivaOKebabDoRecurso():
+def test_slugDerivesTheResourceKebab():
     for resource, expected in (("SplitProfile", "split-profile"), ("Invoice", "invoice"),
                                ("DictKey", "dict-key"), ("Transaction", "transaction")):
         code, out = runTool("place-generated.py", resource, "--slug")
         assert (code, out.strip()) == (0, expected), resource
 
 
-def test_slugNaoExigeLang():
+def test_slugDoesNotRequireLang():
     code, out = runTool("place-generated.py", "Invoice", "--slug")
     assert code == 0
     assert "obrigatório" not in out
 
 
-def test_slugRejeitaMetacaractereDeShell():
+def test_slugRejectsShellMetacharacters():
     for hostile in ("X$(id)", "X`id`", "X;id", "X|id", "X&id", "X\nbranch=evil"):
         code, out = runTool("place-generated.py", hostile, "--slug")
         assert code == 2, f"{hostile!r} passou"
         assert "nome de recurso inválido" in out
 
 
-def test_slugRejeitaFormaForaDeUpperCamelCase():
+def test_slugRejectsNonUpperCamelCaseForms():
     for invalid in ("lower", "With Space", "has-dash", "has_underscore", "9Leading"):
         code, out = runTool("place-generated.py", invalid, "--slug")
         assert code == 2, f"{invalid!r} passou"
 
 
-def test_slugSemResourceRetornaDois():
+def test_slugWithoutResourceReturnsTwo():
     code, out = runTool("place-generated.py", "--slug")
     assert code == 2
     assert "resource é obrigatório no modo --slug" in out
 
 
-def test_langAusenteForaDeConsultaRetornaDois(tmpPath):
+def test_missingLangOutsideQueryReturnsTwo(tmpPath):
     code, out = runTool("place-generated.py", "SplitProfile", "--list")
     assert code == 2
     assert "--lang é obrigatório" in out
 
 
-def test_todaLinguagemComLayoutTemRepositorioAlvo(placeGenerated):
+def test_everyLanguageWithLayoutHasATargetRepository(placeGenerated):
     assert set(placeGenerated.LAYOUTS) == set(placeGenerated.TARGETS)
 
 
-def test_cadaLinguagemTemUmAlvoDistinto(placeGenerated):
+def test_eachLanguageHasADistinctTarget(placeGenerated):
     alvos = list(placeGenerated.TARGETS.values())
     assert len(alvos) == len(set(alvos))
 
 
-def test_linguagemSemLayoutRetornaDois(tmpPath):
+def test_languageWithoutLayoutReturnsTwo(tmpPath):
     generated = _generated(tmpPath)
     repo = _targetRepo(tmpPath)
 
@@ -188,7 +188,7 @@ def test_linguagemSemLayoutRetornaDois(tmpPath):
     assert "linguagem sem layout mapeado" in out
 
 
-def test_arquivoAusenteNaSaidaRetornaUm(tmpPath):
+def test_missingFileInTheOutputReturnsOne(tmpPath):
     generated = tmpPath / "generated"
     generated.mkdir()
     repo = _targetRepo(tmpPath)
@@ -201,7 +201,7 @@ def test_arquivoAusenteNaSaidaRetornaUm(tmpPath):
     assert JAVA_SOURCE in out
 
 
-def test_saidaInexistenteRetornaDois(tmpPath):
+def test_missingOutputDirectoryReturnsTwo(tmpPath):
     repo = _targetRepo(tmpPath)
 
     code, out = runTool("place-generated.py", "SplitProfile", "--lang", "java",
@@ -211,7 +211,7 @@ def test_saidaInexistenteRetornaDois(tmpPath):
     assert "saída do gerador não é um diretório" in out
 
 
-def test_alvoInexistenteRetornaDois(tmpPath):
+def test_missingTargetReturnsTwo(tmpPath):
     generated = _generated(tmpPath)
 
     code, out = runTool("place-generated.py", "SplitProfile", "--lang", "java",
@@ -221,7 +221,7 @@ def test_alvoInexistenteRetornaDois(tmpPath):
     assert "repositório alvo não é um diretório" in out
 
 
-def test_nadaEhEscritoQuandoFonteAusente(tmpPath):
+def test_nothingIsWrittenWhenTheSourceIsMissing(tmpPath):
     generated = tmpPath / "generated"
     generated.mkdir()
     repo = _targetRepo(tmpPath)
@@ -232,7 +232,7 @@ def test_nadaEhEscritoQuandoFonteAusente(tmpPath):
     assert list(repo.rglob("*")) == []
 
 
-def test_targetsImprimeSoOsDestinos():
+def test_targetsPrintsOnlyTheDestinations():
     code, out = runTool("place-generated.py", "Transfer", "--lang", "node", "--targets")
     linhas = out.strip().splitlines()
 
@@ -241,13 +241,13 @@ def test_targetsImprimeSoOsDestinos():
     assert all("->" not in linha for linha in linhas)
 
 
-def test_targetsTemAMesmaContagemDoList():
+def test_targetsHasTheSameCountAsList():
     _, targets = runTool("place-generated.py", "Invoice", "--lang", "node", "--targets")
     _, pares = runTool("place-generated.py", "Invoice", "--lang", "node", "--list")
     assert len(targets.strip().splitlines()) == len(pares.strip().splitlines())
 
 
-def test_arquivoEstranhoNoAlvoNaoEntraNoCommit(tmpPath):
+def test_strayFileInTheTargetStaysOutOfTheCommit(tmpPath):
     repo = tmpPath / "alvo"
     repo.mkdir()
     for command in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],

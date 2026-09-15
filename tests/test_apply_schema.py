@@ -89,7 +89,7 @@ def _apply(tmpPath: Path, resource: str = "Widget", exports: str = "create, get,
     return (code, out, spec, schemas)
 
 
-def test_schemaEhGravadoNoDiretorioDeSchemas(tmpPath):
+def test_schemaIsWrittenToTheSchemasDirectory(tmpPath):
     code, out, _, schemas = _apply(tmpPath)
 
     assert code == 0, out
@@ -97,7 +97,7 @@ def test_schemaEhGravadoNoDiretorioDeSchemas(tmpPath):
     assert applied["components"]["schemas"]["Widget"]["properties"]["amount"]["type"] == "integer"
 
 
-def test_gravadoEhIdenticoAoExtraido(tmpPath):
+def test_writtenFileIsIdenticalToExtracted(tmpPath):
     """O golden compara os dois; escrever algo diferente do extrator quebraria o guard."""
     root = _sdk(tmpPath)
     spec, schemas = _workspace(tmpPath)
@@ -108,7 +108,7 @@ def test_gravadoEhIdenticoAoExtraido(tmpPath):
     assert (schemas / "widget.yaml").read_text(encoding="utf-8") == extracted
 
 
-def test_stubViraRefComFlagsIrmas(tmpPath):
+def test_stubBecomesRefWithSiblingFlags(tmpPath):
     code, out, spec, _ = _apply(tmpPath)
     assert code == 0, out
 
@@ -119,7 +119,7 @@ def test_stubViraRefComFlagsIrmas(tmpPath):
     assert schemas["WidgetCreate"]["$ref"].endswith("widget.yaml#/components/schemas/WidgetCreate")
 
 
-def test_putEhSuprimidoComMotivo(tmpPath):
+def test_putIsSuppressedWithReason(tmpPath):
     """Decisao 43: Rest.put nao existe no sdk-java. Declarar geraria codigo que nao compila."""
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, page")
 
@@ -128,7 +128,7 @@ def test_putEhSuprimidoComMotivo(tmpPath):
     assert "put" in out and "suprimid" in out
 
 
-def test_soFlagComSecaoNoTemplateEhEscrita(tmpPath):
+def test_onlyFlagWithTemplateSectionIsWritten(tmpPath):
     """Escrever flag que o template nao produz faria o lint considerar completo um
     recurso cujo gerado nao tem a operacao — plausivel e errado."""
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, delete, pdf")
@@ -140,7 +140,7 @@ def test_soFlagComSecaoNoTemplateEhEscrita(tmpPath):
     assert flags == {"x-sdk-get", "x-sdk-query", "x-sdk-delete", "x-sdk-pdf"}
 
 
-def test_recursoAusenteNoPythonNaoEscreveNada(tmpPath):
+def test_resourceMissingInPythonWritesNothing(tmpPath):
     root = _sdk(tmpPath)
     spec, schemas = _workspace(tmpPath)
     before = spec.read_text(encoding="utf-8")
@@ -161,7 +161,7 @@ def _emptySpec(tmpPath: Path) -> tuple[Path, Path]:
     return (spec, schemas)
 
 
-def test_recursoAusenteEhCriadoNaSpec(tmpPath):
+def test_missingResourceIsCreatedInTheSpec(tmpPath):
     """15 recursos do Python nao estao entre os 60 nomes da spec. Sem criar, eles nunca
     chegam ao Java, por mais que o tooling os alcance."""
     root = _sdk(tmpPath)
@@ -176,7 +176,7 @@ def test_recursoAusenteEhCriadoNaSpec(tmpPath):
     assert written["components"]["schemas"]["WidgetCreate"]["$ref"].endswith("#/components/schemas/WidgetCreate")
 
 
-def test_recursoCriadoGanhaPathsDerivadosDasFlags(tmpPath):
+def test_createdResourceGetsPathsDerivedFromFlags(tmpPath):
     root = _sdk(tmpPath, exports="create, get, query, page")
     spec, schemas = _emptySpec(tmpPath)
 
@@ -192,7 +192,7 @@ def test_recursoCriadoGanhaPathsDerivadosDasFlags(tmpPath):
     assert paths["/widget"]["post"]["operationId"] == "createWidget"
 
 
-def test_pathRefleteApenasOperacaoDeclarada(tmpPath):
+def test_pathsReflectOnlyDeclaredOperations(tmpPath):
     root = _sdk(tmpPath, exports="get, query")
     spec, schemas = _emptySpec(tmpPath)
     runTool("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
@@ -203,7 +203,7 @@ def test_pathRefleteApenasOperacaoDeclarada(tmpPath):
     assert set(paths["/widget/{id}"]) == {"get"}
 
 
-def test_nomeCompostoViraPathKebab(tmpPath):
+def test_compoundNameBecomesKebabPath(tmpPath):
     root = _sdk(tmpPath)
     (root / "starkbank" / "merchantcard").mkdir()
     (root / "starkbank" / "merchantcard" / "__merchantcard.py").write_text(
@@ -220,7 +220,7 @@ def test_nomeCompostoViraPathKebab(tmpPath):
     assert "/merchant-card" in paths
 
 
-def test_specInvalidaNaoSubstituiOOriginal(tmpPath):
+def test_invalidSpecDoesNotReplaceTheOriginal(tmpPath):
     """Escreve em copia e valida antes de trocar: a spec real tem 5700 linhas."""
     root = _sdk(tmpPath)
     spec = tmpPath / "spec.yaml"
@@ -236,7 +236,7 @@ def test_specInvalidaNaoSubstituiOOriginal(tmpPath):
     assert spec.read_text(encoding="utf-8") == before
 
 
-def test_duasAplicacoesProduzemOMesmoResultado(tmpPath):
+def test_twoApplicationsProduceTheSameResult(tmpPath):
     root = _sdk(tmpPath)
     spec, schemas = _workspace(tmpPath)
     args = ("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
@@ -248,7 +248,7 @@ def test_duasAplicacoesProduzemOMesmoResultado(tmpPath):
     assert spec.read_text(encoding="utf-8") == first
 
 
-def test_recursoAplicadoPassaNoLint(tmpPath):
+def test_appliedResourcePassesTheLint(tmpPath):
     code, out, spec, _ = _apply(tmpPath)
     assert code == 0, out
 

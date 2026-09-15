@@ -42,14 +42,14 @@ def _report(tmpPath: Path, exports: str) -> dict:
     return json.loads(out)
 
 
-def test_operacaoToalmenteSuportadaContaComoParidadeTotal(tmpPath):
+def test_fullySupportedOperationsCountAsFullParity(tmpPath):
     report = _report(tmpPath, "create, get, query, page")
 
     assert report["fullParity"] == ["Widget"]
     assert report["withPending"] == []
 
 
-def test_operacaoSemSecaoNoTemplateViraPendenciaNaoExclusao(tmpPath):
+def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
     """Invoice gera hoje mesmo sem `qrcode`: tratar como fora de alcance seria mentira."""
     report = _report(tmpPath, "get, query, qrcode")
 
@@ -57,14 +57,14 @@ def test_operacaoSemSecaoNoTemplateViraPendenciaNaoExclusao(tmpPath):
     assert report["withPending"] == [{"resource": "Widget", "pending": ["qrcode"]}]
 
 
-def test_recursoSoComOperacaoSuprimidaFicaForaDeAlcance(tmpPath):
+def test_resourceWithOnlySuppressedOperationIsOutOfReach(tmpPath):
     """`put` e derivado do Python mas suprimido: Rest.put nao existe no sdk-java."""
     report = _report(tmpPath, "put")
 
     assert report["outOfReach"] == [{"resource": "Widget", "reason": "sem operação suportada"}]
 
 
-def test_classeSemCrudEhAlcancavelComoDataOnly(tmpPath):
+def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
     """CorporateRule tem zero `public static` no Java real: classe so de dados conta."""
     report = _report(tmpPath, "parse_rules")
 
@@ -72,7 +72,7 @@ def test_classeSemCrudEhAlcancavelComoDataOnly(tmpPath):
     assert report["withPending"] == [{"resource": "Widget", "pending": ["parse_rules"]}]
 
 
-def test_flagsVemDoTemplateNaoDeUmaListaParalela(coverageReport):
+def test_flagsComeFromTemplateNotAParallelList(coverageReport):
     """Duas autoridades: o template diz o que pode ser produzido, o apply-schema o que
     pode ser escrito. Lista propria dessincronizaria das duas em silencio."""
     flags = coverageReport.templateFlags()
@@ -83,7 +83,7 @@ def test_flagsVemDoTemplateNaoDeUmaListaParalela(coverageReport):
     assert "x-sdk-data-only" in flags
 
 
-def test_secaoNovaNoTemplateEntraNoRelatorioSozinha(coverageReport, tmpPath):
+def test_newTemplateSectionEntersTheReportOnItsOwn(coverageReport, tmpPath):
     template = tmpPath / "model.mustache"
     template.write_text("{{#vendorExtensions.x-sdk-get}}x{{/vendorExtensions.x-sdk-get}}", encoding="utf-8")
 
@@ -91,7 +91,7 @@ def test_secaoNovaNoTemplateEntraNoRelatorioSozinha(coverageReport, tmpPath):
 
 
 @pytest.mark.skipif(not (SDK_PYTHON / "starkbank").is_dir(), reason="sdk-python do Stark Bank não clonado")
-def test_alcanceRealAtingeAMetaDaEntrega():
+def test_realReachMeetsTheDeliveryTarget():
     """Meta da Fase 7: >= 35 de 41, com o restante nomeado."""
     code, out = runTool("coverage-report.py", "--json")
     assert code == 0, out

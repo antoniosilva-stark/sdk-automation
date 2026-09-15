@@ -54,7 +54,7 @@ def _commitDeclared(repo: Path) -> bool:
     or not REAL_JAVA.is_dir(),
     reason="referências do Stark Bank não resolvidas",
 )
-def test_recursoAlvoVemDaDescobertaNaoDeUmaLista():
+def test_targetResourceComesFromDiscoveryNotAList():
     code, out = runTool("list-gaps.py", "--json")
 
     assert code == 0, out
@@ -62,7 +62,7 @@ def test_recursoAlvoVemDaDescobertaNaoDeUmaLista():
 
 
 @requiresGenerator
-def test_cadeiaCompletaNaoDeixaArtefatoNaoDeclarado(tmpPath):
+def test_fullChainLeavesNoUndeclaredArtifact(tmpPath):
     """Criterio da entrega: o `git status` pre-commit so mostra o que ferramenta escreveu."""
     repo = _repo(tmpPath)
 
@@ -74,7 +74,7 @@ def test_cadeiaCompletaNaoDeixaArtefatoNaoDeclarado(tmpPath):
 
 
 @requiresGenerator
-def test_commitLevaRecursoETesteJuntos(tmpPath):
+def test_commitCarriesResourceAndTestTogether(tmpPath):
     repo = _repo(tmpPath)
     runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
 
@@ -88,7 +88,7 @@ def test_commitLevaRecursoETesteJuntos(tmpPath):
 
 
 @requiresGenerator
-def test_segundaExecucaoNaoCriaCommit(tmpPath):
+def test_secondRunCreatesNoCommit(tmpPath):
     """Idempotencia: rodar 2x sobre a mesma branch nao pode gerar commit vazio nem duplicar PR."""
     repo = _repo(tmpPath)
 
@@ -102,7 +102,7 @@ def test_segundaExecucaoNaoCriaCommit(tmpPath):
 
 
 @requiresGenerator
-def test_templateCorrompidoAbortaAntesDePosicionar(tmpPath):
+def test_corruptTemplateAbortsBeforePlacing(tmpPath):
     """Teste negativo: defeito no template nao pode chegar ao repo alvo."""
     repo = _repo(tmpPath)
     template = REPO_ROOT / "templates/java/model.mustache"

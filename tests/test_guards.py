@@ -13,24 +13,24 @@ def _fakeBin(tmpPath: Path, name: str, script: str) -> Path:
     return root
 
 
-def test_commandWorksAceitaComandoQueSaiZero(tmpPath, monkeypatch):
+def test_commandWorksAcceptsCommandExitingZero(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "probe", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
     assert commandWorks("probe") is True
 
 
-def test_commandWorksRejeitaComandoQueSaiNaoZero(tmpPath, monkeypatch):
+def test_commandWorksRejectsCommandExitingNonZero(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "probe", "#!/bin/sh\nexit 1\n")
     monkeypatch.setenv("PATH", str(root))
     assert commandWorks("probe") is False
 
 
-def test_commandWorksRejeitaComandoAusente(tmpPath, monkeypatch):
+def test_commandWorksRejectsMissingCommand(tmpPath, monkeypatch):
     monkeypatch.setenv("PATH", str(tmpPath))
     assert commandWorks("nao-existe-mesmo") is False
 
 
-def test_javaPresenteMasInoperanteAcusaJre(tmpPath, monkeypatch):
+def test_javaPresentButBrokenReportsJre(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 1\n")
     _fakeBin(tmpPath, "npx", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
@@ -40,14 +40,14 @@ def test_javaPresenteMasInoperanteAcusaJre(tmpPath, monkeypatch):
     assert "JRE" in reason
 
 
-def test_npxAusenteAcusaNpx(tmpPath, monkeypatch):
+def test_missingNpxReportsNpx(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
 
     assert missingGeneratorDependency() == "npx ausente"
 
 
-def test_ambienteCompletoNaoPula(tmpPath, monkeypatch):
+def test_completeEnvironmentDoesNotSkip(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "java", "#!/bin/sh\nexit 0\n")
     _fakeBin(tmpPath, "npx", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(root))
@@ -55,7 +55,7 @@ def test_ambienteCompletoNaoPula(tmpPath, monkeypatch):
     assert missingGeneratorDependency() is None
 
 
-def test_javacInoperanteAcusaJavac(tmpPath, monkeypatch):
+def test_brokenJavacReportsJavac(tmpPath, monkeypatch):
     root = _fakeBin(tmpPath, "javac", "#!/bin/sh\nexit 1\n")
     monkeypatch.setenv("PATH", str(root))
 
@@ -64,7 +64,7 @@ def test_javacInoperanteAcusaJavac(tmpPath, monkeypatch):
     assert "javac" in reason
 
 
-def test_razaoDoSkipNomeiaADependencia():
+def test_skipReasonNamesTheDependency():
     if GENERATOR_SKIP is None:
         assert shutil.which("npx")
         return
