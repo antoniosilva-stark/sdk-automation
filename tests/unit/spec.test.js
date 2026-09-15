@@ -103,29 +103,24 @@ describe('OpenAPI Specification Tests', () => {
       }
     });
 
-    test('breaking change detector gives a legible verdict against the default branch', () => {
-      let output;
-      let detected = false;
+    // O veredito de BC contra a branch alvo e assunto do validate-spec na PR, que conhece
+    // a base real. Aqui se verifica a garantia que vale em qualquer checkout: base que nao
+    // resolve reprova, em vez de passar alegando "primeiro commit".
+    test('breaking change detector refuses a base that does not resolve', () => {
+      let status = 0;
+      let output = '';
       try {
-        output = execSync('python3 tools/breaking-change-detector.py --base origin/development', {
+        output = execSync('python3 tools/breaking-change-detector.py --base refs/nao-existe', {
           cwd: path.join(__dirname, '../../'),
           encoding: 'utf8'
         });
       } catch (error) {
-        if (error.status !== 1) {
-          throw new Error(`Breaking change detector failed: ${error.message}`);
-        }
+        status = error.status;
         output = error.stdout;
-        detected = true;
       }
 
-      expect(output).toMatch(/verificando breaking changes/);
-      if (detected) {
-        expect(output).toMatch(/breaking change\(s\) detectada\(s\)/);
-        expect(output).toMatch(/regra violada, governance\.md/);
-      } else {
-        expect(output).toMatch(/\[OK\] nenhuma breaking change detectada/);
-      }
+      expect(status).toBe(2);
+      expect(output).toMatch(/não resolve para um commit/);
     }, 15000);
   });
 });

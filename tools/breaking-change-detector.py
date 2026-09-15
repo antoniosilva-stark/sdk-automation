@@ -40,9 +40,19 @@ def gitShow(commit: str, path: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+def refExists(ref: str) -> bool:
+    probe = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+                           capture_output=True, text=True)
+    return probe.returncode == 0
+
+
 def loadSpec(ref: str | None = None) -> dict | None:
+    """Ref que nao resolve levanta; ref valida sem a spec e primeiro commit, caso legitimo."""
     if ref is None:
         return loadFast(Path(SPEC_FILE).read_text(encoding="utf-8"))
+
+    if not refExists(ref):
+        raise LookupError(ref)
 
     content = gitShow(ref, SPEC_FILE)
     if content is None:
@@ -52,8 +62,8 @@ def loadSpec(ref: str | None = None) -> dict | None:
 
 
 def refLoader(ref: str | None):
-    """Decisao 67: o `$ref` do lado anterior tem de ser lido no commit anterior,
-    senao mudanca dentro de apis/schemas/ passa invisivel."""
+    """O `$ref` do lado anterior tem de ser lido no commit anterior, senao mudanca dentro
+    de apis/schemas/ passa invisivel."""
     def load(relative: str) -> dict:
         path = (Path(SPEC_FILE).parent / relative).as_posix()
         if ref is None:
@@ -332,7 +342,11 @@ def main() -> int:
         return 2
 
     emit("[INFO] verificando breaking changes...")
-    previous = loadSpec(args.base)
+    try:
+        previous = loadSpec(args.base)
+    except LookupError as ref:
+        emit(f"[ERROR] base {ref} não resolve para um commit — sem comparação não há veredito")
+        return 2
     current = loadSpec()
     changes = detectBreakingChanges(current, previous,
                                     resolveSchemas(current, refLoader(None)),

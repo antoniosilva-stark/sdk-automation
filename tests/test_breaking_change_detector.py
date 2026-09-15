@@ -477,3 +477,21 @@ def test_unusedApprovalIsAnnouncedByTheTool(tmpPath):
                      "--approvals", str(approvals))
 
     assert "aprovação não utilizada" in out
+
+
+def test_unresolvableBaseIsAnErrorNotAFreePass():
+    """Base que nao resolve passava como "primeiro commit" e o gate aprovava sem comparar.
+
+    Erro de digitacao, clone raso ou fork com outra branch default bastavam para burlar.
+    """
+    code, out = runTool("breaking-change-detector.py", "--base", "origin/nao-existe")
+
+    assert code == 2
+    assert "não resolve" in out
+
+
+def test_baseThatResolvesWithoutTheSpecIsStillTheFirstCommit(detector, tmpPath, monkeypatch):
+    """Ref valida onde a spec ainda nao existia e caso legitimo: nao ha o que comparar."""
+    monkeypatch.setattr(detector, "SPEC_FILE", "apis/inexistente.yaml")
+
+    assert detector.loadSpec("HEAD") is None
