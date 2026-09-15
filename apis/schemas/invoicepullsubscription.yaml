@@ -35,7 +35,7 @@ components:
           type: string
           description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
         due:
-          type: string
+          type: integer
           description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
         externalId:
           type: string
@@ -122,7 +122,7 @@ components:
           type: string
           description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
         due:
-          type: string
+          type: integer
           description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
         externalId:
           type: string

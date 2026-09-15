@@ -42,10 +42,21 @@ def test_addedPathIsNotBreaking(detector):
 
 # --- contrato de saida ---
 
-def test_cleanSpecReturnsZero():
-    code, out = runTool("breaking-change-detector.py")
-    assert code == 0
-    assert "[OK]" in out
+def test_specWithoutChangeReportsNothing(detector, tmpPath, monkeypatch):
+    """Substitui a versao que rodava sem `--base`, comparando a spec com ela mesma: o [OK]
+    era garantido qualquer que fosse o conteudo.
+
+    Fixar um SHA tambem nao serve — a arvore de trabalho muda, e o teste passaria a medir
+    a branch em vez da ferramenta.
+    """
+    spec = tmpPath / "spec.yaml"
+    spec.write_text(yaml.safe_dump(_spec(_widget({"amount": {"type": "integer"}}))), encoding="utf-8")
+    monkeypatch.setattr(detector, "SPEC_FILE", str(spec))
+
+    current = detector.loadSpec()
+    assert detector.detectBreakingChanges(current, current,
+                                          detector.resolveSchemas(current, lambda _: {}),
+                                          detector.resolveSchemas(current, lambda _: {})) == []
 
 
 def test_invalidYamlPropagates(detector, tmpPath, monkeypatch):
@@ -219,3 +230,37 @@ def test_everyGovernanceRuleIsImplemented(detector):
                    detector.RULE_TYPE, detector.RULE_REQUIRED}
 
     assert set(promised) == implemented, f"governance.md promete {promised}"
+
+
+def test_baseIsRequiredBecauseHeadComparesTheSpecWithItself():
+    """`--base HEAD` compara a arvore com ela mesma: em PR o gate nunca acusa nada.
+
+    Era o estado real ate 2026-09-15 — as 5 regras existiam e jamais rodaram contra
+    historia de verdade.
+    """
+    code, _ = runTool("breaking-change-detector.py")
+
+    assert code == 2, "sem --base o tool tem de recusar, nao assumir HEAD"
+
+
+def test_realHistoryWithBreakingChangeFails():
+    """Prova que o gate morde: `4c8d50a` e o commit anterior ao mapeamento dos 40 recursos,
+    onde Invoice.amount virou int64 e 12 campos sairam.
+    """
+    code, out = runTool("breaking-change-detector.py", "--base", "4c8d50a")
+
+    assert code == 1
+    assert "type_changed" in out
+    assert "governance.md" in out
+
+
+def test_theToolReportsAVerdictAgainstRealHistory():
+    """Contra historia real o veredito e util em qualquer direcao: o que nao pode e passar
+    sem olhar. Nao se afirma "zero BC" aqui porque isso seria medir a branch, nao o tool.
+    """
+    code, out = runTool("breaking-change-detector.py", "--base", "567ce54")
+
+    assert code in (0, 1), out
+    assert "verificando breaking changes" in out
+    if code == 1:
+        assert "regra violada, governance.md" in out

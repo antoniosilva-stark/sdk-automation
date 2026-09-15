@@ -138,3 +138,62 @@ def test_everyBuildResourceCallIsGuardedByTheGeneratorMark():
             desguardados.append(node.name)
 
     assert desguardados == [], f"chamam o gerador sem @requiresGenerator: {desguardados}"
+
+
+def test_noToolParsesYamlWithThePurePythonLoader():
+    """A spec tem 7.131 linhas: o parser puro custa 138 ms contra 18 ms do libyaml.
+
+    Cada ferramenta e um processo novo, entao o custo aparece em toda invocacao —
+    `yaml.safe_load` num tool derruba isso de volta sem ninguem notar.
+    """
+    lentos = []
+    for path in sorted((REPO_ROOT / "tools").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "yaml.safe_load(" in source:
+            lentos.append(path.name)
+        if "yaml.load(" in source and "CSafeLoader" not in source:
+            lentos.append(f"{path.name} (sem fallback declarado)")
+
+    assert lentos == [], f"parse lento de YAML: {lentos}"
+
+
+def test_theFastLoaderIsActuallyAvailableHere():
+    """Se o libyaml sair do ambiente, o fallback mantem tudo correto — mas 8x mais lento.
+
+    Este teste nao e correcao, e aviso: falhar aqui explica uma suite subitamente lenta.
+    """
+    import yaml
+
+    assert hasattr(yaml, "CSafeLoader"), "libyaml ausente: PyYAML instalado sem a extensao C"
+
+
+def test_everyFastLoaderActuallyRuns():
+    """`yaml` estava importado dentro da funcao em coverage-report: o texto passava na
+    guarda acima e o tool quebrava com NameError so na execucao.
+    """
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    quebrados = []
+    for path in sorted((REPO_ROOT / "tools").glob("*.py")):
+        if "def loadFast" not in path.read_text(encoding="utf-8"):
+            continue
+        spec = spec_from_file_location(path.stem.replace("-", "_"), path)
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        try:
+            assert module.loadFast("componente: valor") == {"componente": "valor"}
+        except Exception as error:
+            quebrados.append(f"{path.name}: {type(error).__name__} {error}")
+
+    assert quebrados == [], f"loadFast quebrado: {quebrados}"
+
+
+def test_referenceRefreshFailsInsteadOfSwallowing():
+    """O status de um `for` e o da ultima iteracao: com `&&`, fetch que falha some,
+    e o detector de defasagem compara contra clone velho reportando "em sincronia".
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    bloco = makefile.split("refresh-sdk-ref:")[1].split("\nreference:")[0]
+
+    assert "exit 1" in bloco
+    assert "if ! git" in bloco, "falha de fetch tem de abortar, nao seguir para o proximo repo"

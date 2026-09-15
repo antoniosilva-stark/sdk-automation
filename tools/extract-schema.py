@@ -7,6 +7,11 @@ import argparse
 import subprocess
 from pathlib import Path
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
 
@@ -55,6 +60,11 @@ TYPES = {
 }
 
 
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
+
+
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
 
@@ -66,7 +76,7 @@ def warn(text: str) -> None:
 def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
     if not Path(conventions).is_file():
         return None
-    table = yaml.safe_load(Path(conventions).read_text(encoding="utf-8")) or {}
+    table = loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
     return (table.get("integerFormats") or {}).get(field)
 
 
@@ -173,13 +183,17 @@ def fieldsFromInit(node: ast.ClassDef) -> list[dict]:
 
     for pythonName, checker in assignments.items():
         kind, fmt = CHECK_FORMATS.get(checker or "", ("string", None))
+        name = camelCase(pythonName)
+        convention = integerFormat(name) if checker is None else None
+        if convention:
+            kind, fmt = "integer", convention
         schema = {"type": kind}
         if fmt:
             schema["format"] = fmt
 
         fields.append(
             {
-                "name": camelCase(pythonName),
+                "name": name,
                 "pythonName": pythonName,
                 "schema": schema,
                 "description": "tipo inferido do __init__, nao declarado no docstring",
@@ -189,9 +203,7 @@ def fieldsFromInit(node: ast.ClassDef) -> list[dict]:
     return fields
 
 
-def parseType(raw: str) -> dict:
-    text = raw.strip().split(",")[0].split(" or ")[0].strip()
-
+def resolveType(text: str) -> dict | None:
     listMatch = re.match(r"^list of (\w+?)s?$", text)
     if listMatch:
         inner = listMatch.group(1).lower()
@@ -201,7 +213,21 @@ def parseType(raw: str) -> dict:
     if text.startswith(("dictionary", "dict")):
         return {"type": "object"}
 
-    return dict(TYPES.get(text.lower(), {"type": "string"}))
+    known = TYPES.get(text.lower())
+    return dict(known) if known else None
+
+
+def parseType(raw: str) -> dict:
+    """Uniao no docstring vale a alternativa que o SDK sabe expressar.
+
+    `delay [DateInterval or integer]` resolvia para `DateInterval`, desconhecido, e o campo
+    virava string — regredindo um integer ja declarado na spec.
+    """
+    for text in [part.strip() for part in raw.strip().split(",")[0].split(" or ")]:
+        resolved = resolveType(text)
+        if resolved:
+            return resolved
+    return {"type": "string"}
 
 
 def parseDocstring(doc: str) -> tuple[str, list[dict]]:

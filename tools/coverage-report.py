@@ -1,10 +1,16 @@
 import re
 import sys
 import json
+import yaml
 import argparse
 import subprocess
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
+
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
@@ -12,6 +18,11 @@ JAVA_TEMPLATE = REPO_ROOT / "templates/java/model.mustache"
 MIN_READ_PROPS = 3
 
 _SECTION = re.compile(r"\{\{#vendorExtensions\.(x-sdk-[a-z]+)\}\}")
+
+
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
 
 
 def emit(text: str) -> None:
@@ -41,9 +52,7 @@ def readProps(resource: str, root: Path) -> int:
     if result.returncode != 0:
         return 0
 
-    import yaml
-
-    document = yaml.safe_load(result.stdout) or {}
+    document = loadFast(result.stdout) or {}
     schemas = (document.get("components") or {}).get("schemas") or {}
     return len((schemas.get(resource, {}).get("properties") or {}))
 

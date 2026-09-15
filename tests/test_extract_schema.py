@@ -516,3 +516,50 @@ def test_extractedMatchesTheAppliedSchema(resource, tmpPath):
     current = yaml.safe_load(applied.read_text(encoding="utf-8"))
 
     assert extracted == current, f"{applied} divergiu do SDK Python — reextraia"
+
+@requiresPythonSdk
+def test_monetaryFieldInferredFromInitFollowsTheConvention():
+    """`DynamicBrcode` nao documenta campos no docstring, entao o tipo vem do `__init__`,
+    onde nao ha tipo nenhum — e `amount` saia como string num SDK bancario.
+    """
+    code, out = runTool("extract-schema.py", "DynamicBrcode", "--from", str(PYTHON_SDK))
+    assert code == 0, out
+
+    schema = yaml.safe_load(out)["components"]["schemas"]["DynamicBrcode"]
+    amount = schema["properties"]["amount"]
+    assert (amount["type"], amount["format"]) == ("integer", "int64")
+
+
+def test_noAppliedSchemaDeclaresMoneyAsString():
+    """apis/type-conventions.yaml existe para isso: valor monetario e inaritmetico como string."""
+    conventions = yaml.safe_load((REPO_ROOT / "apis/type-conventions.yaml").read_text(encoding="utf-8"))
+    monetarios = set(conventions["integerFormats"])
+
+    erradas = []
+    for path in sorted((REPO_ROOT / "apis/schemas").glob("*.yaml")):
+        for name, schema in yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"].items():
+            for field, definition in (schema.get("properties") or {}).items():
+                if field in monetarios and (definition or {}).get("type") != "integer":
+                    erradas.append(f"{path.name}:{name}.{field} = {(definition or {}).get('type')}")
+
+    assert erradas == [], f"valor monetario fora da convencao: {erradas}"
+
+
+def test_typeUnionPicksTheAlternativeTheSdkCanExpress(extractSchema):
+    """`delay [DateInterval or integer]` no SplitProfile: pegar so a primeira alternativa
+    dava `DateInterval`, desconhecido, e o campo virava string — regredindo a spec que
+    ja declarava integer.
+    """
+    assert extractSchema.parseType("DateInterval or integer") == {"type": "integer"}
+    assert extractSchema.parseType("string or integer") == {"type": "string"}
+    assert extractSchema.parseType("DateInterval or Coisa") == {"type": "string"}
+
+
+@requiresPythonSdk
+def test_splitProfileDelayStaysInteger():
+    code, out = runTool("extract-schema.py", "SplitProfile", "--from", str(PYTHON_SDK))
+    assert code == 0, out
+
+    schema = yaml.safe_load(out)["components"]["schemas"]["SplitProfile"]
+    assert schema["properties"]["delay"]["type"] == "integer"
+    assert schema["properties"]["interval"]["type"] == "string"

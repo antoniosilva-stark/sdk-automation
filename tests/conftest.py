@@ -134,3 +134,26 @@ def extractSchema():
 @pytest.fixture
 def coverageReport():
     return _loadTool("coverage-report.py")
+
+
+@pytest.fixture(scope="session")
+def builtOnce(tmp_path_factory):
+    """Gera cada (recurso, linguagem, flags) uma vez por sessao e reusa o diretorio.
+
+    A suite fazia 40 invocacoes do build-resource para cobrir 12 casos distintos, e cada
+    invocacao java custa 2 boots do gerador. Quem mede o artefato so le, entao compartilhar
+    e seguro; quem mede o pipeline (duas execucoes, gerador quebrado, lint reprovando) tem de
+    continuar chamando o tool direto.
+    """
+    cache: dict[tuple, tuple] = {}
+
+    def build(resource: str, language: str, *extra: str):
+        key = (resource, language, extra)
+        if key not in cache:
+            target = tmp_path_factory.mktemp(f"{resource}-{language}")
+            code, out = runTool("build-resource.py", resource, "--lang", language,
+                                "--into", str(target), *extra)
+            cache[key] = (code, out, target)
+        return cache[key]
+
+    return build

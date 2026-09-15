@@ -9,7 +9,8 @@ components:
           type: string
           description: "tipo inferido do __init__, nao declarado no docstring"
         amount:
-          type: string
+          type: integer
+          format: int64
           description: "tipo inferido do __init__, nao declarado no docstring"
         expiration:
           type: string
@@ -46,7 +47,8 @@ components:
       description: "DynamicBrcode creation request"
       properties:
         amount:
-          type: string
+          type: integer
+          format: int64
           description: "tipo inferido do __init__, nao declarado no docstring"
         expiration:
           type: string

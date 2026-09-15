@@ -25,7 +25,12 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
     test('spec should define SplitProfile with real fields, not the generic placeholder', () => {
       const specPath = path.join(__dirname, '../../apis/spec-v2.openapi.yaml');
       const spec = YAML.load(fs.readFileSync(specPath, 'utf8'));
-      const schema = spec.components.schemas.SplitProfile;
+      const reference = spec.components.schemas.SplitProfile.$ref;
+
+      // o schema mora em apis/schemas/, como os outros 40; a spec so aponta
+      expect(reference).toBe('./schemas/splitprofile.yaml#/components/schemas/SplitProfile');
+      const schemaPath = path.join(__dirname, '../../apis/schemas/splitprofile.yaml');
+      const schema = YAML.load(fs.readFileSync(schemaPath, 'utf8')).components.schemas.SplitProfile;
 
       expect(Object.keys(schema.properties)).toEqual(
         expect.arrayContaining(['interval', 'delay', 'tags', 'status', 'created', 'updated'])

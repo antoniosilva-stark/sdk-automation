@@ -142,9 +142,8 @@ def test_nothingIsWrittenWhenTheLintFails(tmpPath):
 
 
 @requiresGenerator
-def test_pilotProducesAVerifiedArtifact(tmpPath):
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+def test_pilotProducesAVerifiedArtifact(builtOnce):
+    code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
     placed = target / ARTIFACT
@@ -161,15 +160,14 @@ def test_pilotProducesAVerifiedArtifact(tmpPath):
 
 
 @requiresGenerator
-def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(tmpPath):
+def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(builtOnce):
     """`Rest.java` do sdk-java @ c7f40b8 nao tem `put` de entidade — so `patch` e `putRaw`.
 
     Gerar `put` produzia arquivo que nao compila, e o alvo nao tem CI para pegar.
     Decisao 43: piloto sai com get/query/page; `put` fica como `todo` no contrato.
     `page` continua, porque `Rest.getPage` existe (Rest.java:100).
     """
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+    code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
     source = (target / ARTIFACT).read_text(encoding="utf-8")
@@ -197,9 +195,8 @@ NODE_ARTIFACTS = (
 
 
 @requiresGenerator
-def test_nodeProducesTheThreeArtifacts(tmpPath):
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
+def test_nodeProducesTheThreeArtifacts(builtOnce):
+    code, out, target = builtOnce("Transaction", "node", "--advisory")
 
     assert code == 0, out
     for relative in NODE_ARTIFACTS:
@@ -207,9 +204,8 @@ def test_nodeProducesTheThreeArtifacts(tmpPath):
 
 
 @requiresGenerator
-def test_nodeUsesTheModuleFunctionShape(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
+def test_nodeUsesTheModuleFunctionShape(builtOnce):
+    code, out, target = builtOnce("Transaction", "node", "--advisory")
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
 
     assert "exports.get = async function" in source
@@ -219,18 +215,16 @@ def test_nodeUsesTheModuleFunctionShape(tmpPath):
 
 
 @requiresGenerator
-def test_nodeAppliesCheckDatetimeOnDateFields(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
+def test_nodeAppliesCheckDatetimeOnDateFields(builtOnce):
+    code, out, target = builtOnce("Transaction", "node", "--advisory")
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
 
     assert "check.datetime(created)" in source
 
 
 @requiresGenerator
-def test_nodeBarrelExportsOnlyDeclaredOperations(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
+def test_nodeBarrelExportsOnlyDeclaredOperations(builtOnce):
+    code, out, target = builtOnce("Transaction", "node", "--advisory")
     barrel = (target / "sdk/transaction/index.js").read_text(encoding="utf-8")
 
     assert "exports.create" in barrel
@@ -239,11 +233,10 @@ def test_nodeBarrelExportsOnlyDeclaredOperations(tmpPath):
 
 
 @requiresGenerator
-def test_generatedTestAccompaniesTheResource(tmpPath):
+def test_generatedTestAccompaniesTheResource(builtOnce):
     """Os 42 recursos do sdk-java tem TestX.java sem excecao: PR sem teste e PR incompleto,
     e e onde a intervencao humana voltaria."""
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
 
     assert code == 0, out
     generated = target / "src/test/java/TestInvoice.java"
@@ -257,9 +250,8 @@ def test_generatedTestAccompaniesTheResource(tmpPath):
 
 
 @requiresGenerator
-def test_generatedTestExercisesOnlyDeclaredOperations(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "DictKey", "--lang", "java", "--into", str(target), "--advisory")
+def test_generatedTestExercisesOnlyDeclaredOperations(builtOnce):
+    code, out, target = builtOnce("DictKey", "java", "--advisory")
     source = (target / "src/test/java/TestDictKey.java").read_text(encoding="utf-8")
 
     assert "DictKey.query(" in source
@@ -268,20 +260,18 @@ def test_generatedTestExercisesOnlyDeclaredOperations(tmpPath):
 
 
 @requiresGenerator
-def test_bothJavaArtifactsArePlaced(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
+def test_bothJavaArtifactsArePlaced(builtOnce):
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
 
     assert (target / "src/main/java/com/starkbank/Invoice.java").is_file()
     assert (target / "src/test/java/TestInvoice.java").is_file()
 
 
 @requiresGenerator
-def test_deleteAndPdfAreEmittedWhenDeclared(tmpPath):
+def test_deleteAndPdfAreEmittedWhenDeclared(builtOnce):
     """Transfer exporta delete e pdf no SDK Python, e os dois tem primitivo no Rest real:
     Rest.delete(data, id, user) e Rest.getContent(data, id, "pdf", user, ...)."""
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transfer", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Transfer", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transfer.java").read_text(encoding="utf-8")
 
     assert "public static Transfer delete(String id)" in source
@@ -294,9 +284,8 @@ def test_deleteAndPdfAreEmittedWhenDeclared(tmpPath):
 
 
 @requiresGenerator
-def test_updateIsEmittedWhenDeclared(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
+def test_updateIsEmittedWhenDeclared(builtOnce):
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public static Invoice update(String id, Map<String, Object> patchData)" in source
@@ -304,13 +293,12 @@ def test_updateIsEmittedWhenDeclared(tmpPath):
 
 
 @requiresGenerator
-def test_cancelIsEmittedWhenDeclared(tmpPath):
+def test_cancelIsEmittedWhenDeclared(builtOnce):
     """cancel e Rest.delete com outro nome (InvoicePullRequest.java:355).
 
     CorporateCard exporta update e cancel no Python, entao exercita as duas flags.
     """
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "CorporateCard", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("CorporateCard", "java", "--advisory")
 
     assert code == 0, out
     source = (target / "src/main/java/com/starkbank/CorporateCard.java").read_text(encoding="utf-8")
@@ -320,14 +308,13 @@ def test_cancelIsEmittedWhenDeclared(tmpPath):
 
 
 @requiresGenerator
-def test_readOnlyResourceCarriesNoDeadImport(tmpPath):
+def test_readOnlyResourceCarriesNoDeadImport(builtOnce):
     """Balance, CardMethod, CorporateBalance e PaymentPreview so expoem get/query.
 
     Generator, ArrayList e List so existem para query/create/page/log — sem condicionar,
     o gate reprova os 4 por DEAD_IMPORT e a spec inteira para de gerar.
     """
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Balance", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Balance", "java", "--advisory")
 
     assert code == 0, out
     source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")
@@ -339,10 +326,9 @@ def test_readOnlyResourceCarriesNoDeadImport(tmpPath):
 
 
 @requiresGenerator
-def test_withoutTheFlagNoDeadInputStreamIsEmitted(tmpPath):
+def test_withoutTheFlagNoDeadInputStreamIsEmitted(builtOnce):
     """Recurso sem pdf nao pode carregar import de InputStream — o gate reprova import morto."""
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Transaction", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
     assert "InputStream" not in source
@@ -350,11 +336,10 @@ def test_withoutTheFlagNoDeadInputStreamIsEmitted(tmpPath):
 
 
 @requiresGenerator
-def test_logIsEmittedAsInnerClassWhenDeclared(tmpPath):
+def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
     """No sdk-java o Log nao e arquivo proprio: e classe interna do recurso, com
     ClassData(Log.class, "InvoiceLog"), e o endpoint /invoice/log sai do Api.endpoint."""
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public final static class Log extends Resource" in source
@@ -366,24 +351,22 @@ def test_logIsEmittedAsInnerClassWhenDeclared(tmpPath):
 
 
 @requiresGenerator
-def test_resourceWithoutLogGetsNoInnerClass(tmpPath):
+def test_resourceWithoutLogGetsNoInnerClass(builtOnce):
     """Transaction nao tem log/ no SDK Python — gerar Log ali seria inventar recurso."""
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Transaction", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
     assert "class Log" not in source
 
 
 @requiresGenerator
-def test_pageIsEmittedWhenTheSpecDeclaresIt(tmpPath):
+def test_pageIsEmittedWhenTheSpecDeclaresIt(builtOnce):
     """Todo recurso real do Stark Bank tem page(); a spec não declarava em nenhum.
 
     O template sempre soube produzir — faltava a flag, então nenhum SDK gerado
     saía com paginação manual.
     """
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public static Page page()" in source
@@ -391,9 +374,8 @@ def test_pageIsEmittedWhenTheSpecDeclaresIt(tmpPath):
 
 
 @requiresGenerator
-def test_nodeTypesUsesDeclareModule(tmpPath):
-    target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
+def test_nodeTypesUsesDeclareModule(builtOnce):
+    code, out, target = builtOnce("Transaction", "node", "--advisory")
     types = (target / "types/transaction/transaction.d.ts").read_text(encoding="utf-8")
 
     assert "declare module 'starkbank'" in types
@@ -457,41 +439,35 @@ def test_strictIsNotOptionalInTheWorkflow():
 
 
 @requiresGenerator
-def test_substitutionIsAnnouncedAsSuch(tmpPath):
+def test_substitutionIsAnnouncedAsSuch(builtOnce):
     """Preencher lacuna e sobrescrever producao sao riscos diferentes e tem de aparecer diferentes."""
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Invoice", "--lang", "java",
-                        "--into", str(target), "--advisory")
+    code, out, _ = builtOnce("Invoice", "java", "--advisory")
 
     assert code == 0, out
     assert "SUBSTITUI" in out
 
 
 @requiresGenerator
-def test_gapFillingIsAnnouncedAsSuch(tmpPath):
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+def test_gapFillingIsAnnouncedAsSuch(builtOnce):
+    code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
     assert "preenche a lacuna" in out
 
 
 @requiresGenerator
-def test_referenceShaIsRecordedInTheRun(tmpPath):
+def test_referenceShaIsRecordedInTheRun(builtOnce):
     """Decisao 59: sem o SHA da referencia, "passou ontem e reprova hoje" nao e diagnosticavel."""
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+    code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
     assert "sdk-java @" in out
 
 
 @requiresGenerator
-def test_subResourceIsImportedNotQualifiedInline(tmpPath):
+def test_subResourceIsImportedNotQualifiedInline(builtOnce):
     """37 de 37 arquivos do sdk-java importam: o nome qualificado inline era divergencia em todo recurso."""
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Invoice", "--lang", "java",
-                        "--into", str(target), "--advisory")
+    code, out, target = builtOnce("Invoice", "java", "--advisory")
     assert code == 0, out
 
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
@@ -501,10 +477,8 @@ def test_subResourceIsImportedNotQualifiedInline(tmpPath):
 
 
 @requiresGenerator
-def test_resourceWithoutPageDoesNotImportSubResource(tmpPath):
-    target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Balance", "--lang", "java",
-                        "--into", str(target), "--advisory")
+def test_resourceWithoutPageDoesNotImportSubResource(builtOnce):
+    code, out, target = builtOnce("Balance", "java", "--advisory")
     assert code == 0, out
 
     source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")

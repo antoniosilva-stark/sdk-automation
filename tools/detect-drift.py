@@ -4,6 +4,11 @@ import argparse
 import subprocess
 from pathlib import Path
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 SCHEMAS_DIR = "apis/schemas"
@@ -12,6 +17,11 @@ EXIT_IN_SYNC = 0
 EXIT_DRIFTED = 1
 EXIT_ERROR = 2
 EXIT_NOT_APPLIED = 3
+
+
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
 
 
 def emit(text: str) -> None:
@@ -83,7 +93,7 @@ def main() -> int:
             emit(f"    {line}")
         return EXIT_ERROR
 
-    differences = compare(yaml.safe_load(output), yaml.safe_load(applied.read_text(encoding="utf-8")))
+    differences = compare(loadFast(output), loadFast(applied.read_text(encoding="utf-8")))
     if not differences:
         emit(f"[OK] {args.resource}: schema versionado em sincronia com o sdk-python")
         return EXIT_IN_SYNC

@@ -9,7 +9,8 @@ components:
           type: string
           description: "tipo inferido do __init__, nao declarado no docstring"
         amount:
-          type: string
+          type: integer
+          format: int64
           description: "tipo inferido do __init__, nao declarado no docstring"
         installmentCount:
           type: string
@@ -115,7 +116,8 @@ components:
       description: "MerchantPurchase creation request"
       properties:
         amount:
-          type: string
+          type: integer
+          format: int64
           description: "tipo inferido do __init__, nao declarado no docstring"
         installmentCount:
           type: string

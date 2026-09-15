@@ -285,6 +285,7 @@ def test_splitProfileIsGeneratableInTheRealSpec():
 
 
 def test_schemaWithoutIdDoesNotTriggerIdOrder(lintSpec, tmpPath):
+    """Sem `id` quem reprova e o NO_ID, nunca o ID_ORDER: a mensagem tem de dizer a coisa certa."""
     schemas = {
         "Widget": {"x-sdk-get": True, "properties": {"amount": {}, "status": {}, "extra": {}}},
         "WidgetCreate": {"properties": {"amount": {}}},
@@ -292,7 +293,7 @@ def test_schemaWithoutIdDoesNotTriggerIdOrder(lintSpec, tmpPath):
     specPath = _writeSpec(tmpPath, schemas)
     report = lintSpec.inspectResource("Widget", schemas, specPath, {})
 
-    assert report.generatable
+    assert [code for code, _ in report.reasons] == [lintSpec.CODE_NO_ID]
 
 
 def test_refWithoutProvenanceIsRejected(lintSpec, tmpPath):
@@ -334,3 +335,26 @@ def test_everyAppliedSchemaDeclaresItsProvenance():
         first = path.read_text(encoding="utf-8").splitlines()[0]
         assert first.startswith("# fonte: starkbank/sdk-python@"), f"{path.name} sem procedencia"
         assert "@desconhecido" not in first, f"{path.name} com procedencia vazia"
+
+
+def test_schemaWithoutIdIsNotGeneratable(lintSpec, tmpPath):
+    """Sem `id` o template emite `super(null)` e nao declara a primeira propriedade:
+    `MerchantCategory` gerado lancava "Unknown parameters used in constructor: [code]"
+    em toda resposta da API. Upstream esses quatro sao `SubResource`, nao `Resource`.
+    """
+    schemas = {
+        "Widget": {"x-sdk-query": True,
+                   "properties": {"code": {}, "name": {}, "number": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not report.generatable
+    assert report.reasons[0][0] == lintSpec.CODE_NO_ID
+
+
+def test_theFourSubResourcesAreBlockedInTheRealSpec():
+    for resource in ("CardMethod", "Institution", "MerchantCategory", "MerchantCountry"):
+        code, out = runTool("lint-spec.py", "--quiet", "--require", resource)
+        assert code == 1, f"{resource} passou no lint sem ter id"
+        assert "NO_ID" in out

@@ -41,7 +41,9 @@ jobs:
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
 
       - name: Detect breaking changes
-        run: python3 tools/breaking-change-detector.py
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 tools/breaking-change-detector.py --base "origin/$DEFAULT_BRANCH"
 
       - name: Resolve the Python SDK reference
         run: make clone-sdk-ref
@@ -95,8 +97,11 @@ jobs:
 
       - name: Require GitHub App credentials
         if: steps.compare.outputs.blocked == 'true'
+        env:
+          APP_ID: ${{ secrets.SDK_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY }}
         run: |
-          if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
             echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
             exit 1
           fi
@@ -123,6 +128,7 @@ jobs:
         env:
           RESOURCE: ${{ inputs.resource }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
         run: |
           BRANCH="spec/refresh-$(python3 tools/place-generated.py "$RESOURCE" --slug)"
           git config user.name "sdk-automation[bot]"
@@ -135,7 +141,7 @@ jobs:
           fi
           git commit -m "Refresh the $RESOURCE schema from the current sdk-python"
           git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "HEAD:refs/heads/$BRANCH"
-          gh pr create --base "${{ github.ref_name }}" --head "$BRANCH" \
+          gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
             --title "Refresh the $RESOURCE schema from the current sdk-python" \
             --body-file drift.log
 
@@ -197,8 +203,11 @@ jobs:
           python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging
 
       - name: Require GitHub App credentials
+        env:
+          APP_ID: ${{ secrets.SDK_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY }}
         run: |
-          if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
             echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
             echo "Sem credencial este job reprova — nao passa verde sem fazer nada."
             exit 1
@@ -297,7 +306,9 @@ jobs:
       - name: Push branch
         if: steps.commit.outputs.changed == 'true'
         working-directory: target
-        run: git push -u origin "${{ steps.branch.outputs.branch }}"
+        env:
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: git push -u origin "$BRANCH"
 
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true'

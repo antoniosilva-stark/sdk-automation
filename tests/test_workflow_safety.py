@@ -7,7 +7,19 @@ from conftest import REPO_ROOT
 
 WORKFLOW_DIR = REPO_ROOT / ".github/workflows"
 SYNC = WORKFLOW_DIR / "sdk-sync.yaml"
-UNTRUSTED = ("inputs.", "github.event.")
+SAFE_IN_RUN = ("secrets.GITHUB_TOKEN",)
+UNTRUSTED = (
+    "inputs.",
+    "github.event.",
+    "github.ref_name",
+    "github.head_ref",
+    "github.actor",
+    "github.triggering_actor",
+    "secrets.",
+    "steps.",
+    "needs.",
+    "env.",
+)
 
 _EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
 
@@ -61,6 +73,8 @@ def untrustedInRun(workflow: dict) -> list[str]:
     found = []
     for jobName, stepName, script in runBlocks(workflow):
         for expression in _EXPRESSION.findall(script):
+            if expression.startswith(SAFE_IN_RUN):
+                continue
             if expression.startswith(UNTRUSTED):
                 found.append(f"{jobName}/{stepName}: {expression}")
     return found
@@ -68,6 +82,15 @@ def untrustedInRun(workflow: dict) -> list[str]:
 
 def test_findsTheWorkflows():
     assert len(workflowFiles()) >= 2, "glob nao achou workflow — teste seria vacuo"
+
+
+def test_theInjectionGuardCoversWhatTheWorkflowsActuallyUse():
+    """A lista cobria so `inputs.` e `github.event.`, e o `${{ github.ref_name }}` que eu
+    interpolei no step do token do App passava verde — com o README afirmando o contrario.
+    """
+    for expression in ("github.ref_name", "github.head_ref", "github.actor",
+                       "secrets.SDK_APP_PRIVATE_KEY", "steps.app-token.outputs.token"):
+        assert expression.startswith(UNTRUSTED), f"nao coberto pela guarda: {expression}"
 
 
 @pytest.mark.parametrize("path", workflowFiles(), ids=lambda p: p.name)

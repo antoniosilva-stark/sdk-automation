@@ -5,6 +5,11 @@ import argparse
 from pathlib import Path
 from dataclasses import dataclass
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
 CREATE_SUFFIX = "Create"
 
@@ -13,6 +18,7 @@ CODE_UNDECLARED = "UNDECLARED"
 CODE_ID_ORDER = "ID_ORDER"
 CODE_NO_OPERATION = "NO_OPERATION"
 CODE_NO_PROVENANCE = "NO_PROVENANCE"
+CODE_NO_ID = "NO_ID"
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
@@ -51,12 +57,17 @@ class ResourceReport:
         return not self.reasons
 
 
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
+
+
 def emit(text: str) -> None:
     sys.stdout.write(f"{text}\n")
 
 
 def loadYaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    return loadFast(path.read_text(encoding="utf-8"))
 
 
 def resolveRef(ref: str, specPath: Path) -> dict:
@@ -148,6 +159,11 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
                         f"{schemaFile.name} não declara de qual commit do sdk-python veio"))
     if not operations:
         reasons.append((CODE_NO_OPERATION, f"nenhuma operação declarada — use uma de {', '.join(OPERATION_FLAGS)}"))
+    if names and "id" not in names:
+        reasons.append((CODE_NO_ID,
+                        "schema sem 'id': o template emite 'extends Resource' com 'super(null)'"
+                        " e nao declara a primeira propriedade — no SDK real esses recursos sao"
+                        " SubResource, que ainda nao tem template"))
     if "id" in names and names[0] != "id":
         reasons.append((CODE_ID_ORDER, f"'id' deve ser a primeira propriedade, mas veio depois de '{names[0]}'"))
     if len(readProps) < MIN_READ_PROPS:

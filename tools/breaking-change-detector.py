@@ -7,6 +7,11 @@ import argparse
 import subprocess
 from pathlib import Path
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 
@@ -17,6 +22,11 @@ RULE_TYPE = "type changes"
 RULE_REQUIRED = "required field added"
 
 SHAPE_KEYS = ("type", "format", "items")
+
+
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
 
 
 def emit(text: str) -> None:
@@ -30,13 +40,13 @@ def gitShow(commit: str, path: str) -> str | None:
 
 def loadSpec(ref: str | None = None) -> dict | None:
     if ref is None:
-        return yaml.safe_load(Path(SPEC_FILE).read_text(encoding="utf-8"))
+        return loadFast(Path(SPEC_FILE).read_text(encoding="utf-8"))
 
     content = gitShow(ref, SPEC_FILE)
     if content is None:
         emit("[INFO] nenhuma spec anterior encontrada (primeiro commit)")
         return None
-    return yaml.safe_load(content)
+    return loadFast(content)
 
 
 def refLoader(ref: str | None):
@@ -46,9 +56,9 @@ def refLoader(ref: str | None):
         path = (Path(SPEC_FILE).parent / relative).as_posix()
         if ref is None:
             target = Path(path)
-            return yaml.safe_load(target.read_text(encoding="utf-8")) if target.is_file() else {}
+            return loadFast(target.read_text(encoding="utf-8")) if target.is_file() else {}
         content = gitShow(ref, path)
-        return yaml.safe_load(content) if content else {}
+        return loadFast(content) if content else {}
     return load
 
 
@@ -183,7 +193,8 @@ def detectBreakingChanges(current: dict, previous: dict | None,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detecta breaking changes entre versões da spec")
-    parser.add_argument("--base", default="HEAD", help="commit de comparação (padrão: HEAD)")
+    parser.add_argument("--base", required=True,
+                        help="commit de comparação: o alvo da PR, nunca HEAD — a árvore é HEAD")
     args = parser.parse_args()
 
     if not Path(SPEC_FILE).exists():

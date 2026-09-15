@@ -8,6 +8,11 @@ import subprocess
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
@@ -63,7 +68,7 @@ REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-pa
 
 
 def declaredFlags(resource: str) -> set[str]:
-    spec = yaml.safe_load((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
+    spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
     schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
     return {key for key in schema if key.startswith("x-sdk-")}
 
@@ -86,6 +91,11 @@ def javaImports(flags: set[str]) -> list[str]:
     if flags & set(REST_USERS):
         properties.append("usesRest=true")
     return properties
+
+
+def loadFast(text: str):
+    """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
+    return yaml.load(text, Loader=SafeLoader)
 
 
 def emit(text: str) -> None:

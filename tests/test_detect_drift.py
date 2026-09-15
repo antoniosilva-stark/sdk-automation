@@ -107,3 +107,15 @@ def test_onlyTheDriftedResourceIsBlocked(tmpPath):
 
     assert blocked == 1
     assert free == 0
+
+
+@requiresPythonSdk
+def test_thePilotResourceHasAVersionedSchema():
+    """`SplitProfile` e o default do workflow_dispatch e nao tinha `apis/schemas/splitprofile.yaml`:
+    o detector devolvia exit 3 e o workflow tratava como "nao defasado". A protecao que o README
+    anuncia nunca rodava no unico caminho que o piloto exercita.
+    """
+    code, out = runTool("detect-drift.py", "SplitProfile", "--from", str(PYTHON_SDK))
+
+    assert code == 0, out
+    assert "em sincronia" in out
