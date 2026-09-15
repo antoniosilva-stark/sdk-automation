@@ -1,4 +1,6 @@
+import os
 import yaml
+import subprocess
 import pytest
 from pathlib import Path
 
@@ -64,11 +66,20 @@ components:
 
 
 def _sdk(tmpPath: Path, exports: str = "create, get, query, page") -> Path:
+    """A referencia real e sempre um clone, entao a forjada tambem: o schema aplicado
+    carrega o SHA de origem e o lint reprova quem nao declara procedencia."""
     root = tmpPath / "sdk-python"
     package = root / "starkbank" / "widget"
     package.mkdir(parents=True)
     (package / "__widget.py").write_text(WIDGET_MODULE, encoding="utf-8")
     (package / "__init__.py").write_text(f"from .__widget import {exports}\n", encoding="utf-8")
+
+    environment = {"GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@local",
+                   "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@local",
+                   "PATH": os.environ.get("PATH", "")}
+    for command in (["git", "init", "--quiet"], ["git", "add", "."],
+                    ["git", "commit", "--quiet", "-m", "forged reference"]):
+        subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True)
     return root
 
 

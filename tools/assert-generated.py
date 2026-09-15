@@ -7,16 +7,20 @@ from pathlib import Path
 from dataclasses import dataclass
 
 CONTRACT_DIR = "tests/contract"
+WAIVER_DIR = "tests/waivers"
 
 CODE_PLACEHOLDER = "PLACEHOLDER"
 CODE_EMPTY_TOKEN = "EMPTY_TOKEN"
 CODE_SYNTAX = "SYNTAX"
 CODE_CONTRACT_GAP = "CONTRACT_GAP"
 CODE_DEAD_IMPORT = "DEAD_IMPORT"
+CODE_MISSING_CONTRACT = "MISSING_CONTRACT"
+
+_INLINE_COMMENT = re.compile(r"\s+#")
+_WAIVER_SECTION = re.compile(r"^\[([\w.-]+)/([\w.-]+)\]$")
 
 CONTRACT_KINDS = ("signature", "declaration", "constructor", "inner", "export",
                   "namespace", "field", "require")
-CONTRACT_NOTES = ("todo",)
 
 _PLACEHOLDER = re.compile(r"\{\{.*?\}\}")
 _EMPTY_ARG = re.compile(r"\(\s*,|,\s*\)|,\s*,")
@@ -41,18 +45,59 @@ def emit(text: str) -> None:
 
 
 def parseContract(path: Path) -> dict[str, list[str]]:
-    entries: dict[str, list[str]] = {kind: [] for kind in CONTRACT_KINDS + CONTRACT_NOTES}
+    entries: dict[str, list[str]] = {kind: [] for kind in CONTRACT_KINDS}
     for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        kind, _, value = line.partition(" ")
+        kind, _, value = _INLINE_COMMENT.split(line, maxsplit=1)[0].partition(" ")
         if kind not in entries:
             raise ValueError(f"{path}:{number} kind desconhecido: {kind!r}")
         if not value.strip():
             raise ValueError(f"{path}:{number} kind {kind!r} sem valor")
         entries[kind].append(value.strip())
     return entries
+
+
+def parseWaivers(path: Path) -> dict[tuple[str, str], list[dict]]:
+    """Divergências aceitas, por recurso e papel. Motivo é obrigatório e string é exata."""
+    waivers: dict[tuple[str, str], list[dict]] = {}
+    section = None
+
+    for number, raw in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        header = _WAIVER_SECTION.match(line)
+        if header:
+            section = (header.group(1), header.group(2))
+            waivers.setdefault(section, [])
+            continue
+
+        if section is None:
+            raise ValueError(f"{path}:{number} dispensa fora de seção [recurso/papel]")
+
+        body, separator, reason = line.partition("#")
+        if not separator or not reason.strip():
+            raise ValueError(f"{path}:{number} dispensa sem motivo: {body.strip()}")
+
+        kind, _, value = body.strip().partition(" ")
+        if kind not in CONTRACT_KINDS:
+            raise ValueError(f"{path}:{number} kind desconhecido: {kind!r}")
+        if not value.strip():
+            raise ValueError(f"{path}:{number} kind {kind!r} sem valor")
+        if "*" in value:
+            raise ValueError(f"{path}:{number} dispensa com curinga: {value.strip()}")
+
+        waivers[section].append({"kind": kind, "value": value.strip(), "reason": reason.strip()})
+
+    return waivers
+
+
+def resolveWaivers(language: str, explicit: str | None) -> Path | None:
+    candidate = Path(explicit) if explicit else Path(WAIVER_DIR) / f"{language}.waivers"
+    return candidate if candidate.is_file() else None
 
 
 def normalise(text: str) -> str:
@@ -128,17 +173,33 @@ def contractGap(kind: str, expected: str, source: str) -> str:
     return f"field divergente: esperado {expected!r}, gerado {found!r}"
 
 
-def checkContract(source: str, contract: dict[str, list[str]], filePath: str) -> list[Issue]:
+def checkContract(source: str, contract: dict[str, list[str]], filePath: str,
+                  waivers: list[dict] | None = None) -> tuple[list[Issue], list[dict], list[dict]]:
+    """Gaps bloqueantes, dispensas aplicadas e dispensas que não casaram com nada."""
     collapsed = normalise(source)
-    issues = []
+    pending = list(waivers or [])
+    issues, applied = [], []
+
     for kind in CONTRACT_KINDS:
         for expected in contract[kind]:
             if normalise(expected) in collapsed:
                 continue
+
+            match = next(
+                (entry for entry in pending
+                 if entry["kind"] == kind and normalise(entry["value"]) == normalise(expected)),
+                None,
+            )
+            if match:
+                pending.remove(match)
+                applied.append(match)
+                continue
+
             issues.append(
                 Issue(filePath, 0, 0, CODE_CONTRACT_GAP, contractGap(kind, expected, source))
             )
-    return issues
+
+    return (issues, applied, pending)
 
 
 def javacWorks() -> bool:
@@ -198,8 +259,13 @@ def main() -> int:
     parser.add_argument("target", help="arquivo gerado a verificar")
     parser.add_argument("--lang", choices=["java", "node"], default=None)
     parser.add_argument("--contract", default=None, help="arquivo .contract explícito")
+    parser.add_argument("--substitution", action="store_true",
+                        help="o arquivo já existe no SDK alvo: nenhuma dispensa se aplica")
+    parser.add_argument("--allow-missing-contract", dest="allowMissingContract", action="store_true",
+                        help="aceita a ausência de régua, para recurso que ainda não existe no SDK alvo")
     parser.add_argument("--strict", action="store_true", help="trata gap de contrato como reprovação")
     parser.add_argument("--role", help="papel do artefato, ex: impl, barrel, types")
+    parser.add_argument("--waivers", default=None, help=f"arquivo de dispensas (padrão: {WAIVER_DIR}/<lang>.waivers)")
     args = parser.parse_args()
 
     target = Path(args.target)
@@ -224,17 +290,29 @@ def main() -> int:
         else:
             skipped.append("verificação de sintaxe indisponível: javac ausente ou inoperante")
 
+    waiverPath = resolveWaivers(language, args.waivers)
+    waivers = []
+    ignored = []
+    if waiverPath:
+        try:
+            parsed = parseWaivers(waiverPath)
+        except ValueError as error:
+            emit(f"[ERROR] dispensa inválida: {error}")
+            return 2
+        waivers = parsed.get((target.stem.lower(), args.role or "main"), [])
+        if args.substitution:
+            ignored, waivers = waivers, []
+
     contractPath = resolveContract(target, language, args.contract, args.role)
-    gaps = []
-    pending = []
-    if contractPath and contractPath.exists():
+    hasContract = bool(contractPath and contractPath.exists())
+    gaps, applied, unused = [], [], []
+    if hasContract:
         try:
             contract = parseContract(contractPath)
         except ValueError as error:
             emit(f"[ERROR] contrato inválido: {error}")
             return 2
-        gaps = checkContract(source, contract, filePath)
-        pending = contract["todo"]
+        gaps, applied, unused = checkContract(source, contract, filePath, waivers)
 
     emit(f"[INFO] {target} — linguagem {language}")
     emit(f"[INFO] verificações executadas: {', '.join(executed)}")
@@ -242,16 +320,30 @@ def main() -> int:
                    " — o gate roda no workflow, sobre o checkout do alvo")
     for reason in skipped:
         emit(f"[WARN] {reason}")
-    if not contractPath:
-        emit("[INFO] sem contrato para este recurso — gap não verificado")
-    for note in pending:
-        emit(f"[INFO] paridade pendente, nao verificada: {note}")
+    if not hasContract and args.allowMissingContract:
+        emit("[INFO] recurso sem arquivo real no SDK alvo — régua dispensada nesta execução")
+    if not hasContract and not args.allowMissingContract:
+        emit("[WARN] sem contrato para este recurso — nada a medir contra o SDK real")
+    for entry in applied:
+        emit(f"[INFO] dispensado: {entry['kind']} {entry['value']} — {entry['reason']}")
+    for entry in ignored:
+        emit(f"[WARN] dispensa não vale em substituição: {entry['kind']} {entry['value']}"
+             " — o arquivo já existe no SDK alvo e perder o item é regressão")
+    for entry in unused:
+        emit(f"[WARN] dispensa não utilizada: {entry['kind']} {entry['value']}"
+             " — o item deixou de divergir, remova a dispensa")
 
     if blocking:
         emit("")
         reportIssues(blocking)
         emit("")
         emit(f"[ERROR] {len(blocking)} problema(s) bloqueante(s)")
+        return 1
+
+    if not hasContract and args.strict and not args.allowMissingContract:
+        emit("")
+        emit(f"[ERROR] {CODE_MISSING_CONTRACT} régua ausente para {target.name} — derive o contrato"
+             " do SDK real ou declare --allow-missing-contract para recurso genuinamente novo")
         return 1
 
     if gaps and args.strict:

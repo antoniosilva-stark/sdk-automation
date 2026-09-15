@@ -6,6 +6,7 @@ from pathlib import Path
 from conftest import REPO_ROOT
 
 WORKFLOW_DIR = REPO_ROOT / ".github/workflows"
+SYNC = WORKFLOW_DIR / "sdk-sync.yaml"
 UNTRUSTED = ("inputs.", "github.event.")
 
 _EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
@@ -89,7 +90,7 @@ def test_detectorIgnoresExpressionOutsideRun():
 
 
 def test_detectorSeesEveryStepWithRun():
-    workflow = yaml.safe_load((WORKFLOW_DIR / "sdk-sync.yaml").read_text(encoding="utf-8"))
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
     assert len(runBlocks(workflow)) >= 5
 
 
@@ -147,9 +148,15 @@ def test_compilationCoversGeneratedTestAndRunsNothing():
 
 
 def test_ownRepoCheckoutDoesNotPersistCredentials():
-    first = syncSteps()[0]
-    assert "actions/checkout" in first["uses"]
-    assert first.get("with", {}).get("persist-credentials") is False
+    """Credencial ambiente de escrita e o que permite push acidental no proprio repo."""
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
+    for jobName, job in (workflow.get("jobs") or {}).items():
+        for step in (job.get("steps") or []):
+            options = step.get("with") or {}
+            if "actions/checkout" not in (step.get("uses") or "") or "repository" in options:
+                continue
+            assert options.get("persist-credentials") is False, \
+                f"{jobName}: checkout do proprio repo mantem credencial de escrita"
 
 
 def test_buildDoesNotWriteStraightIntoTheTarget():
@@ -254,6 +261,25 @@ def test_whoeverRunsTestsResolvesTheReferenceFirst():
             assert cloneIndex < testIndex
 
 
+def test_whoeverBuildsResolvesTheReferenceFirst():
+    """A regua e derivada do SDK real a cada execucao: sem a referencia nao ha o que medir.
+
+    Roda antes do token do App de proposito (decisao 29): os SDKs sao publicos.
+    """
+    for path in workflowFiles():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for jobName, job in (workflow.get("jobs") or {}).items():
+            scripts = [step.get("run") or "" for step in (job.get("steps") or [])]
+
+            buildIndex = next((i for i, script in enumerate(scripts) if "build-resource.py" in script), None)
+            if buildIndex is None:
+                continue
+
+            cloneIndex = next((i for i, script in enumerate(scripts) if "clone-sdk-ref" in script), None)
+            assert cloneIndex is not None, f"{path.name}:{jobName} gera sem resolver a referencia"
+            assert cloneIndex < buildIndex
+
+
 def test_whoeverRunsNpmCiSetsUpNode():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -282,3 +308,56 @@ def test_baseIsConfirmedAgainstTheRemoteNotJustHead():
 
     assert "ls-remote --symref origin HEAD" in script, "base nao e confirmada no remoto"
     assert '"$BASE" != "$REMOTE_DEFAULT"' in script, "nada compara o checkout com a default real"
+
+
+def driftJob() -> dict:
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
+    return (workflow.get("jobs") or {}).get("drift") or {}
+
+
+def test_driftIsCheckedBeforeAnythingIsGenerated():
+    """Decisao 61: recurso defasado espera; os outros seguem. O bloqueio e por recurso."""
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
+    jobs = workflow.get("jobs") or {}
+
+    assert "drift" in jobs, "sem job de defasagem, gera-se a partir de spec velha"
+    assert "drift" in (jobs["sync"].get("needs") or [])
+    scripts = [step.get("run") or "" for step in (jobs["drift"].get("steps") or [])]
+    assert any("detect-drift.py" in script for script in scripts)
+
+
+def test_syncIsSkippedOnlyForTheDriftedResource():
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
+    condition = (workflow["jobs"]["sync"].get("if") or "")
+
+    assert "needs.drift.outputs" in condition
+    assert "blocked" in condition
+
+
+def test_driftJobRefreshesTheReferenceBeforeComparing():
+    """Decisao 62: o fetch vive no sdk-sync. Comparar contra clone velho e nao comparar."""
+    scripts = [step.get("run") or "" for step in (driftJob().get("steps") or [])]
+    refresh = next((i for i, script in enumerate(scripts) if "refresh-sdk-ref" in script), None)
+    compare = next((i for i, script in enumerate(scripts) if "detect-drift.py" in script), None)
+
+    assert refresh is not None, "job de defasagem compara sem atualizar a referencia"
+    assert compare is not None
+    assert refresh < compare
+
+
+def test_specPrIsNeverAutoMerged():
+    """A spec e o artefato que a governanca de BC protege: PR de spec e revisada por gente."""
+    workflow = SYNC.read_text(encoding="utf-8")
+
+    assert "gh pr merge" not in workflow
+    assert "--auto" not in workflow
+
+
+def test_specPrUsesTheAppTokenNotTheDefaultOne():
+    """PR aberta com GITHUB_TOKEN nao dispara workflow nenhum: a PR nasceria sem validacao."""
+    steps = driftJob().get("steps") or []
+    prStep = next((step for step in steps if "gh pr create" in (step.get("run") or "")), None)
+
+    assert prStep is not None, "defasagem detectada e nenhuma PR de spec"
+    assert "secrets.GITHUB_TOKEN" not in str(prStep)
+    assert "steps.app-token.outputs.token" in str(prStep.get("env") or {})

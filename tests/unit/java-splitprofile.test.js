@@ -76,8 +76,8 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
     const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
     const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));
 
-    test('should exist with the 2 expected jobs', () => {
-      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'sync']);
+    test('should exist with the 3 expected jobs', () => {
+      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'drift', 'sync']);
     });
 
     test('should trigger manually, not on push', () => {

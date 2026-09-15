@@ -12,6 +12,8 @@ CODE_SCAFFOLDING = "SCAFFOLDING"
 CODE_UNDECLARED = "UNDECLARED"
 CODE_ID_ORDER = "ID_ORDER"
 CODE_NO_OPERATION = "NO_OPERATION"
+CODE_NO_PROVENANCE = "NO_PROVENANCE"
+PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
 MIN_CREATE_PROPS = 1
@@ -74,6 +76,20 @@ def resolveRef(ref: str, specPath: Path) -> dict:
     return node
 
 
+def refFile(schema: dict | None, specPath: Path) -> Path | None:
+    ref = schema.get("$ref") if isinstance(schema, dict) else None
+    if not ref or "#" not in ref:
+        return None
+    filePart, _ = ref.split("#", 1)
+    target = (specPath.parent / filePart).resolve()
+    return target if target.is_file() else None
+
+
+def declaresProvenance(path: Path) -> bool:
+    first = path.read_text(encoding="utf-8").splitlines()[:1]
+    return bool(first) and first[0].startswith(PROVENANCE_PREFIX) and "@desconhecido" not in first[0]
+
+
 def resolveSchema(schema: dict | None, specPath: Path) -> dict:
     if not isinstance(schema, dict):
         return {}
@@ -126,6 +142,10 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
 
     reasons: list[tuple[str, str]] = []
     names = list(readProps)
+    schemaFile = refFile(schemas.get(name), specPath)
+    if schemaFile and not declaresProvenance(schemaFile):
+        reasons.append((CODE_NO_PROVENANCE,
+                        f"{schemaFile.name} não declara de qual commit do sdk-python veio"))
     if not operations:
         reasons.append((CODE_NO_OPERATION, f"nenhuma operação declarada — use uma de {', '.join(OPERATION_FLAGS)}"))
     if "id" in names and names[0] != "id":

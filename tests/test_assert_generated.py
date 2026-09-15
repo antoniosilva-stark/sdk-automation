@@ -209,9 +209,15 @@ def test_everyKindUsedInContractsIsDeclared(assertGenerated):
             if not line or line.startswith("#"):
                 continue
             usados.add(line.split(" ")[0])
-    declarados = set(assertGenerated.CONTRACT_KINDS) | set(assertGenerated.CONTRACT_NOTES)
+    declarados = set(assertGenerated.CONTRACT_KINDS)
     desconhecidos = usados - declarados
     assert desconhecidos == set(), f"kind usado e nao declarado: {sorted(desconhecidos)}"
+
+
+def test_inlineCommentIsNotPartOfTheExpectedString(assertGenerated, tmpPath):
+    """O contrato e a dispensa tem que concordar sobre onde a string esperada termina."""
+    contract = _write(tmpPath, "x.contract", "field public Long amount;  # anotacao\n")
+    assert assertGenerated.parseContract(contract)["field"] == ["public Long amount;"]
 
 
 def test_unknownKindFailsTheParse(assertGenerated, tmpPath):
@@ -292,14 +298,11 @@ def test_fieldWithPrefixNameDoesNotSatisfyTheContract(tmpPath):
     assert "field ausente" in out
 
 
-def test_fieldDeclaredAsTodoDoesNotBlock(tmpPath):
-    """Tipo que o gerador nao alcanca (primitivo) fica visivel sem travar o pipeline."""
-    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+def test_todoNoLongerParsesAsAKind(assertGenerated, tmpPath):
+    """A dispensa versionada substituiu o `todo`: divergencia tolerada agora tem motivo e dono."""
     contract = _write(tmpPath, "widget.contract", "todo field public long status;\n")
-    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
-
-    assert code == 0, out
-    assert "paridade pendente" in out
+    with pytest.raises(ValueError, match="kind desconhecido"):
+        assertGenerated.parseContract(contract)
 
 
 def test_missingRequireIsAGap(tmpPath):
@@ -332,6 +335,96 @@ def test_fieldCoverageReachesResourcesWithJavaContract(assertGenerated):
         assert len(declared) >= 5, f"{name}: {len(declared)} campos declarados"
 
 
+def test_waiverNeedsAReason(assertGenerated, tmpPath):
+    """Dispensa sem motivo e supressao anonima: em 3 meses ninguem sabe por que esta ali."""
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public long status;\n")
+
+    with pytest.raises(ValueError, match="sem motivo"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverRejectsWildcard(assertGenerated, tmpPath):
+    """Curinga vira supressao em bloco: dispensa e string exata (decisao 57)."""
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public * status;  # motivo\n")
+
+    with pytest.raises(ValueError, match="curinga"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverNeedsASection(assertGenerated, tmpPath):
+    waivers = _write(tmpPath, "java.waivers", "field public long status;  # motivo\n")
+
+    with pytest.raises(ValueError, match="seção"):
+        assertGenerated.parseWaivers(waivers)
+
+
+def test_waiverIsScopedByResourceAndRole(assertGenerated, tmpPath):
+    waivers = _write(
+        tmpPath, "java.waivers",
+        "[widget/main]\nfield public long status;  # motivo do main\n\n"
+        "[widget/test]\nsignature public void testCreate()  # motivo do test\n",
+    )
+    parsed = assertGenerated.parseWaivers(waivers)
+
+    assert [entry["value"] for entry in parsed[("widget", "main")]] == ["public long status;"]
+    assert parsed[("widget", "test")][0]["reason"] == "motivo do test"
+
+
+def test_waivedGapIsAnnouncedNotBlocking(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public long status;  # primitivo nao alcancavel\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 0, out
+    assert "dispensado" in out
+    assert "primitivo nao alcancavel" in out
+
+
+def test_gapWithoutWaiverStillBlocks(tmpPath):
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public long status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public String other;  # outro item\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 1
+    assert "field divergente" in out or "field ausente" in out
+
+
+def test_unusedWaiverIsReported(tmpPath):
+    """Dispensa obsoleta nao e ruido: item dispensado NAO e verificado, entao ela
+    desliga a cobertura daquele item sem ninguem perceber."""
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "field public String status;\n")
+    waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public String status;  # ja resolvido\n")
+
+    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                        "--waivers", str(waivers), "--role", "main", "--strict")
+
+    assert code == 0, out
+    assert "dispensa não utilizada" in out
+    assert "public String status;" in out
+
+
+def test_realWaiverFilesParseAndCarryReasons(assertGenerated):
+    """As 50 dispensas migradas dos contratos: toda uma com motivo."""
+    files = sorted(Path(assertGenerated.WAIVER_DIR).glob("*.waivers"))
+    assert files
+
+    total = 0
+    for path in files:
+        for entries in assertGenerated.parseWaivers(path).values():
+            for entry in entries:
+                assert entry["reason"], f"{path.name}: {entry['value']} sem motivo"
+                total += 1
+
+    assert total >= 45
+
+
 def test_roleResolvesItsOwnContract(assertGenerated, tmpPath):
     resolved = {
         role: assertGenerated.resolveContract(Path("Transfer.js"), "node", None, role)
@@ -352,23 +445,61 @@ def test_roleWithoutOwnContractFallsBack(assertGenerated):
     assert resolved.name == "java-invoice.contract"
 
 
-def test_missingContractIsStillAnnounced(tmpPath):
+def test_missingRulerBlocks(tmpPath):
+    """Foi esta linha que deixou a PR #5 sobrescrever producao: `Deposit` nao tinha regua."""
     target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target), "--strict")
-    assert code == 0
-    assert "sem contrato para este recurso" in out
+
+    assert code == 1
+    assert "MISSING_CONTRACT" in out
 
 
-def test_todoIsNotAGapButIsAnnounced(tmpPath):
-    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
-    contract = _write(tmpPath, "widget.contract", "todo signature public static void futuro()\n")
-    code, out = runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+def test_missingRulerIsAllowedOnlyWhenDeclared(tmpPath):
+    target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target), "--strict", "--allow-missing-contract")
+
     assert code == 0, out
-    assert "paridade pendente, nao verificada" in out
-    assert "CONTRACT_GAP" not in out
+    assert "recurso sem arquivo real no SDK alvo" in out
+
+
+def test_missingRulerWithoutStrictIsOnlyAWarning(tmpPath):
+    """Modo consultivo continua sendo consultivo: quem bloqueia e o --strict do pipeline."""
+    target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target))
+
+    assert code == 0, out
+    assert "sem contrato" in out
+
+
+def test_noContractStillCarriesATodo():
+    """Guarda da migracao: `todo` nos contratos voltaria a esconder divergencia sem motivo."""
+    carregam = [path.name for path in sorted(CONTRACT_DIR.glob("*.contract"))
+                if any(line.startswith("todo ")
+                       for line in path.read_text(encoding="utf-8").splitlines())]
+    assert carregam == [], f"todo sobrevivente, migre para tests/waivers: {carregam}"
 
 
 def test_buildResourcePassesStrictAndRole(buildResource, tmpPath):
     source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
     assert '"--strict"' in source
     assert '"--role", role' in source
+
+
+def test_waiverDoesNotApplyWhenSubstitutingProduction(tmpPath):
+    """Dispensa diz "o gerado pode nao ter isto" — aceitavel em arquivo novo, regressao em
+    arquivo que ja existe. Foi exatamente o que a PR #5 fez com o `Deposit`.
+    """
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    contract = _write(tmpPath, "widget.contract", "declaration public final class Widget extends Resource\n")
+    waivers = _write(tmpPath, "java.waivers",
+                     "[widget/main]\ndeclaration public final class Widget extends Resource  # o template nao emite final\n")
+
+    lacuna, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                          "--waivers", str(waivers), "--strict")
+    assert lacuna == 0, out
+    assert "dispensado" in out
+
+    substituicao, out = runTool("assert-generated.py", str(target), "--contract", str(contract),
+                                "--waivers", str(waivers), "--strict", "--substitution")
+    assert substituicao == 1
+    assert "dispensa não vale em substituição" in out

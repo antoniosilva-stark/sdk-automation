@@ -1,4 +1,4 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref reference
+.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref refresh-sdk-ref reference
 
 # Reference clones live in _references/, created by `make clone-sdk-ref`.
 # Point SDK_PYTHON / SDK_JAVA at your own clone to override.
@@ -60,6 +60,19 @@ clone-sdk-ref: ## Clone the SDK references into _references/ (override with SDK_
 	@$(MAKE) --no-print-directory reference REPO=sdk-python MARKER=starkbank OVERRIDE="$(SDK_PYTHON)"
 	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)"
 	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)"
+
+refresh-sdk-ref: ## Atualiza os clones em _references/ (override por symlink e preservado)
+	@for repo in sdk-python sdk-java sdk-node; do \
+		if [ -L "_references/$$repo" ]; then \
+			echo "$(BLUE)↷ $$repo: override, nao atualizado$(NC)"; \
+		elif [ -d "_references/$$repo/.git" ]; then \
+			git -C "_references/$$repo" fetch --quiet --depth 1 origin HEAD && \
+			git -C "_references/$$repo" checkout --quiet --detach FETCH_HEAD && \
+			echo "$(GREEN)✅ $$repo: $$(git -C _references/$$repo rev-parse --short HEAD)$(NC)"; \
+		else \
+			echo "$(RED)❌ $$repo: sem clone em _references, rode make clone-sdk-ref$(NC)"; exit 1; \
+		fi; \
+	done
 
 reference: ## Internal: resolve one reference clone
 	@if [ -n "$(OVERRIDE)" ]; then \

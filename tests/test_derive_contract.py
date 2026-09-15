@@ -1,7 +1,11 @@
 import pytest
 from pathlib import Path
 
+import re
+
 from conftest import JAVA_SDK, NODE_SDK, REPO_ROOT, requiresJavaSdk, requiresNodeSdk, runTool
+
+_INLINE = re.compile(r"\s+#")
 
 FORGED_JAVA = '''package com.starkbank;
 
@@ -154,8 +158,8 @@ def test_derivedJavaCoversTheHandWrittenContract():
     contract = (REPO_ROOT / "tests/contract/java-invoice.contract").read_text(encoding="utf-8")
 
     required = [
-        " ".join(line.split()) for line in contract.splitlines()
-        if line.strip() and not line.strip().startswith("#") and not line.startswith("todo ")
+        " ".join(_INLINE.split(line, maxsplit=1)[0].split()) for line in contract.splitlines()
+        if line.strip() and not line.strip().startswith("#")
     ]
     normalised = [" ".join(line.split()) for line in derived]
     missing = [line for line in required if not any(line in entry for entry in normalised)]
@@ -172,9 +176,41 @@ def test_derivedNodeCoversTheHandWrittenContract():
     contract = (REPO_ROOT / "tests/contract/node-transfer-impl.contract").read_text(encoding="utf-8")
 
     required = [
-        " ".join(line.split()) for line in contract.splitlines()
+        " ".join(_INLINE.split(line, maxsplit=1)[0].split()) for line in contract.splitlines()
         if line.strip() and not line.strip().startswith("#") and not line.startswith("todo ")
     ]
     missing = [line for line in required if not any(line in entry for entry in derived)]
 
     assert missing == [], f"extrator incompleto: {missing[:5]}"
+
+
+def test_resourceAbsentUpstreamHasItsOwnExitCode(tmpPath):
+    """`build-resource` tem de distinguir recurso novo de referência quebrada.
+
+    Sem os códigos separados, referência ausente passaria por recurso novo e a régua
+    seria dispensada exatamente quando mais importa.
+    """
+    (tmpPath / "src/main/java/com/starkbank").mkdir(parents=True)
+    code, out = runTool("derive-contract.py", "NaoExiste", "--lang", "java", "--from", str(tmpPath))
+
+    assert code == 3
+    assert "recurso novo neste SDK" in out
+
+
+def test_unresolvedReferenceIsNotMistakenForANewResource(tmpPath):
+    code, out = runTool("derive-contract.py", "Invoice", "--lang", "java", "--from", str(tmpPath))
+
+    assert code == 2
+    assert "não resolvida" in out
+
+
+@requiresJavaSdk
+def test_derivedRulerCarriesTheReferenceSha():
+    """Decisao 59: a regua e efemera, entao o SHA no cabecalho e o unico registro do que mediu."""
+    code, out = runTool("derive-contract.py", "Invoice", "--lang", "java", "--role", "main")
+
+    assert code == 0, out
+    header = [line for line in out.splitlines() if line.startswith("# sha:")]
+    assert header, "regua sem SHA de origem"
+    assert "starkbank/sdk-java@" in header[0]
+    assert "@desconhecido" not in header[0]

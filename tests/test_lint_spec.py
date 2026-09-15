@@ -2,7 +2,7 @@ import yaml
 import pytest
 from pathlib import Path
 
-from conftest import runTool
+from conftest import REPO_ROOT, runTool
 
 
 def _writeSpec(tmpPath: Path, schemas: dict) -> Path:
@@ -79,7 +79,7 @@ def test_flagsSurviveTheExternalRef(lintSpec, tmpPath):
     """
     (tmpPath / "schemas").mkdir()
     (tmpPath / "schemas" / "widget.yaml").write_text(
-        yaml.safe_dump(
+        "# fonte: starkbank/sdk-python@abc1234 · starkbank/widget/__widget.py\n" + yaml.safe_dump(
             {"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}},
             sort_keys=False,
         ),
@@ -293,3 +293,44 @@ def test_schemaWithoutIdDoesNotTriggerIdOrder(lintSpec, tmpPath):
     report = lintSpec.inspectResource("Widget", schemas, specPath, {})
 
     assert report.generatable
+
+
+def test_refWithoutProvenanceIsRejected(lintSpec, tmpPath):
+    """Decisao 59: sem o SHA de origem, "passou ontem e reprova hoje" nao e diagnosticavel."""
+    (tmpPath / "schemas").mkdir()
+    (tmpPath / "schemas" / "widget.yaml").write_text(
+        yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}}),
+        encoding="utf-8",
+    )
+    specPath = tmpPath / "spec.yaml"
+    specPath.write_text("{}", encoding="utf-8")
+
+    schemas = {"Widget": {"x-sdk-get": True, "$ref": "./schemas/widget.yaml#/components/schemas/Widget"}}
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not report.generatable
+    assert report.reasons[0][0] == lintSpec.CODE_NO_PROVENANCE
+
+
+def test_refWithProvenanceIsAccepted(lintSpec, tmpPath):
+    (tmpPath / "schemas").mkdir()
+    body = yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}},
+                          sort_keys=False)
+    (tmpPath / "schemas" / "widget.yaml").write_text(
+        "# fonte: starkbank/sdk-python@abc1234 · starkbank/widget/__widget.py\n" + body,
+        encoding="utf-8",
+    )
+    specPath = tmpPath / "spec.yaml"
+    specPath.write_text("{}", encoding="utf-8")
+
+    schemas = {"Widget": {"x-sdk-get": True, "$ref": "./schemas/widget.yaml#/components/schemas/Widget"}}
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert report.generatable
+
+
+def test_everyAppliedSchemaDeclaresItsProvenance():
+    for path in sorted((REPO_ROOT / "apis/schemas").glob("*.yaml")):
+        first = path.read_text(encoding="utf-8").splitlines()[0]
+        assert first.startswith("# fonte: starkbank/sdk-python@"), f"{path.name} sem procedencia"
+        assert "@desconhecido" not in first, f"{path.name} com procedencia vazia"

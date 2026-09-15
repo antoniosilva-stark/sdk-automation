@@ -12,4 +12,4 @@ signature public void testGet() throws Exception
 signature public void testPage() throws Exception
 field Settings.user = utils.User.defaultProject();
 
-todo signature public void testCreate() throws Exception
+signature public void testCreate() throws Exception

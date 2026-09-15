@@ -4,11 +4,11 @@ declaration declare module 'starkbank'
 declaration export class Transfer
 namespace export namespace transfer
 
-todo signature export function get(id: string, params?:{ user?: Project | Organization | null}): Promise<Transfer>
-todo signature export function pdf(id: string, params?:{ user?: Project | Organization | null}): Promise<Buffer>
-todo signature function _delete(id: string, user?: Project | Organization): Promise<Transfer>
-todo inner export class Rule
-todo inner export class Log
-todo namespace export namespace log
+signature export function get(id: string, params?:{ user?: Project | Organization | null}): Promise<Transfer>
+signature export function pdf(id: string, params?:{ user?: Project | Organization | null}): Promise<Buffer>
+signature function _delete(id: string, user?: Project | Organization): Promise<Transfer>
+inner export class Rule
+inner export class Log
+namespace export namespace log
 
 signature export function page(params?

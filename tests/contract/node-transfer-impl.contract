@@ -10,10 +10,10 @@ export exports.Transfer = Transfer
 export exports.get = async function (id, {user} = {})
 export exports.query = async function
 
-todo require const { Rule } = require('./rule/rule.js')
-todo require const ruleResource = require('./rule/rule.js').subResource
-todo require const parseObjects = require('../utils/parse.js').parseObjects
-todo export exports.delete = async function (id, { user } = {})
-todo export exports.pdf = async function (id, {user} = {})
+require const { Rule } = require('./rule/rule.js')
+require const ruleResource = require('./rule/rule.js').subResource
+require const parseObjects = require('../utils/parse.js').parseObjects
+export exports.delete = async function (id, { user } = {})
+export exports.pdf = async function (id, {user} = {})
 
 export exports.page = async function

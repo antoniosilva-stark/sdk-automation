@@ -1,3 +1,4 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/taxpayment/__taxpayment.py
 components:
   schemas:
     TaxPayment:

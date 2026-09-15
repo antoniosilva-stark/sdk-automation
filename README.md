@@ -23,9 +23,12 @@ Pull request → validate-spec.yaml
 Merge into development
     ↓
 SDK Sync (sdk-sync.yaml) — manual dispatch, two inputs: resource + language (java | node)
+    ├─ drift: refresh the Python SDK, compare the versioned schema for this resource
+    │     └─ drifted? open a spec-update PR here and skip the sync for this resource only
     ├─ validate resource name at the edge (place-generated.py --slug)
     ├─ resolve target repo from the language (place-generated.py --repo)
-    ├─ generate into staging/ and verify against the contract  ← runs BEFORE the token exists
+    ├─ derive the ruler from the real target SDK, then generate into staging/ and gate
+    │     against it  ← both run BEFORE the token exists
     ├─ mint a short-lived GitHub App token
     ├─ copy staging/ over the target checkout, stage only declared paths (--targets)
     └─ open a PR in starkbank/sdk-<lang>
@@ -46,7 +49,11 @@ never executes with a credential on disk.
 - `tools/extract-schema.py` — derives an OpenAPI schema from the Stark Bank Python SDK
 - `tools/build-resource.py` — generates a resource, verifies it, places it in the SDK layout
 - `tools/place-generated.py` — name validation, target repo/layout mapping
-- `tools/assert-generated.py` — gates generated output against a contract
+- `tools/assert-generated.py` — gates generated output against the ruler
+- `tools/derive-contract.py` — derives the ruler from the real target SDK, per language and role
+- `tools/detect-drift.py` — compares the versioned schema with the current Python SDK
+- `tools/list-gaps.py` — resources that exist in Python and not in the target SDK
+- `tools/coverage-report.py` — how far each resource is from full parity
 
 **Node.js 18+ locally, 22 in CI** — generation engine and JS tests
 - OpenAPI Generator CLI: npm wrapper `^2.41.0`, core JAR pinned to `7.0.1` in
@@ -117,15 +124,25 @@ class with correct CRUD methods and a single field. Three gates exist because of
 
 1. **`lint-spec.py`** — splits the spec into generatable resources and scaffolding; `--require`
    fails when a named resource is not generatable
-2. **`assert-generated.py`** — checks the generated artifact against a contract derived from
-   the real SDK file. Contracts are **per role** (`impl`, `barrel`, `types`), not per resource;
-   an unknown contract kind fails the parse rather than being skipped
-3. **`--strict`** — contract gaps become failures. `build-resource.py` passes it on every run
+2. **`assert-generated.py`** — checks the generated artifact against the ruler, which
+   `derive-contract.py` extracts from the real SDK file **on every run**. Rulers are per role
+   (`main`/`test` in Java, `impl`/`barrel`/`types` in Node); an unknown kind fails the parse
+   rather than being skipped. A resource with no ruler **fails** — only
+   `--allow-missing-contract` lets a genuinely new resource through
+3. **`--strict`** — ruler gaps become failures. `build-resource.py` passes it on every run
+   unless `--advisory` is given, which exists for template development and is forbidden in the
+   workflow
+4. **`detect-drift.py`** — a resource whose versioned schema no longer matches the Python SDK
+   is not generated; the run opens a spec-update PR instead, and the other resources proceed
 
-Contracts carry two levels: blocking kinds, and `todo` entries that are parsed, counted and
-announced on every run but never block. The `todo` level exists so that "0 gaps" cannot be
-read as full parity — 45 declared parity items (30 in Java `Invoice`, 15 in Node `Transfer`)
-are known gaps the generator does not reach.
+Divergence the generator cannot reach lives in `tests/waivers/<language>.waivers`: exact string,
+mandatory reason, no wildcards. A waiver that stops matching is reported so it cannot rot
+silently. Waivers apply when **filling a gap**; when the file already exists in the target SDK,
+`--substitution` disables them all — losing an item there is a regression, not a pending item.
+
+Measured on 2026-09-15 with the derived ruler: of 40 resources, 1 passes (`SplitProfile`, the
+only one absent from `sdk-java`) and 39 fail, 765 gaps in total. That is the parity debt the
+gate now makes visible.
 
 ## Spec status — read this before trusting resource counts
 

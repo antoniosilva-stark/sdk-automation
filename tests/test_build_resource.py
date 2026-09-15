@@ -1,3 +1,10 @@
+"""Testes do `build-resource`.
+
+Quem mede forma de template usa `--advisory`: a regua derivada do SDK real e exaustiva,
+entao recurso que ja existe no alvo reprova por divida de paridade, que e assunto da fase 7.
+Quem mede o pipeline roda sem a flag, e o `test_strictIsNotOptionalInTheWorkflow` garante
+que o workflow tambem.
+"""
 import yaml
 from pathlib import Path
 
@@ -192,7 +199,7 @@ NODE_ARTIFACTS = (
 @requiresGenerator
 def test_nodeProducesTheThreeArtifacts(tmpPath):
     target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
+    code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
 
     assert code == 0, out
     for relative in NODE_ARTIFACTS:
@@ -202,7 +209,7 @@ def test_nodeProducesTheThreeArtifacts(tmpPath):
 @requiresGenerator
 def test_nodeUsesTheModuleFunctionShape(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
 
     assert "exports.get = async function" in source
@@ -214,7 +221,7 @@ def test_nodeUsesTheModuleFunctionShape(tmpPath):
 @requiresGenerator
 def test_nodeAppliesCheckDatetimeOnDateFields(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
     source = (target / "sdk/transaction/transaction.js").read_text(encoding="utf-8")
 
     assert "check.datetime(created)" in source
@@ -223,7 +230,7 @@ def test_nodeAppliesCheckDatetimeOnDateFields(tmpPath):
 @requiresGenerator
 def test_nodeBarrelExportsOnlyDeclaredOperations(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
     barrel = (target / "sdk/transaction/index.js").read_text(encoding="utf-8")
 
     assert "exports.create" in barrel
@@ -236,7 +243,7 @@ def test_generatedTestAccompaniesTheResource(tmpPath):
     """Os 42 recursos do sdk-java tem TestX.java sem excecao: PR sem teste e PR incompleto,
     e e onde a intervencao humana voltaria."""
     target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
 
     assert code == 0, out
     generated = target / "src/test/java/TestInvoice.java"
@@ -252,7 +259,7 @@ def test_generatedTestAccompaniesTheResource(tmpPath):
 @requiresGenerator
 def test_generatedTestExercisesOnlyDeclaredOperations(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "DictKey", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "DictKey", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/test/java/TestDictKey.java").read_text(encoding="utf-8")
 
     assert "DictKey.query(" in source
@@ -263,7 +270,7 @@ def test_generatedTestExercisesOnlyDeclaredOperations(tmpPath):
 @requiresGenerator
 def test_bothJavaArtifactsArePlaced(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
 
     assert (target / "src/main/java/com/starkbank/Invoice.java").is_file()
     assert (target / "src/test/java/TestInvoice.java").is_file()
@@ -274,7 +281,7 @@ def test_deleteAndPdfAreEmittedWhenDeclared(tmpPath):
     """Transfer exporta delete e pdf no SDK Python, e os dois tem primitivo no Rest real:
     Rest.delete(data, id, user) e Rest.getContent(data, id, "pdf", user, ...)."""
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transfer", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Transfer", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Transfer.java").read_text(encoding="utf-8")
 
     assert "public static Transfer delete(String id)" in source
@@ -289,7 +296,7 @@ def test_deleteAndPdfAreEmittedWhenDeclared(tmpPath):
 @requiresGenerator
 def test_updateIsEmittedWhenDeclared(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public static Invoice update(String id, Map<String, Object> patchData)" in source
@@ -303,7 +310,7 @@ def test_cancelIsEmittedWhenDeclared(tmpPath):
     CorporateCard exporta update e cancel no Python, entao exercita as duas flags.
     """
     target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "CorporateCard", "--lang", "java", "--into", str(target))
+    code, out = runTool("build-resource.py", "CorporateCard", "--lang", "java", "--into", str(target), "--advisory")
 
     assert code == 0, out
     source = (target / "src/main/java/com/starkbank/CorporateCard.java").read_text(encoding="utf-8")
@@ -320,7 +327,7 @@ def test_readOnlyResourceCarriesNoDeadImport(tmpPath):
     o gate reprova os 4 por DEAD_IMPORT e a spec inteira para de gerar.
     """
     target = _target(tmpPath)
-    code, out = runTool("build-resource.py", "Balance", "--lang", "java", "--into", str(target))
+    code, out = runTool("build-resource.py", "Balance", "--lang", "java", "--into", str(target), "--advisory")
 
     assert code == 0, out
     source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")
@@ -335,7 +342,7 @@ def test_readOnlyResourceCarriesNoDeadImport(tmpPath):
 def test_withoutTheFlagNoDeadInputStreamIsEmitted(tmpPath):
     """Recurso sem pdf nao pode carregar import de InputStream — o gate reprova import morto."""
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
     assert "InputStream" not in source
@@ -347,7 +354,7 @@ def test_logIsEmittedAsInnerClassWhenDeclared(tmpPath):
     """No sdk-java o Log nao e arquivo proprio: e classe interna do recurso, com
     ClassData(Log.class, "InvoiceLog"), e o endpoint /invoice/log sai do Api.endpoint."""
     target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public final static class Log extends Resource" in source
@@ -362,7 +369,7 @@ def test_logIsEmittedAsInnerClassWhenDeclared(tmpPath):
 def test_resourceWithoutLogGetsNoInnerClass(tmpPath):
     """Transaction nao tem log/ no SDK Python — gerar Log ali seria inventar recurso."""
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
     assert "class Log" not in source
@@ -376,7 +383,7 @@ def test_pageIsEmittedWhenTheSpecDeclaresIt(tmpPath):
     saía com paginação manual.
     """
     target = _target(tmpPath)
-    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target))
+    runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target), "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public static Page page()" in source
@@ -386,7 +393,7 @@ def test_pageIsEmittedWhenTheSpecDeclaresIt(tmpPath):
 @requiresGenerator
 def test_nodeTypesUsesDeclareModule(tmpPath):
     target = _target(tmpPath)
-    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target))
+    runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target), "--advisory")
     types = (target / "types/transaction/transaction.d.ts").read_text(encoding="utf-8")
 
     assert "declare module 'starkbank'" in types
@@ -422,3 +429,83 @@ def test_nothingIsPlacedWhenTheGeneratorProducesNothing(tmpPath):
             "--into", str(target), env={"PATH": str(fakeBin)})
 
     assert list(target.rglob("*")) == []
+
+
+def test_rulerIsDerivedBeforeTheGate(buildResource):
+    """A regua vem do SDK real a cada execucao (decisao 56), nao de arquivo versionado."""
+    source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
+
+    assert "derive-contract.py" in source
+    assert source.index("deriveRuler") < source.index("def assertGenerated")
+    assert '"--contract"' in source
+
+
+def test_absentUpstreamIsTheOnlyWayToSkipTheRuler(buildResource):
+    """Recurso novo dispensa regua; referencia quebrada tem de abortar (exit 2 do derivador)."""
+    source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
+
+    assert "EXIT_ABSENT_UPSTREAM" in source
+    assert "--allow-missing-contract" in source
+
+
+def test_strictIsNotOptionalInTheWorkflow():
+    """O `--advisory` existe para medir template; no pipeline ele reabriria a PR #5."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "build-resource.py" in workflow
+    assert "--advisory" not in workflow
+
+
+@requiresGenerator
+def test_substitutionIsAnnouncedAsSuch(tmpPath):
+    """Preencher lacuna e sobrescrever producao sao riscos diferentes e tem de aparecer diferentes."""
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java",
+                        "--into", str(target), "--advisory")
+
+    assert code == 0, out
+    assert "SUBSTITUI" in out
+
+
+@requiresGenerator
+def test_gapFillingIsAnnouncedAsSuch(tmpPath):
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+
+    assert code == 0, out
+    assert "preenche a lacuna" in out
+
+
+@requiresGenerator
+def test_referenceShaIsRecordedInTheRun(tmpPath):
+    """Decisao 59: sem o SHA da referencia, "passou ontem e reprova hoje" nao e diagnosticavel."""
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+
+    assert code == 0, out
+    assert "sdk-java @" in out
+
+
+@requiresGenerator
+def test_subResourceIsImportedNotQualifiedInline(tmpPath):
+    """37 de 37 arquivos do sdk-java importam: o nome qualificado inline era divergencia em todo recurso."""
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java",
+                        "--into", str(target), "--advisory")
+    assert code == 0, out
+
+    source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
+    assert "import com.starkcore.utils.SubResource;" in source
+    assert "for (SubResource " in source
+    assert "for (com.starkcore.utils.SubResource" not in source
+
+
+@requiresGenerator
+def test_resourceWithoutPageDoesNotImportSubResource(tmpPath):
+    target = _target(tmpPath)
+    code, out = runTool("build-resource.py", "Balance", "--lang", "java",
+                        "--into", str(target), "--advisory")
+    assert code == 0, out
+
+    source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")
+    assert "SubResource" not in source

@@ -26,8 +26,8 @@ field public String status;
 field public String created;
 field public String updated;
 
-todo signature public static List<SplitProfile> put(List<?> splitProfiles)
-todo signature public static List<SplitProfile> put(List<?> splitProfiles, User user)
+signature public static List<SplitProfile> put(List<?> splitProfiles)
+signature public static List<SplitProfile> put(List<?> splitProfiles, User user)
 
 inner public final static class Log
 signature public static Log get(String id)
@@ -37,4 +37,4 @@ signature public static Generator<Log> query(Map<String, Object> params)
 signature public static Log.Page page()
 signature public static Log.Page page(Map<String, Object> params)
 
-todo field public String[] tags;  # gerado: public List<String> tags;
+field public String[] tags;

@@ -1,3 +1,4 @@
+import ast
 import shutil
 from pathlib import Path
 
@@ -112,3 +113,28 @@ def test_skipReasonNamesTheDependency():
         assert shutil.which("npx")
         return
     assert "npx" in GENERATOR_SKIP or "JRE" in GENERATOR_SKIP
+
+def test_everyBuildResourceCallIsGuardedByTheGeneratorMark():
+    """Teste que espera o build chegar ao gerador precisa do marcador: sem JRE ele reprova
+    enquanto as irmas dele pulam. Quem aborta antes de gerar — linguagem invalida, destino
+    ausente, lint reprovado — nao precisa.
+    """
+    source = (REPO_ROOT / "tests/test_build_resource.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lines = source.splitlines()
+
+    desguardados = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        body = "\n".join(lines[node.lineno - 1:node.end_lineno])
+        if 'runTool("build-resource.py"' not in body:
+            continue
+        chegaAoGerador = "assert code == 0" in body or "read_text" in body
+        if not chegaAoGerador:
+            continue
+        marks = {decorator.id for decorator in node.decorator_list if isinstance(decorator, ast.Name)}
+        if "requiresGenerator" not in marks:
+            desguardados.append(node.name)
+
+    assert desguardados == [], f"chamam o gerador sem @requiresGenerator: {desguardados}"

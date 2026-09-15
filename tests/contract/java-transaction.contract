@@ -32,7 +32,7 @@ field public String created;
 
 field public Long balance;
 
-todo field public long amount;  # gerado: public Long amount; (primitivo nao alcancavel)
-todo field public String[] tags;  # gerado: public List<String> tags;
+field public long amount;
+field public String[] tags;
 
-todo constructor public Transaction(long amount, String description, String externalId, String receiverId, String senderId, ...)
+constructor public Transaction(long amount, String description, String externalId, String receiverId, String senderId, String[] tags, int fee, String created, String source, Long balance, String id)

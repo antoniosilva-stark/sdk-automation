@@ -1,3 +1,4 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/workspace/__workspace.py
 components:
   schemas:
     Workspace:

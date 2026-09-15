@@ -4,6 +4,7 @@ import ast
 import sys
 import yaml
 import argparse
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -281,11 +282,21 @@ def yamlScalar(text: str) -> str:
     return f'"{escaped}"'
 
 
-def buildDocument(resource: str, summary: str, fields: list[dict]) -> str:
+def provenance(root: Path, source: Path) -> str:
+    """Fica em comentário de propósito: SHA dentro do YAML faria todo commit upstream
+    virar defasagem falsa na comparação semântica."""
+    result = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+                            capture_output=True, text=True)
+    sha = result.stdout.strip() if result.returncode == 0 else "desconhecido"
+    return f"# fonte: starkbank/sdk-python@{sha} · {source.relative_to(root)}"
+
+
+def buildDocument(resource: str, summary: str, fields: list[dict], header: str | None = None) -> str:
     readFields = orderFields(fields)
     createFields = [f for f in fields if f["section"] != SECTION_READONLY]
 
-    lines = ["components:", "  schemas:"]
+    lines = [header] if header else []
+    lines += ["components:", "  schemas:"]
     lines.extend(renderSchema(resource, summary, readFields, 4))
     lines.append("")
     lines.extend(renderSchema(f"{resource}Create", f"{resource} creation request", createFields, 4))
@@ -385,7 +396,7 @@ def main() -> int:
     if unknown:
         emit(f"[WARN] documentados mas ausentes no __init__: {', '.join(unknown)}")
 
-    document = buildDocument(args.resource, summary, fields)
+    document = buildDocument(args.resource, summary, fields, provenance(root, source))
     if args.out:
         Path(args.out).write_text(document, encoding="utf-8")
         emit(f"[OK] {args.resource}: {len(fields)} campo(s) → {args.out}")

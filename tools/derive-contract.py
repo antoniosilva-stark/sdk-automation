@@ -2,11 +2,13 @@ import os
 import re
 import sys
 import argparse
+import subprocess
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REFERENCES = Path("_references")
+EXIT_ABSENT_UPSTREAM = 3
 
 MARKERS = {
     "java": "src/main/java/com/starkbank",
@@ -44,9 +46,10 @@ def referenceRepo(language: str, explicit: str | None = None) -> Path | None:
     marker = MARKERS[language]
     fromEnv = os.environ.get(f"SDK_{language.upper()}")
 
-    candidates = [Path(explicit)] if explicit else []
-    candidates += [Path(fromEnv)] if fromEnv else []
-    candidates += [REFERENCES / f"sdk-{language}"]
+    if explicit:
+        candidates = [Path(explicit)]
+    else:
+        candidates = ([Path(fromEnv)] if fromEnv else []) + [REFERENCES / f"sdk-{language}"]
 
     for candidate in candidates:
         if (candidate / marker).is_dir():
@@ -131,8 +134,16 @@ EXTRACTORS = {
 }
 
 
-def render(resource: str, language: str, role: str, relative: str, entries: list[tuple[str, str]]) -> str:
-    lines = [f"# source:    {relative}", f"# derived:   {resource} ({language}, papel {role})", ""]
+def repoSha(repo: Path) -> str:
+    result = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+                            capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else "desconhecido"
+
+
+def render(resource: str, language: str, role: str, relative: str,
+           entries: list[tuple[str, str]], sha: str = "desconhecido") -> str:
+    lines = [f"# source:    {relative}", f"# sha:       starkbank/sdk-{language}@{sha}",
+             f"# derived:   {resource} ({language}, papel {role})", ""]
     for kind, value in entries:
         padding = " " * max(1, 12 - len(kind))
         lines.append(f"{kind}{padding}{value}" if kind == "field" and value.startswith("static") else f"{kind} {value}")
@@ -163,15 +174,15 @@ def main() -> int:
         emit(f"[ERROR] papel sem layout em {args.lang}: {args.role}")
         return 2
     if not source.is_file():
-        emit(f"[ERROR] arquivo real não encontrado: {source}")
-        return 2
+        emit(f"[INFO] {args.resource} não existe em {source} — recurso novo neste SDK")
+        return EXIT_ABSENT_UPSTREAM
 
     entries = EXTRACTORS[args.lang](source.read_text(encoding="utf-8"))
     if not entries:
         emit(f"[ERROR] nada extraído de {source}")
         return 1
 
-    document = render(args.resource, args.lang, args.role, str(source), entries)
+    document = render(args.resource, args.lang, args.role, str(source), entries, repoSha(repo))
     if args.out:
         Path(args.out).write_text(document, encoding="utf-8")
         emit(f"[OK] {args.resource}: {len(entries)} entrada(s) → {args.out}")
