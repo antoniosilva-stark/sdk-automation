@@ -28,7 +28,7 @@ components:
           description: "list of strings for tagging"
         scheduled:
           type: string
-          format: date
+          format: date-time
           description: "payment scheduled date or datetime. ex: datetime.datetime(2020, 3, 10, 15, 17, 3)"
         status:
           type: string

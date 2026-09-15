@@ -74,6 +74,7 @@ components:
           description: "fee charged by the merchant to cover specific costs, such as ATM withdrawal logistics, etc. ex: 200 (= R$ 2.00)"
         methodCode:
           type: string
+          enum: ['chip', 'token', 'server', 'manual', 'magstripe', 'contactless']
           description: "method code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\" or \"contactless\""
         tags:
           type: array
@@ -87,6 +88,7 @@ components:
           description: "ledger transaction ids linked to this Purchase"
         status:
           type: string
+          enum: ['approved', 'canceled', 'denied', 'confirmed', 'voided']
           description: "current CorporateCard status. Options: \"approved\", \"canceled\", \"denied\", \"confirmed\", \"voided\""
         updated:
           type: string

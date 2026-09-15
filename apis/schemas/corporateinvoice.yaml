@@ -32,6 +32,7 @@ components:
           description: "Invoice due and expiration date in UTC ISO format. ex: \"2020-10-28T17:59:26.249976+00:00\""
         link:
           type: string
+          format: uri
           description: "public Invoice webpage URL. ex: \"https://starkbank-card-issuer.development.starkbank.com/invoicelink/d7f6546e194d4c64a153e8f79f1c41ac\""
         status:
           type: string

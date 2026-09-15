@@ -5,3 +5,7 @@ integerFormats:
   fineAmount: int64
   interestAmount: int64
   discountAmount: int64
+
+stringFormats:
+  pdf: uri
+  link: uri

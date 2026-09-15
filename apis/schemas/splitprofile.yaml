@@ -10,6 +10,7 @@ components:
           description: "unique id returned when the splitProfile is created. ex: \"5656565656565656\""
         interval:
           type: string
+          enum: ['day', 'week', 'month']
           description: "frequency of transfer, default \"week\". Options: \"day\", \"week\", \"month\""
         delay:
           type: integer
@@ -44,6 +45,7 @@ components:
       properties:
         interval:
           type: string
+          enum: ['day', 'week', 'month']
           description: "frequency of transfer, default \"week\". Options: \"day\", \"week\", \"month\""
         delay:
           type: integer

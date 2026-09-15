@@ -14,15 +14,18 @@ components:
           description: "subscription start date. ex: \"2022-04-01\""
         interval:
           type: string
+          enum: ['week', 'month', 'quarter', 'semester', 'year']
           description: "subscription installment interval. Options: \"week\", \"month\", \"quarter\", \"semester\", \"year\""
         pullMode:
           type: string
+          enum: ['manual', 'automatic']
           description: "subscription pull mode. Options: \"manual\", \"automatic\". Automatic mode will create the Invoice Pull Requests automatically"
         pullRetryLimit:
           type: integer
           description: "subscription pull retry limit. Options: 0, 3"
         type:
           type: string
+          enum: ['push', 'qrcode', 'qrcodeAndPayment', 'paymentAndOrQrcode']
           description: "subscription type. Options: \"push\", \"qrcode\", \"qrcodeAndPayment\", \"paymentAndOrQrcode\""
         amount:
           type: integer
@@ -101,15 +104,18 @@ components:
           description: "subscription start date. ex: \"2022-04-01\""
         interval:
           type: string
+          enum: ['week', 'month', 'quarter', 'semester', 'year']
           description: "subscription installment interval. Options: \"week\", \"month\", \"quarter\", \"semester\", \"year\""
         pullMode:
           type: string
+          enum: ['manual', 'automatic']
           description: "subscription pull mode. Options: \"manual\", \"automatic\". Automatic mode will create the Invoice Pull Requests automatically"
         pullRetryLimit:
           type: integer
           description: "subscription pull retry limit. Options: 0, 3"
         type:
           type: string
+          enum: ['push', 'qrcode', 'qrcodeAndPayment', 'paymentAndOrQrcode']
           description: "subscription type. Options: \"push\", \"qrcode\", \"qrcodeAndPayment\", \"paymentAndOrQrcode\""
         amount:
           type: integer

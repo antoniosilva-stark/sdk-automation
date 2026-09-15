@@ -12,7 +12,7 @@ components:
           type: string
           description: "target cost center ID. ex: \"5656565656565656\""
         payment:
-          type: string
+          type: object
           description: "payment entity that should be approved and executed."
         type:
           type: string
@@ -68,7 +68,7 @@ components:
           type: string
           description: "target cost center ID. ex: \"5656565656565656\""
         payment:
-          type: string
+          type: object
           description: "payment entity that should be approved and executed."
         type:
           type: string

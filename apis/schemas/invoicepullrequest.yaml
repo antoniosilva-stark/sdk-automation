@@ -20,6 +20,7 @@ components:
           description: "payment scheduled date in UTC ISO format. ex: \"2023-10-28T17:59:26.249976+00:00\""
         attemptType:
           type: string
+          enum: ['default', 'retry']
           description: "attempt type for the payment. Options: \"default\", \"retry\"."
         tags:
           type: array
@@ -72,6 +73,7 @@ components:
           description: "payment scheduled date in UTC ISO format. ex: \"2023-10-28T17:59:26.249976+00:00\""
         attemptType:
           type: string
+          enum: ['default', 'retry']
           description: "attempt type for the payment. Options: \"default\", \"retry\"."
         tags:
           type: array

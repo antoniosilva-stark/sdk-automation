@@ -31,6 +31,7 @@ _SECTIONS = {
 }
 
 _FIELD = re.compile(r"^-\s+(\w+)\s+\[(.+)\]\s*:\s*(.*)$")
+_OPTIONS = re.compile(r"Options:\s*(.+)$")
 
 OPERATION_FLAGS = {
     "create": "x-sdk-create",
@@ -49,7 +50,7 @@ TYPES = {
     "int": {"type": "integer"},
     "long": {"type": "integer"},
     "number": {"type": "number"},
-    "float": {"type": "number"},
+    "float": {"type": "number", "format": "float"},
     "string": {"type": "string"},
     "str": {"type": "string"},
     "boolean": {"type": "boolean"},
@@ -78,6 +79,25 @@ def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | Non
         return None
     table = loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
     return (table.get("integerFormats") or {}).get(field)
+
+
+def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
+    if not Path(conventions).is_file():
+        return None
+    table = loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
+    return (table.get("stringFormats") or {}).get(field)
+
+
+def declaredOptions(description: str) -> list[str]:
+    """`Options:` e dominio fechado; `ex:` e exemplo.
+
+    Tratar exemplo como enum foi o que produziu `accountType: [checking, savings]` a mao,
+    que rejeita `salary` e `payment` — valores que a API aceita.
+    """
+    match = _OPTIONS.search(description)
+    if not match:
+        return []
+    return re.findall(r'"([^"]+)"', match.group(1))
 
 
 def camelCase(name: str) -> str:
@@ -234,17 +254,32 @@ def reconcileRequired(fields: list[dict], defaults: dict[str, bool]) -> list[str
     return corrigidos
 
 
+def typeAlternatives(raw: str) -> list[str]:
+    """Alternativas separadas por virgula e por `or`, sem a clausula `default`.
+
+    `scheduled [datetime.date, datetime.datetime or string, default now]` tem tres
+    alternativas: cortar na primeira virgula perdia `datetime.datetime`.
+    """
+    parts = []
+    for chunk in raw.strip().split(","):
+        parts.extend(piece.strip() for piece in chunk.split(" or "))
+    return [part for part in parts if part and not part.lower().startswith("default")]
+
+
 def parseType(raw: str) -> dict:
-    """Uniao no docstring vale a alternativa que o SDK sabe expressar.
+    """Uniao vale a alternativa que o SDK sabe expressar, e a mais ampla entre elas.
 
     `delay [DateInterval or integer]` resolvia para `DateInterval`, desconhecido, e o campo
     virava string — regredindo um integer ja declarado na spec.
     """
-    for text in [part.strip() for part in raw.strip().split(",")[0].split(" or ")]:
-        resolved = resolveType(text)
-        if resolved:
-            return resolved
-    return {"type": "string"}
+    resolved = [schema for schema in map(resolveType, typeAlternatives(raw)) if schema]
+    if not resolved:
+        return {"type": "string"}
+
+    for schema in resolved:
+        if schema.get("format") == "date-time":
+            return schema
+    return resolved[0]
 
 
 def parseDocstring(doc: str) -> tuple[str, list[dict]]:
@@ -270,6 +305,14 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
                 fmt = integerFormat(name)
                 if fmt:
                     schema["format"] = fmt
+
+            options = declaredOptions(match.group(3))
+            if options and schema.get("type") == "string":
+                schema["enum"] = options
+
+            stringFmt = stringFormat(name)
+            if stringFmt and schema.get("type") == "string" and "format" not in schema:
+                schema["format"] = stringFmt
 
             fields.append(
                 {

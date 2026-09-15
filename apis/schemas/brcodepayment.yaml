@@ -23,7 +23,7 @@ components:
           description: "If the BRCode does not provide an amount, this parameter is mandatory, else it is optional. ex: 23456 (= R$ 234.56)"
         scheduled:
           type: string
-          format: date
+          format: date-time
           description: "payment scheduled date or datetime. ex: datetime.datetime(2020, 3, 10, 15, 17, 3)"
         tags:
           type: array
@@ -92,7 +92,7 @@ components:
           description: "If the BRCode does not provide an amount, this parameter is mandatory, else it is optional. ex: 23456 (= R$ 234.56)"
         scheduled:
           type: string
-          format: date
+          format: date-time
           description: "payment scheduled date or datetime. ex: datetime.datetime(2020, 3, 10, 15, 17, 3)"
         tags:
           type: array

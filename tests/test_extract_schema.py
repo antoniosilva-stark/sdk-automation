@@ -84,7 +84,7 @@ def test_modulePath(extractSchema):
 def test_parseTypeMapsBasicTypes(extractSchema):
     assert extractSchema.parseType("integer") == {"type": "integer"}
     assert extractSchema.parseType("string") == {"type": "string"}
-    assert extractSchema.parseType("float") == {"type": "number"}
+    assert extractSchema.parseType("float") == {"type": "number", "format": "float"}
     assert extractSchema.parseType("boolean") == {"type": "boolean"}
     assert extractSchema.parseType("datetime.datetime") == {"type": "string", "format": "date-time"}
 
@@ -585,3 +585,48 @@ def test_defaultedParameterStaysOptional():
 
     schemas = yaml.safe_load(out)["components"]["schemas"]
     assert "tags" not in (schemas["SplitProfileCreate"].get("required") or [])
+
+
+def test_typeAlternativesSeparatedByCommaAreConsidered(extractSchema):
+    """`scheduled [datetime.date, datetime.datetime or string, default now]`: cortar na
+    primeira virgula perdia `datetime.datetime` e estreitava o campo para `date`.
+    """
+    resolved = extractSchema.parseType("datetime.date, datetime.datetime or string, default now")
+
+    assert resolved == {"type": "string", "format": "date-time"}
+
+
+def test_dateTimeWinsOverDateWhenBothAreAccepted(extractSchema):
+    """O codigo usa `check_datetime_or_date`, que a propria tabela ja mapeia para date-time:
+    aceitar os dois e gravar `date` perde a hora.
+    """
+    assert extractSchema.parseType("datetime.date or datetime.datetime")["format"] == "date-time"
+    assert extractSchema.parseType("datetime.date")["format"] == "date"
+
+
+def test_defaultClauseIsNotATypeAlternative(extractSchema):
+    assert extractSchema.parseType("list of strings, default []") == {
+        "type": "array", "items": {"type": "string"}}
+
+
+def test_floatCarriesItsFormat(extractSchema):
+    """`Invoice.fine [float]` virava `number` pelado; a spec a mao trazia format float."""
+    assert extractSchema.parseType("float") == {"type": "number", "format": "float"}
+
+
+def test_optionsBecomeAnEnum(extractSchema):
+    """`Options:` no docstring e lista exaustiva — 16 campos no sdk-python trazem."""
+    doc = '- interval [string]: frequency, default "week". Options: "day", "week", "month"'
+    _, fields = extractSchema.parseDocstring("## Parameters (optional):\n" + doc)
+
+    assert fields[0]["schema"]["enum"] == ["day", "week", "month"]
+
+
+def test_exampleNeverBecomesAnEnum(extractSchema):
+    """`ex:` e exemplo, nao dominio. O enum a mao de `Transfer.accountType` listava
+    [checking, savings] e a API aceita salary e payment: enum inventado rejeita valor valido.
+    """
+    doc = '- status [string]: current transfer status. ex: "success" or "failed"'
+    _, fields = extractSchema.parseDocstring("## Attributes (return-only):\n" + doc)
+
+    assert "enum" not in fields[0]["schema"]

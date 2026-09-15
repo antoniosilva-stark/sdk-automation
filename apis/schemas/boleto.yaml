@@ -42,9 +42,11 @@ components:
           description: "Boleto due date in ISO format. ex: 2020-04-30"
         fine:
           type: number
+          format: float
           description: "Boleto fine for overdue payment in %. ex: 2.5"
         interest:
           type: number
+          format: float
           description: "Boleto monthly interest for overdue payment in %. ex: 5.2"
         overdueLimit:
           type: integer
@@ -155,9 +157,11 @@ components:
           description: "Boleto due date in ISO format. ex: 2020-04-30"
         fine:
           type: number
+          format: float
           description: "Boleto fine for overdue payment in %. ex: 2.5"
         interest:
           type: number
+          format: float
           description: "Boleto monthly interest for overdue payment in %. ex: 5.2"
         overdueLimit:
           type: integer

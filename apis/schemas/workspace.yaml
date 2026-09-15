@@ -21,6 +21,7 @@ components:
           description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
         status:
           type: string
+          enum: ['active', 'closed', 'frozen', 'blocked']
           description: "current Workspace status. Options: \"active\", \"closed\", \"frozen\" or \"blocked\""
         organizationId:
           type: string

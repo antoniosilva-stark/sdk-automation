@@ -7,6 +7,7 @@ components:
       properties:
         code:
           type: string
+          enum: ['chip', 'token', 'server', 'manual', 'magstripe', 'contactless']
           description: "method's code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\", \"contactless\""
         name:
           type: string
@@ -25,6 +26,7 @@ components:
       properties:
         code:
           type: string
+          enum: ['chip', 'token', 'server', 'manual', 'magstripe', 'contactless']
           description: "method's code. Options: \"chip\", \"token\", \"server\", \"manual\", \"magstripe\", \"contactless\""
       required:
         - code
