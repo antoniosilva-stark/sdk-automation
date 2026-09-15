@@ -344,7 +344,7 @@ def test_waiverNeedsAReason(assertGenerated, tmpPath):
 
 
 def test_waiverRejectsWildcard(assertGenerated, tmpPath):
-    """Curinga vira supressao em bloco: dispensa e string exata (decisao 57)."""
+    """Curinga vira supressao em bloco: dispensa e string exata."""
     waivers = _write(tmpPath, "java.waivers", "[widget/main]\nfield public * status;  # motivo\n")
 
     with pytest.raises(ValueError, match="curinga"):
@@ -446,7 +446,7 @@ def test_roleWithoutOwnContractFallsBack(assertGenerated):
 
 
 def test_missingRulerBlocks(tmpPath):
-    """Foi esta linha que deixou a PR #5 sobrescrever producao: `Deposit` nao tinha regua."""
+    """Foi esta linha que deixou a PR que sobrescreveu produção sobrescrever producao: `Deposit` nao tinha regua."""
     target = _write(tmpPath, "Inexistente.java", CLEAN_JAVA)
     code, out = runTool("assert-generated.py", str(target), "--strict")
 
@@ -487,7 +487,7 @@ def test_buildResourcePassesStrictAndRole(buildResource, tmpPath):
 
 def test_waiverDoesNotApplyWhenSubstitutingProduction(tmpPath):
     """Dispensa diz "o gerado pode nao ter isto" — aceitavel em arquivo novo, regressao em
-    arquivo que ja existe. Foi exatamente o que a PR #5 fez com o `Deposit`.
+    arquivo que ja existe. Foi exatamente o que a PR que sobrescreveu produção fez com o `Deposit`.
     """
     target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
     contract = _write(tmpPath, "widget.contract", "declaration public final class Widget extends Resource\n")

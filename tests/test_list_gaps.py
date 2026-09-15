@@ -110,7 +110,7 @@ def test_invalidRootReturnsTwo(tmpPath):
 @requiresPythonSdk
 @requiresJavaSdk
 def test_realGapIsOnlySplitProfile():
-    """Se devolver mais que isto, a premissa do gap unico caiu e o plano da Entrega 6 muda."""
+    """Se devolver mais que isto, a premissa do gap unico caiu e o plano muda."""
     code, out = runTool("list-gaps.py", "--json")
     assert code == 0, out
 

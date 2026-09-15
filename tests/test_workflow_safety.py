@@ -287,7 +287,7 @@ def test_whoeverRunsTestsResolvesTheReferenceFirst():
 def test_whoeverBuildsResolvesTheReferenceFirst():
     """A regua e derivada do SDK real a cada execucao: sem a referencia nao ha o que medir.
 
-    Roda antes do token do App de proposito (decisao 29): os SDKs sao publicos.
+    Roda antes do token do App de proposito: os SDKs sao publicos.
     """
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))

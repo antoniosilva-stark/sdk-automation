@@ -1,12 +1,9 @@
 .PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref refresh-sdk-ref reference
 
-# Reference clones live in _references/, created by `make clone-sdk-ref`.
-# Point SDK_PYTHON / SDK_JAVA at your own clone to override.
 BC_BASE ?= origin/development
 SDK_PYTHON ?=
 SDK_JAVA ?=
 
-# Colors for output
 GREEN := \033[0;32m
 RED := \033[0;31m
 BLUE := \033[0;34m

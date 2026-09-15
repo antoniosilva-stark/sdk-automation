@@ -20,7 +20,7 @@ describe('OpenAPI Specification Tests', () => {
       const schemas = new Set(Object.keys(spec.components.schemas));
       for (const route of paths) {
         const resource = route.replace('/{id}', '').replace(/^\//, '').split(/[-_]/)
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
         const known = [...schemas].some((name) => name.toLowerCase() === resource.toLowerCase());
         expect(known).toBe(true);
       }
@@ -69,7 +69,7 @@ describe('OpenAPI Specification Tests', () => {
 
     test('should keep not yet applied resources inline', () => {
       const stubs = Object.entries(spec.components.schemas)
-        .filter(([name, schema]) => !name.endsWith('Create') && !schema.$ref);
+.filter(([name, schema]) => !name.endsWith('Create') && !schema.$ref);
 
       expect(stubs.length).toBeGreaterThan(0);
 
@@ -103,10 +103,6 @@ describe('OpenAPI Specification Tests', () => {
       }
     });
 
-    // Quem BLOQUEIA breaking change e o validate-spec.yaml na PR, onde existe aprovacao
-    // humana (governance.md). Aqui so se verifica que o detector roda e da um veredito
-    // legivel: exigir "zero BC" desta branch deixaria `make test` vermelho ate o merge,
-    // trocando uma decisao de governanca por uma suite quebrada.
     test('breaking change detector gives a legible verdict against the default branch', () => {
       let output;
       let detected = false;

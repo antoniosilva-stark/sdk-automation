@@ -173,7 +173,7 @@ def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(builtOnce):
     """`Rest.java` do sdk-java @ c7f40b8 nao tem `put` de entidade — so `patch` e `putRaw`.
 
     Gerar `put` produzia arquivo que nao compila, e o alvo nao tem CI para pegar.
-    Decisao 43: piloto sai com get/query/page; `put` fica como `todo` no contrato.
+    piloto sai com get/query/page; `put` fica como `todo` no contrato.
     `page` continua, porque `Rest.getPage` existe (Rest.java:100).
     """
     code, out, target = builtOnce("SplitProfile", "java")
@@ -423,7 +423,7 @@ def test_nothingIsPlacedWhenTheGeneratorProducesNothing(tmpPath):
 
 
 def test_rulerIsDerivedBeforeTheGate(buildResource):
-    """A regua vem do SDK real a cada execucao (decisao 56), nao de arquivo versionado."""
+    """A regua vem do SDK real a cada execucao, nao de arquivo versionado."""
     source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
 
     assert "derive-contract.py" in source
@@ -440,7 +440,7 @@ def test_absentUpstreamIsTheOnlyWayToSkipTheRuler(buildResource):
 
 
 def test_strictIsNotOptionalInTheWorkflow():
-    """O `--advisory` existe para medir template; no pipeline ele reabriria a PR #5."""
+    """O `--advisory` existe para medir template; no pipeline ele reabriria a PR que sobrescreveu produção."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "build-resource.py" in workflow

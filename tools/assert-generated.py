@@ -381,7 +381,7 @@ def main() -> int:
         for gap in gaps[:5]:
             emit(f"  {gap.message}")
         if len(gaps) > 5:
-            emit(f"  ... e mais {len(gaps) - 5}")
+            emit(f"... e mais {len(gaps) - 5}")
 
     emit(f"[OK] {target} sem problemas bloqueantes")
     return 0

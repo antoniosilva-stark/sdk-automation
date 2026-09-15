@@ -90,7 +90,7 @@ def test_newTemplateSectionEntersTheReportOnItsOwn(coverageReport, tmpPath):
 
 @requiresPythonSdk
 def test_realReachMeetsTheDeliveryTarget():
-    """Meta da Fase 7: >= 35 de 41, com o restante nomeado."""
+    """Meta: >= 35 de 41, com o restante nomeado."""
     code, out = runTool("coverage-report.py", "--json")
     assert code == 0, out
 

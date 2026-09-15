@@ -444,14 +444,14 @@ def test_approvalWithWildcardIsRejected(detector, tmpPath):
 
 
 def test_approvalsAreAppliedEndToEnd(tmpPath):
-    """O caminho completo: aprovar a remocao do POST /split_profile (decisao 43) tira ela
+    """O caminho completo: aprovar a remocao do POST /split_profile tira ela
     da lista bloqueante e a anuncia com quem aprovou.
     """
     approvals = tmpPath / "approvals.yaml"
     approvals.write_text(
         'approvals:\n'
         '  - signature: "removed_operation /split_profile post"\n'
-        '    reason: "Rest.put nao existe no sdk-java @ c7f40b8 — decisao 43"\n'
+        '    reason: "Rest.put nao existe no sdk-java @ c7f40b8"\n'
         '    approvedBy: "elias"\n'
         '    date: "2026-09-15"\n',
         encoding="utf-8")

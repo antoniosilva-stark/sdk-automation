@@ -404,7 +404,7 @@ def test_missingRootSaysItDoesNotExist(tmpPath):
 def test_defaultRootIsTheVendoredClone(extractSchema, monkeypatch):
     """O clone em _references/ e a referencia canonica, feita pelo setup do projeto.
 
-    Substitui a decisao 21 do plano 4.3, que fixava o checkout local de uma pessoa:
+    Substitui a do plano 4.3, que fixava o checkout local de uma pessoa:
     ninguem mais na equipe organiza os repos daquele jeito.
     """
     monkeypatch.delenv("SDK_PYTHON", raising=False)

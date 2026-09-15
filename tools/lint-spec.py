@@ -207,7 +207,7 @@ def reportInventory(reports: list[ResourceReport]) -> None:
     for report in scaffolding[:5]:
         emit(f"  {report.name} — {report.reasons[0][1]}")
     if len(scaffolding) > 5:
-        emit(f"  ... e mais {len(scaffolding) - 5}")
+        emit(f"... e mais {len(scaffolding) - 5}")
 
 
 def requiredIssues(reports: list[ResourceReport], required: set[str], specPath: Path) -> list[Issue]:

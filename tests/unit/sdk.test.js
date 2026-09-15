@@ -84,7 +84,7 @@ describe('SDK Generation Tests', () => {
     test('all generator configs should use same input spec', () => {
       const configDir = path.join(__dirname, '../../tools');
       const configFiles = fs.readdirSync(configDir)
-        .filter(f => f.startsWith('generator-') && f.endsWith('-config.yaml'));
+.filter(f => f.startsWith('generator-') && f.endsWith('-config.yaml'));
 
       const YAML = require('js-yaml');
       const inputSpecs = new Set();
@@ -102,7 +102,7 @@ describe('SDK Generation Tests', () => {
     test('all generator configs should have consistent version', () => {
       const configDir = path.join(__dirname, '../../tools');
       const configFiles = fs.readdirSync(configDir)
-        .filter(f => f.startsWith('generator-') && f.endsWith('-config.yaml'));
+.filter(f => f.startsWith('generator-') && f.endsWith('-config.yaml'));
 
       const YAML = require('js-yaml');
       const versions = new Set();

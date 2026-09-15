@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const YAML = require('js-yaml');
 
-describe('Java SplitProfile Pilot (Entrega 4)', () => {
+describe('Java SplitProfile Pilot', () => {
 
   describe('Template & Config', () => {
     test('should have the custom Java model template', () => {

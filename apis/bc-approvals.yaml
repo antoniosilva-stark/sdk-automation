@@ -1,13 +1,1 @@
-# Aprovações de breaking change, exigidas pelo governance.md.
-#
-# Cada entrada exige assinatura exata, motivo e quem aprovou. Curinga é recusado no parse.
-# A assinatura é a que o detector imprime: `<tipo> <schema>.<campo>` ou `<tipo> <path> <método>`.
-# Aprovação que deixa de casar com algum achado é reportada, para não apodrecer.
-#
-# approvals:
-#   - signature: "removed_operation /split_profile post"
-#     reason: "Rest.put nao existe no sdk-java @ c7f40b8 — decisao 43"
-#     approvedBy: "elias"
-#     date: "2026-09-15"
-
 approvals: []

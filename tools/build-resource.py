@@ -294,7 +294,7 @@ def main() -> int:
         if code == EXIT_ABSENT_UPSTREAM:
             absent += 1
         elif code != 0:
-            emit(f"[ERROR] régua de {run['role']} não derivada — sem régua não se gera (decisão 55)")
+            emit(f"[ERROR] régua de {run['role']} não derivada — sem régua não se gera")
             return 1
         rulers[run["role"]] = ruler
 
