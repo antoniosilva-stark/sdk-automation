@@ -13,6 +13,7 @@ except ImportError:
     from yaml import SafeLoader
 
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
+APPROVALS_FILE = "apis/bc-approvals.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 
 RULE_OPERATION = "removes operation"
@@ -20,6 +21,7 @@ RULE_SCHEMA = "removes schema"
 RULE_PARAM = "removes required param"
 RULE_TYPE = "type changes"
 RULE_REQUIRED = "required field added"
+RULE_REQUIRED_GONE = "removes required field"
 
 SHAPE_KEYS = ("type", "format", "items", "enum")
 
@@ -187,14 +189,55 @@ def changedTypes(current: dict, previous: dict) -> list[dict]:
     return findings
 
 
-def addedRequiredFields(current: dict, previous: dict) -> list[dict]:
+def collectRefs(node, found: set) -> None:
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+            found.add(ref.rsplit("/", 1)[-1])
+        for value in node.values():
+            collectRefs(value, found)
+        return
+    if isinstance(node, list):
+        for value in node:
+            collectRefs(value, found)
+
+
+def requestSchemas(spec: dict | None) -> set:
+    """Schemas alcancados por `requestBody`. Quem so aparece em `responses` e resposta.
+
+    O sufixo `Create` seria convencao nossa; o `paths` e a fonte.
+    """
+    found = set()
+    for path in ((spec or {}).get("paths") or {}).values():
+        for operation in (path or {}).values():
+            if isinstance(operation, dict) and operation.get("requestBody"):
+                collectRefs(operation["requestBody"], found)
+    return found
+
+
+def changedRequiredFields(current: dict, previous: dict, requests: set) -> list[dict]:
+    """Exigir campo novo quebra quem *envia*; deixar de garantir quebra quem *le*.
+
+    Acrescentar `required` numa resposta e promessa mais forte do servidor: nao quebra
+    ninguem. Tratar os dois casos como iguais produzia 181 alarmes falsos de 240.
+    """
     findings = []
     for name in sorted(set(previous) & set(current)):
         before = set((previous[name] or {}).get("required") or [])
         after = set((current[name] or {}).get("required") or [])
-        for field in sorted(after - before):
-            findings.append({"type": "required_field_added", "severity": "MAJOR",
-                             "rule": RULE_REQUIRED, "schema": name, "field": field})
+
+        if name in requests:
+            for field in sorted(after - before):
+                findings.append({"type": "required_field_added", "severity": "MAJOR",
+                                 "rule": RULE_REQUIRED, "schema": name, "field": field})
+            continue
+
+        surviving = (current[name] or {}).get("properties") or {}
+        for field in sorted(before - after):
+            if field not in surviving:
+                continue
+            findings.append({"type": "required_field_removed", "severity": "MAJOR",
+                             "rule": RULE_REQUIRED_GONE, "schema": name, "field": field})
     return findings
 
 
@@ -208,6 +251,7 @@ def detectBreakingChanges(current: dict, previous: dict | None,
     prevPaths = previous.get("paths") or {}
     currSchemas = currentSchemas if currentSchemas is not None else resolveSchemas(current, lambda _: {})
     prevSchemas = previousSchemas if previousSchemas is not None else resolveSchemas(previous, lambda _: {})
+    requests = requestSchemas(current) | requestSchemas(previous)
 
     return (removedPaths(currPaths, prevPaths)
             + removedOperations(currPaths, prevPaths)
@@ -215,11 +259,70 @@ def detectBreakingChanges(current: dict, previous: dict | None,
             + newlyRequiredParams(currPaths, prevPaths)
             + removedSchemas(currSchemas, prevSchemas)
             + changedTypes(currSchemas, prevSchemas)
-            + addedRequiredFields(currSchemas, prevSchemas))
+            + changedRequiredFields(currSchemas, prevSchemas, requests))
+
+
+def signature(change: dict) -> str:
+    """Identidade de um achado, para a aprovacao casar por string exata."""
+    if "path" in change:
+        parts = [change["path"], change.get("method", ""), change.get("param", "")]
+        return f"{change['type']} " + " ".join(part for part in parts if part)
+    alvo = change.get("schema", "")
+    if change.get("field"):
+        alvo = f"{alvo}.{change['field']}"
+    return f"{change['type']} {alvo}"
+
+
+def parseApprovals(path: Path) -> list[dict]:
+    """Aprovacao de BC: assinatura exata, motivo e quem aprovou. Nunca curinga.
+
+    Mesma forma das dispensas de contrato — o que a governanca exige e uma decisao humana
+    rastreavel, nao um interruptor.
+    """
+    target = Path(path)
+    if not target.is_file():
+        return []
+
+    document = loadFast(target.read_text(encoding="utf-8")) or {}
+    approvals = []
+    for index, entry in enumerate(document.get("approvals") or [], start=1):
+        entry = entry or {}
+        assinatura = str(entry.get("signature") or "").strip()
+        if not assinatura:
+            raise ValueError(f"{target}:{index} aprovacao sem assinatura")
+        if "*" in assinatura:
+            raise ValueError(f"{target}:{index} aprovacao com curinga: {assinatura}")
+        if not str(entry.get("reason") or "").strip():
+            raise ValueError(f"{target}:{index} aprovacao sem motivo: {assinatura}")
+        if not str(entry.get("approvedBy") or "").strip():
+            raise ValueError(f"{target}:{index} aprovacao sem quem aprovou: {assinatura}")
+        approvals.append({"signature": assinatura, "reason": entry["reason"].strip(),
+                          "approvedBy": entry["approvedBy"].strip(),
+                          "date": str(entry.get("date") or "").strip()})
+    return approvals
+
+
+def applyApprovals(changes: list[dict], approvals: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """Bloqueantes, aprovados e aprovacoes que nao casaram com nada."""
+    porAssinatura = {entry["signature"]: entry for entry in approvals}
+    usadas, blocking, approved = set(), [], []
+
+    for change in changes:
+        entry = porAssinatura.get(signature(change))
+        if not entry:
+            blocking.append(change)
+            continue
+        usadas.add(entry["signature"])
+        approved.append({**change, **entry})
+
+    unused = [entry for entry in approvals if entry["signature"] not in usadas]
+    return (blocking, approved, unused)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detecta breaking changes entre versões da spec")
+    parser.add_argument("--approvals", default=APPROVALS_FILE,
+                        help=f"aprovações de BC registradas (padrão: {APPROVALS_FILE})")
     parser.add_argument("--base", required=True,
                         help="commit de comparação: o alvo da PR, nunca HEAD — a árvore é HEAD")
     args = parser.parse_args()
@@ -235,6 +338,20 @@ def main() -> int:
                                     resolveSchemas(current, refLoader(None)),
                                     resolveSchemas(previous, refLoader(args.base)))
 
+    try:
+        approvals = parseApprovals(Path(args.approvals))
+    except ValueError as error:
+        emit(f"[ERROR] aprovação inválida: {error}")
+        return 2
+
+    changes, approved, unused = applyApprovals(changes, approvals)
+
+    for entry in approved:
+        emit(f"[INFO] aprovado: {signature(entry)} — {entry['reason']} ({entry['approvedBy']})")
+    for entry in unused:
+        emit(f"[WARN] aprovação não utilizada: {entry['signature']}"
+             " — a mudança deixou de existir, remova a aprovação")
+
     if changes:
         emit("")
         emit(f"[ERROR] {len(changes)} breaking change(s) detectada(s):")
@@ -243,7 +360,7 @@ def main() -> int:
             emit(f"[INFO] regra violada, governance.md: {rule}")
         return 1
 
-    emit("[OK] nenhuma breaking change detectada")
+    emit("[OK] nenhuma breaking change bloqueante")
     return 0
 
 

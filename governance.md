@@ -13,7 +13,14 @@
 - Requires Tech-Lead approval to merge BC changes
 - SLA: 1-2h for approval
 
-BC = removes operation, removes schema, removes required param, type changes, required field added
+BC = removes operation, removes schema, removes required param, type changes, required field added, removes required field
+
+`required field added` conta **apenas em schema de requisição** (o que `requestBody` alcança):
+exigir campo novo quebra quem chama. Na resposta o acréscimo é promessa mais forte do
+servidor e não quebra ninguém — o que quebra ali é o inverso, `removes required field`.
+
+Aprovação de BC é registrada em `apis/bc-approvals.yaml`: string exata, motivo e quem aprovou.
+O detector subtrai as aprovadas e reporta aprovação que deixou de casar com algo.
 
 ## Spec Owner
 
