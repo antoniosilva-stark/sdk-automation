@@ -1,10 +1,3 @@
-"""Testes do `build-resource`.
-
-Quem mede forma de template usa `--advisory`: a regua derivada do SDK real e exaustiva,
-entao recurso que ja existe no alvo reprova por divida de paridade, que e assunto da fase 7.
-Quem mede o pipeline roda sem a flag, e o `test_strictIsNotOptionalInTheWorkflow` garante
-que o workflow tambem.
-"""
 import yaml
 from pathlib import Path
 
@@ -170,12 +163,6 @@ def test_pilotProducesAVerifiedArtifact(builtOnce):
 
 @requiresGenerator
 def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(builtOnce):
-    """`Rest.java` do sdk-java @ c7f40b8 nao tem `put` de entidade — so `patch` e `putRaw`.
-
-    Gerar `put` produzia arquivo que nao compila, e o alvo nao tem CI para pegar.
-    piloto sai com get/query/page; `put` fica como `todo` no contrato.
-    `page` continua, porque `Rest.getPage` existe (Rest.java:100).
-    """
     code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
@@ -243,8 +230,6 @@ def test_nodeBarrelExportsOnlyDeclaredOperations(builtOnce):
 
 @requiresGenerator
 def test_generatedTestAccompaniesTheResource(builtOnce):
-    """Os 42 recursos do sdk-java tem TestX.java sem excecao: PR sem teste e PR incompleto,
-    e e onde a intervencao humana voltaria."""
     code, out, target = builtOnce("Invoice", "java", "--advisory")
 
     assert code == 0, out
@@ -278,8 +263,6 @@ def test_bothJavaArtifactsArePlaced(builtOnce):
 
 @requiresGenerator
 def test_deleteAndPdfAreEmittedWhenDeclared(builtOnce):
-    """Transfer exporta delete e pdf no SDK Python, e os dois tem primitivo no Rest real:
-    Rest.delete(data, id, user) e Rest.getContent(data, id, "pdf", user, ...)."""
     code, out, target = builtOnce("Transfer", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transfer.java").read_text(encoding="utf-8")
 
@@ -303,10 +286,6 @@ def test_updateIsEmittedWhenDeclared(builtOnce):
 
 @requiresGenerator
 def test_cancelIsEmittedWhenDeclared(builtOnce):
-    """cancel e Rest.delete com outro nome (InvoicePullRequest.java:355).
-
-    CorporateCard exporta update e cancel no Python, entao exercita as duas flags.
-    """
     code, out, target = builtOnce("CorporateCard", "java", "--advisory")
 
     assert code == 0, out
@@ -318,11 +297,6 @@ def test_cancelIsEmittedWhenDeclared(builtOnce):
 
 @requiresGenerator
 def test_readOnlyResourceCarriesNoDeadImport(builtOnce):
-    """Balance, CardMethod, CorporateBalance e PaymentPreview so expoem get/query.
-
-    Generator, ArrayList e List so existem para query/create/page/log — sem condicionar,
-    o gate reprova os 4 por DEAD_IMPORT e a spec inteira para de gerar.
-    """
     code, out, target = builtOnce("Balance", "java", "--advisory")
 
     assert code == 0, out
@@ -336,7 +310,6 @@ def test_readOnlyResourceCarriesNoDeadImport(builtOnce):
 
 @requiresGenerator
 def test_withoutTheFlagNoDeadInputStreamIsEmitted(builtOnce):
-    """Recurso sem pdf nao pode carregar import de InputStream — o gate reprova import morto."""
     code, out, target = builtOnce("Transaction", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
@@ -346,8 +319,6 @@ def test_withoutTheFlagNoDeadInputStreamIsEmitted(builtOnce):
 
 @requiresGenerator
 def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
-    """No sdk-java o Log nao e arquivo proprio: e classe interna do recurso, com
-    ClassData(Log.class, "InvoiceLog"), e o endpoint /invoice/log sai do Api.endpoint."""
     code, out, target = builtOnce("Invoice", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
@@ -361,7 +332,6 @@ def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
 
 @requiresGenerator
 def test_resourceWithoutLogGetsNoInnerClass(builtOnce):
-    """Transaction nao tem log/ no SDK Python — gerar Log ali seria inventar recurso."""
     code, out, target = builtOnce("Transaction", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Transaction.java").read_text(encoding="utf-8")
 
@@ -370,11 +340,6 @@ def test_resourceWithoutLogGetsNoInnerClass(builtOnce):
 
 @requiresGenerator
 def test_pageIsEmittedWhenTheSpecDeclaresIt(builtOnce):
-    """Todo recurso real do Stark Bank tem page(); a spec não declarava em nenhum.
-
-    O template sempre soube produzir — faltava a flag, então nenhum SDK gerado
-    saía com paginação manual.
-    """
     code, out, target = builtOnce("Invoice", "java", "--advisory")
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
@@ -423,7 +388,6 @@ def test_nothingIsPlacedWhenTheGeneratorProducesNothing(tmpPath):
 
 
 def test_rulerIsDerivedBeforeTheGate(buildResource):
-    """A regua vem do SDK real a cada execucao, nao de arquivo versionado."""
     source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
 
     assert "derive-contract.py" in source
@@ -432,7 +396,6 @@ def test_rulerIsDerivedBeforeTheGate(buildResource):
 
 
 def test_absentUpstreamIsTheOnlyWayToSkipTheRuler(buildResource):
-    """Recurso novo dispensa regua; referencia quebrada tem de abortar (exit 2 do derivador)."""
     source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
 
     assert "EXIT_ABSENT_UPSTREAM" in source
@@ -440,7 +403,6 @@ def test_absentUpstreamIsTheOnlyWayToSkipTheRuler(buildResource):
 
 
 def test_strictIsNotOptionalInTheWorkflow():
-    """O `--advisory` existe para medir template; no pipeline ele reabriria a PR que sobrescreveu produção."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "build-resource.py" in workflow
@@ -449,7 +411,6 @@ def test_strictIsNotOptionalInTheWorkflow():
 
 @requiresGenerator
 def test_substitutionIsAnnouncedAsSuch(builtOnce):
-    """Preencher lacuna e sobrescrever producao sao riscos diferentes e tem de aparecer diferentes."""
     code, out, _ = builtOnce("Invoice", "java", "--advisory")
 
     assert code == 0, out
@@ -466,7 +427,6 @@ def test_gapFillingIsAnnouncedAsSuch(builtOnce):
 
 @requiresGenerator
 def test_referenceShaIsRecordedInTheRun(builtOnce):
-    """Decisao 59: sem o SHA da referencia, "passou ontem e reprova hoje" nao e diagnosticavel."""
     code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
@@ -475,7 +435,6 @@ def test_referenceShaIsRecordedInTheRun(builtOnce):
 
 @requiresGenerator
 def test_subResourceIsImportedNotQualifiedInline(builtOnce):
-    """37 de 37 arquivos do sdk-java importam: o nome qualificado inline era divergencia em todo recurso."""
     code, out, target = builtOnce("Invoice", "java", "--advisory")
     assert code == 0, out
 
@@ -495,13 +454,14 @@ def test_resourceWithoutPageDoesNotImportSubResource(builtOnce):
 
 
 def test_rolesAreMatchedByNameNotByPosition(buildResource):
-    """`zip(runs, pairs)` parеava por posicao duas listas mantidas em arquivos diferentes:
-    reordenar GENERATORS ou LAYOUTS trocaria o artefato do papel sem nenhum erro.
-    """
-    source = (REPO_ROOT / "tools/build-resource.py").read_text(encoding="utf-8")
+    pares = buildResource.plannedPairs("Invoice", "java")
 
-    assert "zip(runs, pairs)" not in source
-    assert "plannedPairs" in source
+    assert set(pares) == {"main", "test"}
+    for papel, (origem, _) in pares.items():
+        assert origem.startswith(f"{papel}/"), f"{papel} aponta para {origem}"
+
+    invertidos = {papel: pares[papel] for papel in reversed(list(pares))}
+    assert invertidos["main"] == pares["main"], "a ordem do dicionario mudou o par do papel"
 
 
 def test_layoutAndGeneratorsDeclareTheSameRoles(buildResource):

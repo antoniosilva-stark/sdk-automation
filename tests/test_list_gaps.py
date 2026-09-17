@@ -6,7 +6,6 @@ from conftest import requiresJavaSdk, requiresPythonSdk, runTool
 
 
 def _python(root: Path, modules: dict[str, list[tuple[str, str]]]) -> Path:
-    """modules: {diretorio: [(nomeDoModulo, nomeDaClasse), ...]}"""
     for directory, entries in modules.items():
         target = root / "starkbank" / directory
         target.mkdir(parents=True)
@@ -48,17 +47,11 @@ def test_resourcePresentInBothIsNotAGap(tmpPath):
 
 
 def test_authenticationClassIsNeitherGapNorExtra(tmpPath):
-    """User, Project, Organization e afins vivem no starkcore do lado Python.
-
-    Sem a exclusao explicita, davam 6 falsos positivos no sentido inverso.
-    """
     report = _json(tmpPath, {"widget": [("widget", "Widget")]}, ["Widget", "User", "Project", "Settings"])
     assert report["extras"] == []
 
 
 def test_subObjectThatIsInnerClassInJavaIsNotAGap(tmpPath):
-    """invoice/__payment.py declara Payment, que no Java e Invoice.Payment — classe
-    interna, sem arquivo proprio. Tratar como gap mandaria gerar recurso inexistente."""
     modules = {"invoice": [("invoice", "Invoice"), ("payment", "Payment")]}
     report = _json(tmpPath, modules, ["Invoice"])
 
@@ -67,8 +60,6 @@ def test_subObjectThatIsInnerClassInJavaIsNotAGap(tmpPath):
 
 
 def test_secondaryModuleWithOwnFileCountsAsPresent(tmpPath):
-    """paymentpreview/__boletopreview.py declara BoletoPreview, que no Java TEM arquivo
-    proprio. E o lado Java que discrimina, nao um palpite sobre o nome."""
     modules = {"paymentpreview": [("paymentpreview", "PaymentPreview"), ("boletopreview", "BoletoPreview")]}
     report = _json(tmpPath, modules, ["PaymentPreview", "BoletoPreview"])
 
@@ -77,10 +68,6 @@ def test_secondaryModuleWithOwnFileCountsAsPresent(tmpPath):
 
 
 def test_directoryWithoutClassIsAnnouncedNotSilenced(tmpPath):
-    """request/__request.py nao declara classe — e passthrough de HTTP cru.
-
-    Sumir com ele em silencio esconderia um recurso que a automacao nao cobre.
-    """
     report = _json(tmpPath, {"request": [("request", "")]}, ["Request"])
 
     assert report["gaps"] == []
@@ -110,7 +97,6 @@ def test_invalidRootReturnsTwo(tmpPath):
 @requiresPythonSdk
 @requiresJavaSdk
 def test_realGapIsOnlySplitProfile():
-    """Se devolver mais que isto, a premissa do gap unico caiu e o plano muda."""
     code, out = runTool("list-gaps.py", "--json")
     assert code == 0, out
 

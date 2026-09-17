@@ -97,7 +97,6 @@ def test_javaExtractorCoversEveryKind(tmpPath):
 
 
 def test_javaMultiLineConstructorIsJoined(tmpPath):
-    """O construtor posicional do Invoice real quebra em 4 linhas; contrato e uma linha."""
     root = _forge(tmpPath, "src/main/java/com/starkbank/Widget.java", FORGED_JAVA)
     lines = _derive("Widget", "java", "main", root)
 
@@ -106,7 +105,6 @@ def test_javaMultiLineConstructorIsJoined(tmpPath):
 
 
 def test_joinDoesNotLeaveSpaceBeforeTheClosingParen(tmpPath):
-    """O construtor do Invoice real fecha o parentese em linha propria."""
     body = FORGED_JAVA.replace("String[] tags, String id) {", "String[] tags, String id\n    ) {")
     root = _forge(tmpPath, "src/main/java/com/starkbank/Widget.java", body)
     lines = _derive("Widget", "java", "main", root)
@@ -126,7 +124,6 @@ def test_nodeExtractorCoversEveryKind(tmpPath):
 
 
 def test_roleComesFromTheLayoutNotFromAGuess(tmpPath):
-    """3 papeis Node, 3 arquivos distintos: o caminho sai do LAYOUTS do place-generated."""
     root = tmpPath / "repo"
     for relative, body in (
         ("sdk/widget/widget.js", FORGED_NODE),
@@ -146,11 +143,6 @@ def test_roleComesFromTheLayoutNotFromAGuess(tmpPath):
 
 @requiresJavaSdk
 def test_derivedJavaCoversTheHandWrittenContract():
-    """Criterio da fase: o derivado contem tudo que o contrato a mao exige hoje.
-
-    Se nao contiver, o extrator esta incompleto — e o contrato a mao e a unica
-    referencia que temos do que importa.
-    """
     code, out = runTool("derive-contract.py", "Invoice", "--lang", "java", "--role", "main")
     assert code == 0, out
 
@@ -185,11 +177,6 @@ def test_derivedNodeCoversTheHandWrittenContract():
 
 
 def test_resourceAbsentUpstreamHasItsOwnExitCode(tmpPath):
-    """`build-resource` tem de distinguir recurso novo de referência quebrada.
-
-    Sem os códigos separados, referência ausente passaria por recurso novo e a régua
-    seria dispensada exatamente quando mais importa.
-    """
     (tmpPath / "src/main/java/com/starkbank").mkdir(parents=True)
     code, out = runTool("derive-contract.py", "NaoExiste", "--lang", "java", "--from", str(tmpPath))
 
@@ -206,7 +193,6 @@ def test_unresolvedReferenceIsNotMistakenForANewResource(tmpPath):
 
 @requiresJavaSdk
 def test_derivedRulerCarriesTheReferenceSha():
-    """Decisao 59: a regua e efemera, entao o SHA no cabecalho e o unico registro do que mediu."""
     code, out = runTool("derive-contract.py", "Invoice", "--lang", "java", "--role", "main")
 
     assert code == 0, out

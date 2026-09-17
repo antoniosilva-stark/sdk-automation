@@ -1,5 +1,6 @@
 import ast
 import shutil
+import subprocess
 from pathlib import Path
 
 from conftest import GENERATOR_SKIP, commandWorks, missingGeneratorDependency, missingJavacDependency, REPO_ROOT
@@ -66,12 +67,6 @@ def test_brokenJavacReportsJavac(tmpPath, monkeypatch):
 
 
 def test_noTestFileBindsTheReferenceToHome():
-    """A referencia resolvida vive num lugar so: o conftest, que delega aos tools.
-
-    Presa ao diretorio do usuario, a trava existe na maquina de quem escreveu e fica
-    inerte no CI —
-    foi o que aconteceu com o golden, que seguiu pulado mesmo depois do clone-sdk-ref.
-    """
     needle = "Path" + ".home()"
     offenders = [
         path.name
@@ -83,12 +78,6 @@ def test_noTestFileBindsTheReferenceToHome():
 
 
 def test_noSourceHardcodesAPersonalCheckout():
-    """A referencia canonica e o clone em _references/, feito pelo setup do projeto.
-
-    Cravar o layout de diretorio de uma pessoa faz o projeto funcionar na maquina dela e
-    nao na dos outros. Quem quiser apontar para um clone proprio usa SDK_PYTHON,
-    SDK_JAVA ou SDK_NODE.
-    """
     needle = "workspace" + "/bank"
     searched = sorted((REPO_ROOT / "tools").glob("*.py")) + sorted((REPO_ROOT / "tests").rglob("*.py"))
     searched.append(REPO_ROOT / "Makefile")
@@ -102,7 +91,6 @@ def test_noSourceHardcodesAPersonalCheckout():
 
 
 def test_referenceResolutionIsSharedNotDuplicated(conftest):
-    """Cada tool resolve a referencia que ele le; o teste delega, nao reimplementa."""
     assert conftest.resolvedPythonSdk.__module__ == "conftest"
     assert callable(conftest.resolvedJavaSdk)
     assert callable(conftest.resolvedNodeSdk)
@@ -115,10 +103,6 @@ def test_skipReasonNamesTheDependency():
     assert "npx" in GENERATOR_SKIP or "JRE" in GENERATOR_SKIP
 
 def test_everyBuildResourceCallIsGuardedByTheGeneratorMark():
-    """Teste que espera o build chegar ao gerador precisa do marcador: sem JRE ele reprova
-    enquanto as irmas dele pulam. Quem aborta antes de gerar — linguagem invalida, destino
-    ausente, lint reprovado — nao precisa.
-    """
     source = (REPO_ROOT / "tests/test_build_resource.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     lines = source.splitlines()
@@ -141,11 +125,6 @@ def test_everyBuildResourceCallIsGuardedByTheGeneratorMark():
 
 
 def test_noToolParsesYamlWithThePurePythonLoader():
-    """A spec tem 7.131 linhas: o parser puro custa 138 ms contra 18 ms do libyaml.
-
-    Cada ferramenta e um processo novo, entao o custo aparece em toda invocacao —
-    `yaml.safe_load` num tool derruba isso de volta sem ninguem notar.
-    """
     lentos = []
     for path in sorted((REPO_ROOT / "tools").glob("*.py")):
         source = path.read_text(encoding="utf-8")
@@ -158,19 +137,12 @@ def test_noToolParsesYamlWithThePurePythonLoader():
 
 
 def test_theFastLoaderIsActuallyAvailableHere():
-    """Se o libyaml sair do ambiente, o fallback mantem tudo correto — mas 8x mais lento.
-
-    Este teste nao e correcao, e aviso: falhar aqui explica uma suite subitamente lenta.
-    """
     import yaml
 
     assert hasattr(yaml, "CSafeLoader"), "libyaml ausente: PyYAML instalado sem a extensao C"
 
 
 def test_everyFastLoaderActuallyRuns():
-    """`yaml` estava importado dentro da funcao em coverage-report: o texto passava na
-    guarda acima e o tool quebrava com NameError so na execucao.
-    """
     from importlib.util import module_from_spec, spec_from_file_location
 
     quebrados = []
@@ -188,12 +160,32 @@ def test_everyFastLoaderActuallyRuns():
     assert quebrados == [], f"loadFast quebrado: {quebrados}"
 
 
-def test_referenceRefreshFailsInsteadOfSwallowing():
-    """O status de um `for` e o da ultima iteracao: com `&&`, fetch que falha some,
-    e o detector de defasagem compara contra clone velho reportando "em sincronia".
-    """
-    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
-    bloco = makefile.split("refresh-sdk-ref:")[1].split("\nreference:")[0]
+def test_referenceRefreshFailsInsteadOfSwallowing(tmpPath):
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    (binario / "git").write_text(
+        '#!/bin/sh\ncase "$*" in *sdk-python*) exit 1;; *) exit 0;; esac\n',
+        encoding="utf-8")
+    (binario / "git").chmod(0o755)
 
-    assert "exit 1" in bloco
-    assert "if ! git" in bloco, "falha de fetch tem de abortar, nao seguir para o proximo repo"
+    resultado = subprocess.run(
+        ["make", "refresh-sdk-ref"], cwd=REPO_ROOT, capture_output=True, text=True,
+        env={"PATH": f"{binario}:/usr/bin:/bin", "HOME": str(tmpPath)},
+    )
+
+    assert resultado.returncode != 0, "o fetch de sdk-python falhou e o alvo saiu verde"
+    assert "fetch falhou" in resultado.stdout + resultado.stderr
+
+
+def test_noTestPinsABranchNameThatVariesBetweenForks():
+    remoto = "origin" + "/"
+    fixos = []
+    arquivos = sorted((REPO_ROOT / "tests").rglob("*.py")) + sorted((REPO_ROOT / "tests").rglob("*.js"))
+    for path in arquivos:
+        if path.name == Path(__file__).name:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if remoto + "development" in line or remoto + "main" in line:
+                fixos.append(f"{path.name}:{number}")
+
+    assert fixos == [], f"nome de branch fixo em teste: {fixos}"

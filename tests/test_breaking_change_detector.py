@@ -43,12 +43,6 @@ def test_addedPathIsNotBreaking(detector):
 # --- contrato de saida ---
 
 def test_specWithoutChangeReportsNothing(detector, tmpPath, monkeypatch):
-    """Substitui a versao que rodava sem `--base`, comparando a spec com ela mesma: o [OK]
-    era garantido qualquer que fosse o conteudo.
-
-    Fixar um SHA tambem nao serve — a arvore de trabalho muda, e o teste passaria a medir
-    a branch em vez da ferramenta.
-    """
     spec = tmpPath / "spec.yaml"
     spec.write_text(yaml.safe_dump(_spec(_widget({"amount": {"type": "integer"}}))), encoding="utf-8")
     monkeypatch.setattr(detector, "SPEC_FILE", str(spec))
@@ -60,11 +54,6 @@ def test_specWithoutChangeReportsNothing(detector, tmpPath, monkeypatch):
 
 
 def test_invalidYamlPropagates(detector, tmpPath, monkeypatch):
-    """YAML malformado deve levantar, não ser lido como "nada para comparar".
-
-    O código anterior usava `except Exception` e devolvia None nesse caso, o que
-    fazia o detector passar verde com a spec quebrada.
-    """
     broken = tmpPath / "broken.yaml"
     broken.write_text("paths: [unclosed\n", encoding="utf-8")
     monkeypatch.setattr(detector, "SPEC_FILE", str(broken))
@@ -146,7 +135,6 @@ def test_changedTypeIsDetected(detector):
 
 
 def test_addedFormatIsBreakingForTheJavaClient(detector):
-    """`format: int64` em `integer` faz `Integer` virar `Long` no sdk-java: e BC de cliente."""
     previous = _spec(_widget({"balance": {"type": "integer"}}))
     current = _spec(_widget({"balance": {"type": "integer", "format": "int64"}}))
     changes = detector.detectBreakingChanges(current, previous)
@@ -170,9 +158,6 @@ def test_unchangedTypeIsNotBreaking(detector):
 
 
 def test_addedRequiredFieldIsDetected(detector):
-    """Vale para schema de REQUISICAO. Na resposta o mesmo acrescimo nao quebra ninguem —
-    a versao anterior deste teste nao fazia a distincao e produzia 181 alarmes falsos.
-    """
     previous = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount"]), "Widget")
     current = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount", "taxId"]), "Widget")
     changes = detector.detectBreakingChanges(current, previous)
@@ -183,7 +168,6 @@ def test_addedRequiredFieldIsDetected(detector):
 
 
 def test_relaxedRequiredIsNotBreaking(detector):
-    """Afrouxar a REQUISICAO e compativel: quem ja mandava o campo continua podendo."""
     previous = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount", "taxId"]), "Widget")
     current = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount"]), "Widget")
 
@@ -200,7 +184,6 @@ def test_removedFieldIsDetected(detector):
 
 
 def test_changeInsideTheRefIsSeen(detector, tmpPath, monkeypatch):
-    """Decisao 67: comparar o texto do `$ref` nao veria mudanca no arquivo apontado."""
     (tmpPath / "schemas").mkdir()
     schemaPath = tmpPath / "schemas" / "widget.yaml"
     schemaPath.write_text(
@@ -225,7 +208,6 @@ def test_changeInsideTheRefIsSeen(detector, tmpPath, monkeypatch):
 
 
 def test_everyGovernanceRuleIsImplemented(detector):
-    """`governance.md` prometia 5 regras e o detector implementava 1."""
     declared = (REPO_ROOT / "governance.md").read_text(encoding="utf-8")
     line = next(part for part in declared.splitlines() if part.startswith("BC ="))
     promised = [rule.strip() for rule in line.removeprefix("BC =").split(",")]
@@ -237,20 +219,12 @@ def test_everyGovernanceRuleIsImplemented(detector):
 
 
 def test_baseIsRequiredBecauseHeadComparesTheSpecWithItself():
-    """`--base HEAD` compara a arvore com ela mesma: em PR o gate nunca acusa nada.
-
-    Era o estado real ate 2026-09-15 — as 5 regras existiam e jamais rodaram contra
-    historia de verdade.
-    """
     code, _ = runTool("breaking-change-detector.py")
 
     assert code == 2, "sem --base o tool tem de recusar, nao assumir HEAD"
 
 
 def test_realHistoryWithBreakingChangeFails():
-    """Prova que o gate morde: `4c8d50a` e o commit anterior ao mapeamento dos 40 recursos,
-    onde Invoice.amount virou int64 e 12 campos sairam.
-    """
     code, out = runTool("breaking-change-detector.py", "--base", "4c8d50a")
 
     assert code == 1
@@ -259,9 +233,6 @@ def test_realHistoryWithBreakingChangeFails():
 
 
 def test_theToolReportsAVerdictAgainstRealHistory():
-    """Contra historia real o veredito e util em qualquer direcao: o que nao pode e passar
-    sem olhar. Nao se afirma "zero BC" aqui porque isso seria medir a branch, nao o tool.
-    """
     code, out = runTool("breaking-change-detector.py", "--base", "567ce54")
 
     assert code in (0, 1), out
@@ -271,7 +242,6 @@ def test_theToolReportsAVerdictAgainstRealHistory():
 
 
 def test_removedEnumValueIsDetected(detector):
-    """Tirar um valor de enum quebra quem passa aquele valor — nao estava em SHAPE_KEYS."""
     previous = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week", "month"]}}))
     current = _spec(_widget({"interval": {"type": "string", "enum": ["day", "week"]}}))
     changes = detector.detectBreakingChanges(current, previous)
@@ -288,7 +258,6 @@ def test_addedEnumValueIsNotBreaking(detector):
 
 
 def test_parameterThatBecomesRequiredIsDetected(detector):
-    """Exigir parametro novo numa operacao existente quebra quem ja chama sem ele."""
     antes = {"name": "cursor", "in": "query"}
     depois = {"name": "cursor", "in": "query", "required": True}
     previous = _spec({}, {"/widget": {"get": {"parameters": [antes]}}})
@@ -317,16 +286,12 @@ def _withPaths(schemas: dict, requestSchema: str | None = None) -> dict:
 
 
 def test_requestSchemasComeFromTheRequestBody(detector):
-    """Distinguir requisicao de resposta pelo sufixo do nome seria convencao; o `paths`
-    diz quem e quem.
-    """
     spec = _withPaths({"Widget": {}, "WidgetCreate": {}}, requestSchema="WidgetCreate")
 
     assert detector.requestSchemas(spec) == {"WidgetCreate"}
 
 
 def test_requiredAddedToARequestIsBreaking(detector):
-    """Exigir campo novo no corpo da requisicao quebra quem ja chama sem ele."""
     previous = _withPaths(_widget({"taxId": {"type": "string"}}), "Widget")
     current = _withPaths(_widget({"taxId": {"type": "string"}}, ["taxId"]), "Widget")
     changes = detector.detectBreakingChanges(current, previous)
@@ -335,11 +300,6 @@ def test_requiredAddedToARequestIsBreaking(detector):
 
 
 def test_requiredAddedToAResponseIsNotBreaking(detector):
-    """O servidor promete *mais*: o campo passa a vir sempre. Quem consome so ganha.
-
-    181 dos 217 achados contra `development` eram deste caso — 75% do total, ruido que
-    tornava a lista grande demais para alguem ler.
-    """
     previous = _withPaths(_widget({"amount": {"type": "integer"}}))
     current = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount"]))
 
@@ -347,7 +307,6 @@ def test_requiredAddedToAResponseIsNotBreaking(detector):
 
 
 def test_requiredRemovedFromAResponseIsBreaking(detector):
-    """O inverso e que quebra: o campo deixou de ser garantido e quem lia sem checar quebra."""
     previous = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount"]))
     current = _withPaths(_widget({"amount": {"type": "integer"}}, []))
     changes = detector.detectBreakingChanges(current, previous)
@@ -364,9 +323,6 @@ def test_requiredRemovedFromARequestIsNotBreaking(detector):
 
 
 def test_removedFieldIsNotAlsoReportedAsRequiredRemoved(detector):
-    """Campo que sumiu inteiro ja e `removed_field`; contar tambem como `required_field_removed`
-    duplica a mesma mudanca sob duas regras e infla a lista que alguem precisa ler.
-    """
     previous = _withPaths(_widget({"amount": {"type": "integer"}, "legacy": {"type": "string"}},
                                   ["amount", "legacy"]))
     current = _withPaths(_widget({"amount": {"type": "integer"}}, ["amount"]))
@@ -391,7 +347,6 @@ def _approvalFile(tmpPath, body: str = APPROVAL):
 
 
 def test_signatureIdentifiesAFindingExactly(detector):
-    """A aprovacao casa por assinatura, nunca por curinga — mesma regra das dispensas."""
     change = {"type": "removed_operation", "path": "/widget", "method": "post"}
     assert detector.signature(change) == "removed_operation /widget post"
 
@@ -421,7 +376,6 @@ def test_unapprovedChangeStillBlocks(detector, tmpPath):
 
 
 def test_unusedApprovalIsReported(detector, tmpPath):
-    """Aprovacao que parou de casar apodrece igual dispensa: tem de sair da lista."""
     approvals = detector.parseApprovals(_approvalFile(tmpPath))
 
     _, _, unused = detector.applyApprovals([], approvals)
@@ -444,9 +398,6 @@ def test_approvalWithWildcardIsRejected(detector, tmpPath):
 
 
 def test_approvalsAreAppliedEndToEnd(tmpPath):
-    """O caminho completo: aprovar a remocao do POST /split_profile tira ela
-    da lista bloqueante e a anuncia com quem aprovou.
-    """
     approvals = tmpPath / "approvals.yaml"
     approvals.write_text(
         'approvals:\n'
@@ -456,7 +407,7 @@ def test_approvalsAreAppliedEndToEnd(tmpPath):
         '    date: "2026-09-15"\n',
         encoding="utf-8")
 
-    code, out = runTool("breaking-change-detector.py", "--base", "origin/development",
+    code, out = runTool("breaking-change-detector.py", "--base", "ae90902",
                         "--approvals", str(approvals))
 
     assert "[INFO] aprovado: removed_operation /split_profile post" in out
@@ -473,17 +424,13 @@ def test_unusedApprovalIsAnnouncedByTheTool(tmpPath):
         '    approvedBy: "elias"\n',
         encoding="utf-8")
 
-    _, out = runTool("breaking-change-detector.py", "--base", "origin/development",
+    _, out = runTool("breaking-change-detector.py", "--base", "ae90902",
                      "--approvals", str(approvals))
 
     assert "aprovação não utilizada" in out
 
 
 def test_unresolvableBaseIsAnErrorNotAFreePass():
-    """Base que nao resolve passava como "primeiro commit" e o gate aprovava sem comparar.
-
-    Erro de digitacao, clone raso ou fork com outra branch default bastavam para burlar.
-    """
     code, out = runTool("breaking-change-detector.py", "--base", "origin/nao-existe")
 
     assert code == 2
@@ -491,7 +438,6 @@ def test_unresolvableBaseIsAnErrorNotAFreePass():
 
 
 def test_baseThatResolvesWithoutTheSpecIsStillTheFirstCommit(detector, tmpPath, monkeypatch):
-    """Ref valida onde a spec ainda nao existia e caso legitimo: nao ha o que comparar."""
     monkeypatch.setattr(detector, "SPEC_FILE", "apis/inexistente.yaml")
 
     assert detector.loadSpec("HEAD") is None

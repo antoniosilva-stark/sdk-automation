@@ -34,7 +34,6 @@ def _declaredTargets() -> list[str]:
 
 
 def _commitDeclared(repo: Path) -> bool:
-    """Espelha o step do workflow: adiciona so o que o layout declara e commita se mudou."""
     for relative in _declaredTargets():
         _git(repo, "add", "--", relative)
 
@@ -56,7 +55,6 @@ def test_targetResourceComesFromDiscoveryNotAList():
 
 @requiresGenerator
 def test_fullChainLeavesNoUndeclaredArtifact(tmpPath):
-    """Criterio da entrega: o `git status` pre-commit so mostra o que ferramenta escreveu."""
     repo = _repo(tmpPath)
 
     code, out = runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
@@ -82,7 +80,6 @@ def test_commitCarriesResourceAndTestTogether(tmpPath):
 
 @requiresGenerator
 def test_secondRunCreatesNoCommit(tmpPath):
-    """Idempotencia: rodar 2x sobre a mesma branch nao pode gerar commit vazio nem duplicar PR."""
     repo = _repo(tmpPath)
 
     runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
@@ -96,21 +93,20 @@ def test_secondRunCreatesNoCommit(tmpPath):
 
 @requiresGenerator
 def test_corruptTemplateAbortsBeforePlacing(tmpPath):
-    """Teste negativo: defeito no template nao pode chegar ao repo alvo."""
     repo = _repo(tmpPath)
     template = REPO_ROOT / "templates/java/model.mustache"
     backup = tmpPath / "model.mustache.bak"
     shutil.copy(template, backup)
 
     try:
-        template.write_text(
-            template.read_text(encoding="utf-8").replace(
-                "public class {{classname}} extends Resource {",
-                "public class {{classname}} extends Resource {\n    public String {{naoExiste}};",
-                1,
-            ),
-            encoding="utf-8",
+        original = template.read_text(encoding="utf-8")
+        corrompido = original.replace(
+            "extends Resource {",
+            "extends Resource {\n    public String ;",
+            1,
         )
+        assert corrompido != original, "a corrupcao nao pegou: o teste passaria sem testar nada"
+        template.write_text(corrompido, encoding="utf-8")
         code, out = runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
     finally:
         shutil.copy(backup, template)

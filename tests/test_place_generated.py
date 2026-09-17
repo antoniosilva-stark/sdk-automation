@@ -43,8 +43,6 @@ def test_placesTheJavaFile(tmpPath):
 
 
 def test_placesBothJavaArtifacts(tmpPath):
-    """O layout do Java passou a declarar recurso e teste; posicionar so um deixaria
-    PR incompleta, que e o padrao que o sdk-java rejeita."""
     generated = _generated(tmpPath, body="class SplitProfile {}\n")
     repo = _targetRepo(tmpPath)
 
@@ -274,11 +272,6 @@ def test_strayFileInTheTargetStaysOutOfTheCommit(tmpPath):
 
 
 def test_resourceNameIsValidatedInEveryMode(tmpPath):
-    """A validacao so existia no `--slug`: `--from/--to` montava destino a partir do nome cru.
-
-    Os dois caminhos em producao validam antes, entao isto e defesa em profundidade — a
-    proxima ferramenta que chamar o `place-generated` direto nao herda o cuidado do chamador.
-    """
     for extra in (["--list"], ["--targets"], ["--from", str(tmpPath), "--to", str(tmpPath)]):
         code, out = runTool("place-generated.py", "../etc/passwd", "--lang", "java", *extra)
         assert code == 2, f"nome invalido aceito em {extra}: {out}"

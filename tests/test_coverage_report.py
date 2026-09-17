@@ -48,7 +48,6 @@ def test_fullySupportedOperationsCountAsFullParity(tmpPath):
 
 
 def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
-    """Invoice gera hoje mesmo sem `qrcode`: tratar como fora de alcance seria mentira."""
     report = _report(tmpPath, "get, query, qrcode")
 
     assert report["fullParity"] == []
@@ -56,14 +55,12 @@ def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
 
 
 def test_resourceWithOnlySuppressedOperationIsOutOfReach(tmpPath):
-    """`put` e derivado do Python mas suprimido: Rest.put nao existe no sdk-java."""
     report = _report(tmpPath, "put")
 
     assert report["outOfReach"] == [{"resource": "Widget", "reason": "sem operação suportada"}]
 
 
 def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
-    """CorporateRule tem zero `public static` no Java real: classe so de dados conta."""
     report = _report(tmpPath, "parse_rules")
 
     assert report["fullParity"] == []
@@ -71,8 +68,6 @@ def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
 
 
 def test_flagsComeFromTemplateNotAParallelList(coverageReport):
-    """Duas autoridades: o template diz o que pode ser produzido, o apply-schema o que
-    pode ser escrito. Lista propria dessincronizaria das duas em silencio."""
     flags = coverageReport.templateFlags()
 
     assert "x-sdk-page" in flags
@@ -90,7 +85,6 @@ def test_newTemplateSectionEntersTheReportOnItsOwn(coverageReport, tmpPath):
 
 @requiresPythonSdk
 def test_realReachMeetsTheDeliveryTarget():
-    """Meta: >= 35 de 41, com o restante nomeado."""
     code, out = runTool("coverage-report.py", "--json")
     assert code == 0, out
 

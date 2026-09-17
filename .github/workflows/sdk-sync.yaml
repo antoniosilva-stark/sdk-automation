@@ -132,7 +132,12 @@ jobs:
           BRANCH="spec/refresh-$(python3 tools/place-generated.py "$RESOURCE" --slug)"
           git config user.name "sdk-automation[bot]"
           git config user.email "sdk-automation[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
           git add apis/spec-v2.openapi.yaml apis/schemas
           if git diff --cached --quiet; then
             echo "Defasagem acusada mas nada a comitar — investigar o detector."
@@ -228,7 +233,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout target SDK
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
           token: ${{ steps.app-token.outputs.token }}

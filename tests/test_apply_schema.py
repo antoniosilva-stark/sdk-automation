@@ -66,8 +66,6 @@ components:
 
 
 def _sdk(tmpPath: Path, exports: str = "create, get, query, page") -> Path:
-    """A referencia real e sempre um clone, entao a forjada tambem: o schema aplicado
-    carrega o SHA de origem e o lint reprova quem nao declara procedencia."""
     root = tmpPath / "sdk-python"
     package = root / "starkbank" / "widget"
     package.mkdir(parents=True)
@@ -108,7 +106,6 @@ def test_schemaIsWrittenToTheSchemasDirectory(tmpPath):
 
 
 def test_writtenFileIsIdenticalToExtracted(tmpPath):
-    """O golden compara os dois; escrever algo diferente do extrator quebraria o guard."""
     root = _sdk(tmpPath)
     spec, schemas = _workspace(tmpPath)
     runTool("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
@@ -130,7 +127,6 @@ def test_stubBecomesRefWithSiblingFlags(tmpPath):
 
 
 def test_putIsSuppressedWithReason(tmpPath):
-    """Decisao 43: Rest.put nao existe no sdk-java. Declarar geraria codigo que nao compila."""
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, page")
 
     assert code == 0, out
@@ -139,8 +135,6 @@ def test_putIsSuppressedWithReason(tmpPath):
 
 
 def test_onlyFlagWithTemplateSectionIsWritten(tmpPath):
-    """Escrever flag que o template nao produz faria o lint considerar completo um
-    recurso cujo gerado nao tem a operacao — plausivel e errado."""
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, delete, pdf")
 
     assert code == 0, out
@@ -172,8 +166,6 @@ def _emptySpec(tmpPath: Path) -> tuple[Path, Path]:
 
 
 def test_missingResourceIsCreatedInTheSpec(tmpPath):
-    """15 recursos do Python nao estao entre os 60 nomes da spec. Sem criar, eles nunca
-    chegam ao Java, por mais que o tooling os alcance."""
     root = _sdk(tmpPath)
     spec, schemas = _emptySpec(tmpPath)
 
@@ -231,7 +223,6 @@ def test_compoundNameBecomesKebabPath(tmpPath):
 
 
 def test_invalidSpecDoesNotReplaceTheOriginal(tmpPath):
-    """Escreve em copia e valida antes de trocar: a spec real tem 5700 linhas."""
     root = _sdk(tmpPath)
     spec = tmpPath / "spec.yaml"
     spec.write_text("components:\n  schemas:\n    Widget: {type: object\n", encoding="utf-8")
@@ -266,12 +257,16 @@ def test_appliedResourcePassesTheLint(tmpPath):
     assert code == 0, out
 
 
-def test_specIsReplacedAtomically(tmpPath):
-    """Escrita nao atomica deixa a spec pela metade se o processo morrer no meio, e a spec
-    e a fonte da verdade de todo o pipeline. O docstring do teste vizinho ja afirmava
-    atomicidade que o codigo nao tinha.
-    """
-    source = (REPO_ROOT / "tools/apply-schema.py").read_text(encoding="utf-8")
+def test_specSurvivesAWriteThatDiesMidway(applySchema, tmpPath, monkeypatch):
+    spec = tmpPath / "spec.yaml"
+    spec.write_text("components:\n  schemas: {}\n", encoding="utf-8")
+    original = spec.read_text(encoding="utf-8")
 
-    assert "os.replace" in source, "troca da spec tem de ser atomica"
-    assert "with_suffix" in source or "tmp" in source
+    def morre(source, target):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(applySchema.os, "replace", morre)
+    with pytest.raises(OSError):
+        applySchema.writeAtomically(spec, "conteudo novo que nunca deveria chegar")
+
+    assert spec.read_text(encoding="utf-8") == original, "spec ficou corrompida"
