@@ -20,7 +20,7 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    checkRebase:
+    guard:
         if: >
             github.event_name == 'pull_request' ||
             (github.event_name == 'pull_request_review'
