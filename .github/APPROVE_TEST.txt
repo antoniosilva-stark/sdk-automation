@@ -1,0 +1,2 @@
+Validacao do gatilho de approve.
+Esta branch esta deliberadamente atras de main.
