@@ -49,6 +49,6 @@ jobs:
                       fi
 
                       echo "#$number -> $reason"
-                      NUMBER="$number" HEAD_SHA="$headSha" REASON="$reason" OK="$ok" \
+                      NUMBER="$number" HEAD_SHA="$headSha" REASON="$reason" OK="$ok" PUBLISH_CHECK=1 \
                           .github/scripts/reportRebase.sh || true
                   done
