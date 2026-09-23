@@ -42,8 +42,4 @@ EOF
 gh api -X POST "repos/$REPO/issues/$NUMBER/labels" -f "labels[]=$LABEL" --silent \
     || echo "::warning::could not apply the $LABEL label"
 
-if [ "$OK" = "true" ]; then
-    exit 0
-fi
-
 exit 1
