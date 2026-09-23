@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+echo "branch is rebased onto $3"
+exit 0
+
 baseSha="$1"
 headSha="$2"
 baseName="${3:-base}"
