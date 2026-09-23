@@ -16,6 +16,21 @@ upsertComment() {
     gh api -X PATCH "repos/$REPO/issues/comments/$previousId" -f body="$1" --silent
 }
 
+conclusion=failure
+title="Branch is not rebased"
+if [ "$OK" = "true" ]; then
+    conclusion=success
+    title="Rebase OK"
+fi
+
+gh api -X POST "repos/$REPO/check-runs" \
+    -f name="rebase-status" \
+    -f head_sha="$HEAD_SHA" \
+    -f status="completed" \
+    -f conclusion="$conclusion" \
+    -f "output[title]=$title" \
+    -f "output[summary]=$REASON" --silent
+
 if [ "$OK" = "true" ]; then
     upsertComment "$MARKER
 ✅ **Rebase OK** — $REASON"

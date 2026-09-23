@@ -1,0 +1,54 @@
+name: Rebase Sweep
+
+run-name: "CI: Re-check open pull requests"
+
+on:
+    push:
+        branches: [main]
+
+permissions:
+    contents: read
+    pull-requests: write
+    checks: write
+
+concurrency:
+    group: rebase-sweep-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    sweep:
+        runs-on: ubuntu-latest
+        env:
+            GH_TOKEN: ${{ github.token }}
+            REPO: ${{ github.repository }}
+            BASE: ${{ github.ref_name }}
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  fetch-depth: 0
+
+            - name: Re-check every open pull request
+              run: |
+                  set -euo pipefail
+                  baseSha=$(git rev-parse HEAD)
+
+                  for number in $(gh pr list --repo "$REPO" --base "$BASE" --state open --json number --jq '.[].number'); do
+                      headSha=$(gh pr view "$number" --repo "$REPO" --json headRefOid --jq .headRefOid)
+                      git fetch --no-tags --quiet origin "refs/pull/$number/head"
+
+                      rc=0
+                      reason=$(.github/scripts/checkRebase.sh "$baseSha" "$headSha" "origin/$BASE") || rc=$?
+                      if [ "$rc" -gt 1 ]; then
+                          echo "::warning::pull request #$number could not be evaluated (exit $rc)"
+                          continue
+                      fi
+
+                      ok=true
+                      if [ "$rc" -eq 1 ]; then
+                          ok=false
+                      fi
+
+                      echo "#$number -> $reason"
+                      NUMBER="$number" HEAD_SHA="$headSha" REASON="$reason" OK="$ok" \
+                          .github/scripts/reportRebase.sh || true
+                  done
