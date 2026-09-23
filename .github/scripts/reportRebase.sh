@@ -48,19 +48,6 @@ if [ "${PUBLISH_CHECK:-0}" = "1" ]; then
 fi
 
 if [ "$OK" = "true" ]; then
-    conclusion=success
-    title="Rebase OK"
-fi
-
-gh api -X POST "repos/$REPO/check-runs" \
-    -f name="rebase-status" \
-    -f head_sha="$HEAD_SHA" \
-    -f status="completed" \
-    -f conclusion="$conclusion" \
-    -f "output[title]=$title" \
-    -f "output[summary]=$REASON" --silent
-
-if [ "$OK" = "true" ]; then
     upsertComment "$MARKER
 ✅ **Rebase OK** — $REASON"
     gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/$LABEL" --silent 2>/dev/null || true
