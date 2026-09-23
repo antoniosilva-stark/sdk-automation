@@ -13,6 +13,10 @@ permissions:
     actions: write
     pull-requests: read
 
+concurrency:
+    group: rebase-sweep-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     sweep:
         if: >

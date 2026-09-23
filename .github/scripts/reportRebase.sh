@@ -6,7 +6,7 @@ MARKER="<!-- enforce-rebase -->"
 LABEL="not-rebased"
 
 previousId=$(gh api "repos/$REPO/issues/$NUMBER/comments" --paginate --slurp \
-    | jq -r "add | map(select(.body | contains(\"$MARKER\"))) | last.id // empty")
+    | jq -r --arg marker "$MARKER" 'add | map(select((.body // "") | contains($marker))) | last.id // empty')
 
 upsertComment() {
     if [ -z "$previousId" ]; then
@@ -17,8 +17,10 @@ upsertComment() {
 }
 
 if [ "$OK" = "true" ]; then
-    upsertComment "$MARKER
+    if [ -n "$previousId" ]; then
+        upsertComment "$MARKER
 ✅ **Rebase OK** — $REASON"
+    fi
     gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/$LABEL" --silent 2>/dev/null || true
     exit 0
 fi
