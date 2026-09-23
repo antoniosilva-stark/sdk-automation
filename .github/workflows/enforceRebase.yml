@@ -3,10 +3,8 @@ name: Enforce Rebase
 run-name: "CI: Enforce rebase before merge"
 
 on:
-    pull_request:
+    pull_request_target:
         types: [opened, synchronize, reopened, edited]
-    pull_request_review:
-        types: [submitted]
     issue_comment:
         types: [created]
 
@@ -20,11 +18,9 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    rebase-status:
+    evaluate:
         if: >
-            github.event_name == 'pull_request' ||
-            (github.event_name == 'pull_request_review'
-             && github.event.review.state == 'approved') ||
+            github.event_name == 'pull_request_target' ||
             (github.event_name == 'issue_comment'
              && github.event.issue.pull_request
              && github.event.comment.user.login != 'github-actions[bot]'
@@ -46,51 +42,32 @@ jobs:
                       echo "head=$(jq -r .headRefOid pr.json)"
                   } >> "$GITHUB_OUTPUT"
 
-            - name: Checkout pull request head
-              uses: actions/checkout@v5
-              with:
-                  ref: ${{ steps.pr.outputs.head }}
-                  fetch-depth: 0
-
-            - name: Checkout enforcement scripts from the base branch
+            - name: Checkout the base branch
               uses: actions/checkout@v5
               with:
                   ref: ${{ steps.pr.outputs.base }}
-                  path: base
-                  fetch-depth: 1
-                  sparse-checkout: .github/scripts
+                  fetch-depth: 0
 
             - name: Check rebase
               id: check
               env:
                   BASE: ${{ steps.pr.outputs.base }}
                   HEAD_SHA: ${{ steps.pr.outputs.head }}
+                  NUMBER: ${{ steps.pr.outputs.number }}
               run: |
                   set -euo pipefail
-                  git fetch --no-tags origin "$BASE"
-
-                  scripts=base/.github/scripts
-                  if [ ! -x "$scripts/checkRebase.sh" ]; then
-                      echo "::warning::branch $BASE carries no enforcement scripts; falling back to the pull request copy, which the pull request itself can alter"
-                      scripts=.github/scripts
-                  fi
-                  echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+                  git fetch --no-tags origin "$BASE" "refs/pull/$NUMBER/head"
 
                   rc=0
-                  reason=$("$scripts/checkRebase.sh" \
-                      "$(git rev-parse FETCH_HEAD)" "$HEAD_SHA" "origin/$BASE") || rc=$?
-
-                  if [ "$rc" -gt 1 ]; then
-                      echo "::error::checkRebase.sh failed unexpectedly (exit $rc)"
-                      exit "$rc"
-                  fi
+                  reason=$(.github/scripts/checkRebase.sh \
+                      "$(git rev-parse "origin/$BASE")" "$HEAD_SHA" "origin/$BASE") || rc=$?
 
                   ok=true
-                  if [ "$rc" -eq 1 ]; then
+                  if [ "$rc" -ne 0 ]; then
                       ok=false
                   fi
-                  if [ -z "$reason" ]; then
-                      reason="verification produced no diagnosis (exit $rc)"
+                  if [ "$rc" -gt 1 ]; then
+                      reason="evaluation failed (exit $rc)"
                   fi
 
                   echo "ok=$ok" >> "$GITHUB_OUTPUT"
@@ -104,4 +81,4 @@ jobs:
                   BASE: ${{ steps.pr.outputs.base }}
                   REASON: ${{ steps.check.outputs.reason }}
                   OK: ${{ steps.check.outputs.ok }}
-              run: ${{ steps.check.outputs.scripts }}/reportRebase.sh
+              run: .github/scripts/reportRebase.sh
