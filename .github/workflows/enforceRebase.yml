@@ -3,27 +3,19 @@ name: Enforce Rebase
 run-name: "CI: Enforce rebase before merge"
 
 on:
-    pull_request_target:
+    pull_request:
         types: [opened, synchronize, reopened, edited]
-    issue_comment:
-        types: [created]
 
 permissions:
     contents: read
     pull-requests: write
 
 concurrency:
-    group: enforce-rebase-${{ github.event.pull_request.number || github.event.issue.number }}
+    group: enforce-rebase-${{ github.event.pull_request.number }}
     cancel-in-progress: true
 
 jobs:
     rebase-status:
-        if: >
-            github.event_name == 'pull_request_target' ||
-            (github.event_name == 'issue_comment'
-             && github.event.issue.pull_request
-             && github.event.comment.user.login != 'github-actions[bot]'
-             && contains(github.event.comment.body, '@rebased'))
         runs-on: ubuntu-latest
         env:
             GH_TOKEN: ${{ github.token }}
@@ -33,7 +25,7 @@ jobs:
               id: pr
               run: |
                   set -euo pipefail
-                  number="${{ github.event.pull_request.number || github.event.issue.number }}"
+                  number="${{ github.event.pull_request.number }}"
                   gh pr view "$number" --repo "$REPO" --json number,baseRefName,headRefOid > pr.json
                   {
                       echo "number=$number"
@@ -41,32 +33,51 @@ jobs:
                       echo "head=$(jq -r .headRefOid pr.json)"
                   } >> "$GITHUB_OUTPUT"
 
-            - name: Checkout the base branch
+            - name: Checkout pull request head
+              uses: actions/checkout@v5
+              with:
+                  ref: ${{ steps.pr.outputs.head }}
+                  fetch-depth: 0
+
+            - name: Checkout enforcement scripts from the base branch
               uses: actions/checkout@v5
               with:
                   ref: ${{ steps.pr.outputs.base }}
-                  fetch-depth: 0
+                  path: base
+                  fetch-depth: 1
+                  sparse-checkout: .github/scripts
 
             - name: Check rebase
               id: check
               env:
                   BASE: ${{ steps.pr.outputs.base }}
                   HEAD_SHA: ${{ steps.pr.outputs.head }}
-                  NUMBER: ${{ steps.pr.outputs.number }}
               run: |
                   set -euo pipefail
-                  git fetch --no-tags origin "$BASE" "refs/pull/$NUMBER/head"
+                  git fetch --no-tags origin "$BASE"
+
+                  scripts=base/.github/scripts
+                  if [ ! -x "$scripts/checkRebase.sh" ]; then
+                      echo "::warning::branch $BASE carries no enforcement scripts; falling back to the pull request copy, which the pull request itself can alter"
+                      scripts=.github/scripts
+                  fi
+                  echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
 
                   rc=0
-                  reason=$(.github/scripts/checkRebase.sh \
-                      "$(git rev-parse "origin/$BASE")" "$HEAD_SHA" "origin/$BASE") || rc=$?
+                  reason=$("$scripts/checkRebase.sh" \
+                      "$(git rev-parse FETCH_HEAD)" "$HEAD_SHA" "origin/$BASE") || rc=$?
+
+                  if [ "$rc" -gt 1 ]; then
+                      echo "::error::checkRebase.sh failed unexpectedly (exit $rc)"
+                      exit "$rc"
+                  fi
 
                   ok=true
-                  if [ "$rc" -ne 0 ]; then
+                  if [ "$rc" -eq 1 ]; then
                       ok=false
                   fi
-                  if [ "$rc" -gt 1 ]; then
-                      reason="evaluation failed (exit $rc)"
+                  if [ -z "$reason" ]; then
+                      reason="verification produced no diagnosis (exit $rc)"
                   fi
 
                   echo "ok=$ok" >> "$GITHUB_OUTPUT"
@@ -76,8 +87,7 @@ jobs:
             - name: Report on pull request
               env:
                   NUMBER: ${{ steps.pr.outputs.number }}
-                  HEAD_SHA: ${{ steps.pr.outputs.head }}
                   BASE: ${{ steps.pr.outputs.base }}
                   REASON: ${{ steps.check.outputs.reason }}
                   OK: ${{ steps.check.outputs.ok }}
-              run: .github/scripts/reportRebase.sh
+              run: ${{ steps.check.outputs.scripts }}/reportRebase.sh

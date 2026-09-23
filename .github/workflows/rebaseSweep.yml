@@ -5,27 +5,37 @@ run-name: "CI: Re-check open pull requests"
 on:
     push:
         branches: [main]
+    issue_comment:
+        types: [created]
 
 permissions:
     contents: read
     actions: write
-
-concurrency:
-    group: rebase-sweep-${{ github.ref }}
-    cancel-in-progress: true
+    pull-requests: read
 
 jobs:
     sweep:
+        if: >
+            github.event_name == 'push' ||
+            (github.event.issue.pull_request
+             && github.event.comment.user.login != 'github-actions[bot]'
+             && contains(github.event.comment.body, '@rebased'))
         runs-on: ubuntu-latest
         env:
             GH_TOKEN: ${{ github.token }}
             REPO: ${{ github.repository }}
-            BASE: ${{ github.ref_name }}
         steps:
-            - name: Re-run the guard on every open pull request
+            - name: Rerun the guard on the affected pull requests
               run: |
                   set -euo pipefail
-                  for number in $(gh pr list --repo "$REPO" --base "$BASE" --state open --json number --jq '.[].number'); do
+
+                  numbers="${{ github.event.issue.number }}"
+                  if [ "${{ github.event_name }}" = "push" ]; then
+                      numbers=$(gh pr list --repo "$REPO" --base "${{ github.ref_name }}" \
+                          --state open --json number --jq '.[].number')
+                  fi
+
+                  for number in $numbers; do
                       headSha=$(gh pr view "$number" --repo "$REPO" --json headRefOid --jq .headRefOid)
                       runId=$(gh run list --repo "$REPO" --workflow "Enforce Rebase" --commit "$headSha" \
                           --limit 1 --json databaseId --jq '.[0].databaseId // empty')
