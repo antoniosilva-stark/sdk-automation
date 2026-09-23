@@ -30,7 +30,7 @@ gh api -X PATCH "repos/${REPO}" \
 echo "== branch protection on ${BRANCH} =="
 gh api -X PUT "repos/${REPO}/branches/${BRANCH}/protection" --input - <<JSON
 {
-  "required_status_checks": {"strict": true, "contexts": ["checkRebase"]},
+  "required_status_checks": {"strict": true, "contexts": ["rebase-status"]},
   "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": true},
   "enforce_admins": true,
   "restrictions": null,
