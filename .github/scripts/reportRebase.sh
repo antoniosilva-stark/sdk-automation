@@ -43,9 +43,7 @@ publishCheck() {
         -f "output[title]=$title" -f "output[summary]=$REASON" --silent
 }
 
-if [ "${PUBLISH_CHECK:-0}" = "1" ]; then
-    publishCheck
-fi
+publishCheck
 
 if [ "$OK" = "true" ]; then
     upsertComment "$MARKER
@@ -73,8 +71,4 @@ EOF
 gh api -X POST "repos/$REPO/issues/$NUMBER/labels" -f "labels[]=$LABEL" --silent \
     || echo "::warning::could not apply the $LABEL label"
 
-if [ "$OK" = "true" ] || [ "${PUBLISH_CHECK:-0}" = "1" ]; then
-    exit 0
-fi
-
-exit 1
+exit 0
