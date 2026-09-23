@@ -16,35 +16,6 @@ upsertComment() {
     gh api -X PATCH "repos/$REPO/issues/comments/$previousId" -f body="$1" --silent
 }
 
-conclusion=failure
-title="Branch is not rebased"
-if [ "$OK" = "true" ]; then
-    conclusion=success
-    title="Rebase OK"
-fi
-
-publishCheck() {
-    local existing
-    existing=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" \
-        --jq '[.check_runs[] | select(.name == "rebase-status")] | last.id // empty')
-
-    if [ -n "$existing" ]; then
-        if gh api -X PATCH "repos/$REPO/check-runs/$existing" \
-            -f status=completed -f conclusion="$conclusion" \
-            -f "output[title]=$title" -f "output[summary]=$REASON" --silent 2>/dev/null; then
-            return 0
-        fi
-        echo "::warning::could not update the existing rebase-status check; creating another one"
-    fi
-
-    gh api -X POST "repos/$REPO/check-runs" \
-        -f name="rebase-status" -f head_sha="$HEAD_SHA" \
-        -f status=completed -f conclusion="$conclusion" \
-        -f "output[title]=$title" -f "output[summary]=$REASON" --silent
-}
-
-publishCheck
-
 if [ "$OK" = "true" ]; then
     upsertComment "$MARKER
 ✅ **Rebase OK** — $REASON"
@@ -71,4 +42,8 @@ EOF
 gh api -X POST "repos/$REPO/issues/$NUMBER/labels" -f "labels[]=$LABEL" --silent \
     || echo "::warning::could not apply the $LABEL label"
 
-exit 0
+if [ "$OK" = "true" ]; then
+    exit 0
+fi
+
+exit 1

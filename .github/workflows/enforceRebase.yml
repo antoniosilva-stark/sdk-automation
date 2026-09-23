@@ -11,14 +11,13 @@ on:
 permissions:
     contents: read
     pull-requests: write
-    checks: write
 
 concurrency:
     group: enforce-rebase-${{ github.event.pull_request.number || github.event.issue.number }}
     cancel-in-progress: true
 
 jobs:
-    evaluate:
+    rebase-status:
         if: >
             github.event_name == 'pull_request_target' ||
             (github.event_name == 'issue_comment'
