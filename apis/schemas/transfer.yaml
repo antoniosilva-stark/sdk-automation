@@ -1,3 +1,4 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/transfer/__transfer.py
 components:
   schemas:
     Transfer:
@@ -9,6 +10,7 @@ components:
           description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string
@@ -33,7 +35,7 @@ components:
           description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
         scheduled:
           type: string
-          format: date
+          format: date-time
           description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
         description:
           type: string
@@ -95,6 +97,7 @@ components:
       properties:
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string
@@ -119,7 +122,7 @@ components:
           description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
         scheduled:
           type: string
-          format: date
+          format: date-time
           description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
         description:
           type: string

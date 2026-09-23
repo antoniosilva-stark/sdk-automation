@@ -1,0 +1,87 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/paymentrequest/__paymentrequest.py
+components:
+  schemas:
+    PaymentRequest:
+      type: object
+      description: "A PaymentRequest is an indirect request to access a specific cash-out service (such as Transfers, BoletoPayments, etc.) which goes through the cost center approval flow on our website. To emit a PaymentRequest, you must direct it to a specific cost center by its ID, which can be retrieved on our website at the cost center page."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when a PaymentRequest is created. ex: \"5656565656565656\""
+        centerId:
+          type: string
+          description: "target cost center ID. ex: \"5656565656565656\""
+        payment:
+          type: object
+          description: "payment entity that should be approved and executed."
+        type:
+          type: string
+          description: "payment type, inferred from the payment parameter if it is not a dictionary. ex: \"transfer\", \"boleto-payment\""
+        due:
+          type: string
+          format: date
+          description: "Payment target date in ISO format. ex: 2020-04-30"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        amount:
+          type: integer
+          format: int64
+          description: "PaymentRequest amount. ex: 100000 = R$1.000,00"
+        description:
+          type: string
+          description: "payment request description. ex: \"Tony Stark's Suit\""
+        status:
+          type: string
+          description: "current PaymentRequest status. ex: \"pending\" or \"approved\""
+        actions:
+          type: array
+          items:
+            type: object
+          description: "list of actions that are affecting this PaymentRequest. ex: [{\"type\": \"member\", \"id\": \"56565656565656, \"action\": \"requested\"}]"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the PaymentRequest. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the PaymentRequest. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - centerId
+        - payment
+        - amount
+        - description
+        - status
+        - actions
+        - updated
+        - created
+
+    PaymentRequestCreate:
+      type: object
+      description: "PaymentRequest creation request"
+      properties:
+        centerId:
+          type: string
+          description: "target cost center ID. ex: \"5656565656565656\""
+        payment:
+          type: object
+          description: "payment entity that should be approved and executed."
+        type:
+          type: string
+          description: "payment type, inferred from the payment parameter if it is not a dictionary. ex: \"transfer\", \"boleto-payment\""
+        due:
+          type: string
+          format: date
+          description: "Payment target date in ISO format. ex: 2020-04-30"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - centerId
+        - payment

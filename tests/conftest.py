@@ -49,6 +49,42 @@ def _loadTool(fileName: str):
     return module
 
 
+def resolvedPythonSdk() -> Path | None:
+    extractSchema = _loadTool("extract-schema.py")
+    root = extractSchema.resolveRoot(None)
+    return None if extractSchema.rootIssue(root) else root
+
+
+def resolvedJavaSdk() -> Path | None:
+    return _loadTool("list-gaps.py").resolveJavaRoot()
+
+
+def resolvedNodeSdk() -> Path | None:
+    candidates = [Path(os.environ["SDK_NODE"])] if os.environ.get("SDK_NODE") else []
+    candidates += [REPO_ROOT / "_references/sdk-node"]
+
+    for candidate in candidates:
+        if (candidate / "sdk").is_dir():
+            return candidate / "sdk"
+    return None
+
+
+PYTHON_SDK = resolvedPythonSdk()
+JAVA_SDK = resolvedJavaSdk()
+NODE_SDK = resolvedNodeSdk()
+
+requiresPythonSdk = pytest.mark.skipif(PYTHON_SDK is None, reason="sdk-python do Stark Bank não resolvido")
+requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não resolvido")
+requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
+
+
+@pytest.fixture
+def conftest():
+    import conftest as module
+
+    return module
+
+
 def runTool(fileName: str, *args: str, env: dict | None = None) -> tuple[int, str]:
     result = subprocess.run(
         [sys.executable, str(TOOLS_DIR / fileName), *args],
@@ -68,6 +104,11 @@ def tmpPath(request):
 @pytest.fixture
 def lintSpec():
     return _loadTool("lint-spec.py")
+
+
+@pytest.fixture
+def applySchema():
+    return _loadTool("apply-schema.py")
 
 
 @pytest.fixture
@@ -93,3 +134,24 @@ def buildResource():
 @pytest.fixture
 def extractSchema():
     return _loadTool("extract-schema.py")
+
+
+@pytest.fixture
+def coverageReport():
+    return _loadTool("coverage-report.py")
+
+
+@pytest.fixture(scope="session")
+def builtOnce(tmp_path_factory):
+    cache: dict[tuple, tuple] = {}
+
+    def build(resource: str, language: str, *extra: str):
+        key = (resource, language, extra)
+        if key not in cache:
+            target = tmp_path_factory.mktemp(f"{resource}-{language}")
+            code, out = runTool("build-resource.py", resource, "--lang", language,
+                                "--into", str(target), *extra)
+            cache[key] = (code, out, target)
+        return cache[key]
+
+    return build

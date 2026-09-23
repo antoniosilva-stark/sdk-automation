@@ -1,0 +1,162 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/invoicepullsubscription/__invoicepullsubscription.py
+components:
+  schemas:
+    InvoicePullSubscription:
+      type: object
+      description: "When you initialize an InvoicePullSubscription, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when InvoicePullSubscription is created. ex: \"5656565656565656\""
+        start:
+          type: string
+          format: date
+          description: "subscription start date. ex: \"2022-04-01\""
+        interval:
+          type: string
+          enum: ['week', 'month', 'quarter', 'semester', 'year']
+          description: "subscription installment interval. Options: \"week\", \"month\", \"quarter\", \"semester\", \"year\""
+        pullMode:
+          type: string
+          enum: ['manual', 'automatic']
+          description: "subscription pull mode. Options: \"manual\", \"automatic\". Automatic mode will create the Invoice Pull Requests automatically"
+        pullRetryLimit:
+          type: integer
+          description: "subscription pull retry limit. Options: 0, 3"
+        type:
+          type: string
+          enum: ['push', 'qrcode', 'qrcodeAndPayment', 'paymentAndOrQrcode']
+          description: "subscription type. Options: \"push\", \"qrcode\", \"qrcodeAndPayment\", \"paymentAndOrQrcode\""
+        amount:
+          type: integer
+          format: int64
+          description: "subscription amount in cents. Required if an amount_min_limit is not informed. Minimum = 1 (R$ 0.01). ex: 100 (= R$ 1.00)"
+        amountMinLimit:
+          type: integer
+          description: "subscription minimum amount in cents. Required if an amount is not informed. Minimum = 1 (R$ 0.01). ex: 100 (= R$ 1.00)"
+        displayDescription:
+          type: string
+          description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
+        due:
+          type: integer
+          description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
+        externalId:
+          type: string
+          description: "string that must be unique among all your InvoicePullSubscriptions. Duplicated external_ids will cause failures. ex: \"my-external-id\""
+        referenceCode:
+          type: string
+          description: "reference code for reconciliation. ex: \"REF123456\""
+        end:
+          type: string
+          format: date
+          description: "subscription end date. ex: \"2023-04-01\""
+        data:
+          type: object
+          description: "additional data for the subscription based on type"
+        name:
+          type: string
+          description: "subscription debtor name. ex: \"Iron Bank S.A.\""
+        taxId:
+          type: string
+          description: "subscription debtor tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        status:
+          type: string
+          description: "current InvoicePullSubscription status. ex: \"active\", \"canceled\""
+        bacenId:
+          type: string
+          description: "unique authentication id at the Central Bank. ex: \"RR2001818320250616dtsPkBVaBYs\""
+        brcode:
+          type: string
+          description: "Brcode string for the InvoicePullSubscription. ex: \"00020101021126580014br.gov.bcb.pix0114+5599999999990210starkbank.com.br520400005303986540410000000000005802BR5913Stark Bank S.A.6009SAO PAULO62070503***6304D2B1\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the InvoicePullSubscription. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the InvoicePullSubscription. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - start
+        - interval
+        - pullMode
+        - pullRetryLimit
+        - type
+        - status
+        - bacenId
+        - brcode
+        - created
+        - updated
+
+    InvoicePullSubscriptionCreate:
+      type: object
+      description: "InvoicePullSubscription creation request"
+      properties:
+        start:
+          type: string
+          format: date
+          description: "subscription start date. ex: \"2022-04-01\""
+        interval:
+          type: string
+          enum: ['week', 'month', 'quarter', 'semester', 'year']
+          description: "subscription installment interval. Options: \"week\", \"month\", \"quarter\", \"semester\", \"year\""
+        pullMode:
+          type: string
+          enum: ['manual', 'automatic']
+          description: "subscription pull mode. Options: \"manual\", \"automatic\". Automatic mode will create the Invoice Pull Requests automatically"
+        pullRetryLimit:
+          type: integer
+          description: "subscription pull retry limit. Options: 0, 3"
+        type:
+          type: string
+          enum: ['push', 'qrcode', 'qrcodeAndPayment', 'paymentAndOrQrcode']
+          description: "subscription type. Options: \"push\", \"qrcode\", \"qrcodeAndPayment\", \"paymentAndOrQrcode\""
+        amount:
+          type: integer
+          format: int64
+          description: "subscription amount in cents. Required if an amount_min_limit is not informed. Minimum = 1 (R$ 0.01). ex: 100 (= R$ 1.00)"
+        amountMinLimit:
+          type: integer
+          description: "subscription minimum amount in cents. Required if an amount is not informed. Minimum = 1 (R$ 0.01). ex: 100 (= R$ 1.00)"
+        displayDescription:
+          type: string
+          description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
+        due:
+          type: integer
+          description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
+        externalId:
+          type: string
+          description: "string that must be unique among all your InvoicePullSubscriptions. Duplicated external_ids will cause failures. ex: \"my-external-id\""
+        referenceCode:
+          type: string
+          description: "reference code for reconciliation. ex: \"REF123456\""
+        end:
+          type: string
+          format: date
+          description: "subscription end date. ex: \"2023-04-01\""
+        data:
+          type: object
+          description: "additional data for the subscription based on type"
+        name:
+          type: string
+          description: "subscription debtor name. ex: \"Iron Bank S.A.\""
+        taxId:
+          type: string
+          description: "subscription debtor tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - start
+        - interval
+        - pullMode
+        - pullRetryLimit
+        - type

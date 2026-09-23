@@ -1,5 +1,4 @@
-# Contrato do artefato impl: sdk/transfer/transfer.js
-# Derivado de ~/workspace/bank/sdk-node/sdk/transfer/transfer.js
+# source:    _references/sdk-node/sdk/transfer/transfer.js
 
 require const rest = require('../utils/rest.js')
 require const check = require('starkcore').check
@@ -11,9 +10,10 @@ export exports.Transfer = Transfer
 export exports.get = async function (id, {user} = {})
 export exports.query = async function
 
-# --- Paridade ainda nao alcancada: sub-recurso e operacoes nao declaradas na spec ---
-todo require const { Rule } = require('./rule/rule.js')
-todo require const ruleResource = require('./rule/rule.js').subResource
-todo require const parseObjects = require('../utils/parse.js').parseObjects
-todo export exports.delete = async function (id, { user } = {})
-todo export exports.pdf = async function (id, {user} = {})
+require const { Rule } = require('./rule/rule.js')
+require const ruleResource = require('./rule/rule.js').subResource
+require const parseObjects = require('../utils/parse.js').parseObjects
+export exports.delete = async function (id, { user } = {})
+export exports.pdf = async function (id, {user} = {})
+
+export exports.page = async function

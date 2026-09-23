@@ -7,6 +7,7 @@ from pathlib import Path
 LAYOUTS = {
     "java": [
         ("main", "src/main/java/com/starkbank/{Resource}.java", "src/main/java/com/starkbank/{Resource}.java"),
+        ("test", "src/main/java/com/starkbank/{Resource}.java", "src/test/java/Test{Resource}.java"),
     ],
     "node": [
         ("impl", "src/model/{Resource}.js", "sdk/{resource}/{resource}.js"),
@@ -71,13 +72,14 @@ def main() -> int:
     parser.add_argument("--slug", action="store_true", help="valida o nome do recurso e imprime o slug da branch")
     args = parser.parse_args()
 
+    if args.resource and not _RESOURCE_NAME.match(args.resource):
+        emit(f"[ERROR] nome de recurso inválido: {args.resource!r}")
+        emit("[INFO] esperado UpperCamelCase só com letras e dígitos, ex: SplitProfile")
+        return 2
+
     if args.slug:
         if not args.resource:
             emit("[ERROR] resource é obrigatório no modo --slug")
-            return 2
-        if not _RESOURCE_NAME.match(args.resource):
-            emit(f"[ERROR] nome de recurso inválido: {args.resource!r}")
-            emit("[INFO] esperado UpperCamelCase só com letras e dígitos, ex: SplitProfile")
             return 2
         emit(slugName(args.resource))
         return 0

@@ -1,15 +1,17 @@
 package {{package}};
-
-import com.starkbank.utils.Rest;
-import com.starkbank.utils.Resource;
-import com.starkbank.utils.Generator;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 {{#models}}{{#model}}
+
+{{#usesRest}}import com.starkbank.utils.Rest;
+{{/usesRest}}import com.starkbank.utils.Resource;
+{{#usesGenerator}}import com.starkbank.utils.Generator;
+{{/usesGenerator}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
+{{/usesSubResource}}
+{{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
+{{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
+{{/usesList}}import java.util.HashMap;
+{{#usesList}}import java.util.List;
+{{/usesList}}import java.util.Map;
+
 /**
  * {{classname}} object
  * <p>
@@ -314,10 +316,324 @@ public class {{classname}} extends Resource {
     public static Page page(Map<String, Object> params, User user) throws Exception {
         com.starkcore.utils.Page page = Rest.getPage(data, params, user);
         List<{{classname}}> {{classVarName}}s = new ArrayList<>();
-        for (com.starkcore.utils.SubResource {{classVarName}}: page.entities)
+        for (SubResource {{classVarName}}: page.entities)
             {{classVarName}}s.add(({{classname}}) {{classVarName}});
         return new Page({{classVarName}}s, page.cursor);
     }
 {{/vendorExtensions.x-sdk-page}}
+{{#vendorExtensions.x-sdk-update}}
+
+    /**
+     * Update {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * @param patchData map of parameters to patch
+     * <p>
+     * Return:
+     * @return updated {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} update(String id, Map<String, Object> patchData) throws Exception {
+        return {{classname}}.update(id, patchData, null);
+    }
+
+    /**
+     * Update {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * @param patchData map of parameters to patch
+     * @param user [Organization/Project object]: Organization or Project object
+     * <p>
+     * Return:
+     * @return updated {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} update(String id, Map<String, Object> patchData, User user) throws Exception {
+        return Rest.patch(data, id, patchData, user);
+    }
+{{/vendorExtensions.x-sdk-update}}
+{{#vendorExtensions.x-sdk-delete}}
+
+    /**
+     * Delete a {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * <p>
+     * Return:
+     * @return deleted {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} delete(String id) throws Exception {
+        return {{classname}}.delete(id, null);
+    }
+
+    /**
+     * Delete a {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * @param user [Organization/Project object]: Organization or Project object
+     * <p>
+     * Return:
+     * @return deleted {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} delete(String id, User user) throws Exception {
+        return Rest.delete(data, id, user);
+    }
+{{/vendorExtensions.x-sdk-delete}}
+{{#vendorExtensions.x-sdk-cancel}}
+
+    /**
+     * Cancel a {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * <p>
+     * Return:
+     * @return canceled {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} cancel(String id) throws Exception {
+        return {{classname}}.cancel(id, null);
+    }
+
+    /**
+     * Cancel a {{classname}} entity
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * @param user [Organization/Project object]: Organization or Project object
+     * <p>
+     * Return:
+     * @return canceled {{classname}} object
+     * @throws Exception error in the request
+     */
+    public static {{classname}} cancel(String id, User user) throws Exception {
+        return Rest.delete(data, id, user);
+    }
+{{/vendorExtensions.x-sdk-cancel}}
+{{#vendorExtensions.x-sdk-pdf}}
+
+    /**
+     * Retrieve a specific {{classname}} pdf file
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * <p>
+     * Return:
+     * @return {{classname}} pdf file content
+     * @throws Exception error in the request
+     */
+    public static InputStream pdf(String id) throws Exception {
+        return {{classname}}.pdf(id, null);
+    }
+
+    /**
+     * Retrieve a specific {{classname}} pdf file
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id
+     * @param user [Organization/Project object]: Organization or Project object
+     * <p>
+     * Return:
+     * @return {{classname}} pdf file content
+     * @throws Exception error in the request
+     */
+    public static InputStream pdf(String id, User user) throws Exception {
+        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
+    }
+{{/vendorExtensions.x-sdk-pdf}}
+{{#vendorExtensions.x-sdk-log}}
+
+    public final static class Log extends Resource {
+        static ClassData data = new ClassData(Log.class, "{{classname}}Log");
+
+        public String created;
+        public String type;
+        public String[] errors;
+        public {{classname}} {{classVarName}};
+
+        /**
+         * {{classname}} Log object
+         * <p>
+         * Every time a {{classname}} entity is updated, a corresponding {{classname}} Log
+         * is generated for the entity. This log is never generated by the user,
+         * but it can be retrieved to check additional information on the {{classname}}.
+         * <p>
+         * Attributes (return-only):
+         * @param id [string]: unique id returned when the log is created
+         * @param {{classVarName}} [{{classname}}]: {{classname}} entity to which the log refers to
+         * @param errors [list of strings]: list of errors linked to this {{classname}} event
+         * @param type [string]: type of the {{classname}} event which triggered the log creation
+         * @param created [string]: creation datetime for the log
+         */
+        public Log(String created, String type, String[] errors, {{classname}} {{classVarName}}, String id) {
+            super(id);
+            this.created = created;
+            this.type = type;
+            this.errors = errors;
+            this.{{classVarName}} = {{classVarName}};
+        }
+
+        public Log() {
+            super(null);
+        }
+
+        /**
+         * Retrieve a specific {{classname}} Log
+         * <p>
+         * Parameters:
+         * @param id [string]: object unique id
+         * <p>
+         * Return:
+         * @return {{classname}} Log object with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Log get(String id) throws Exception {
+            return Log.get(id, null);
+        }
+
+        /**
+         * Retrieve a specific {{classname}} Log
+         * <p>
+         * Parameters:
+         * @param id [string]: object unique id
+         * @param user [Organization/Project object]: Organization or Project object
+         * <p>
+         * Return:
+         * @return {{classname}} Log object with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Log get(String id, User user) throws Exception {
+            return Rest.getId(data, id, user);
+        }
+
+        /**
+         * Retrieve {{classname}} Logs
+         * <p>
+         * Return:
+         * @return generator of {{classname}} Log objects with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Generator<Log> query() throws Exception {
+            return Log.query(new HashMap<>(), null);
+        }
+
+        /**
+         * Retrieve {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param params parameters of the query
+         * <p>
+         * Return:
+         * @return generator of {{classname}} Log objects with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Generator<Log> query(Map<String, Object> params) throws Exception {
+            return Log.query(params, null);
+        }
+
+        /**
+         * Retrieve {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param user [Organization/Project object]: Organization or Project object
+         * <p>
+         * Return:
+         * @return generator of {{classname}} Log objects with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Generator<Log> query(User user) throws Exception {
+            return Log.query(new HashMap<>(), user);
+        }
+
+        /**
+         * Retrieve {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param params parameters of the query
+         * @param user [Organization/Project object]: Organization or Project object
+         * <p>
+         * Return:
+         * @return generator of {{classname}} Log objects with updated attributes
+         * @throws Exception error in the request
+         */
+        public static Generator<Log> query(Map<String, Object> params, User user) throws Exception {
+            return Rest.getStream(data, params, user);
+        }
+
+        public final static class Page {
+            public List<Log> logs;
+            public String cursor;
+
+            public Page(List<Log> logs, String cursor) {
+                this.logs = logs;
+                this.cursor = cursor;
+            }
+        }
+
+        /**
+         * Retrieve paged {{classname}} Logs
+         * <p>
+         * Return:
+         * @return {{classname}}.Log.Page object with logs list and cursor
+         * @throws Exception error in the request
+         */
+        public static Log.Page page() throws Exception {
+            return Log.page(new HashMap<>(), null);
+        }
+
+        /**
+         * Retrieve paged {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param params parameters of the query
+         * <p>
+         * Return:
+         * @return {{classname}}.Log.Page object with logs list and cursor
+         * @throws Exception error in the request
+         */
+        public static Log.Page page(Map<String, Object> params) throws Exception {
+            return Log.page(params, null);
+        }
+
+        /**
+         * Retrieve paged {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param user [Organization/Project object]: Organization or Project object
+         * <p>
+         * Return:
+         * @return {{classname}}.Log.Page object with logs list and cursor
+         * @throws Exception error in the request
+         */
+        public static Log.Page page(User user) throws Exception {
+            return Log.page(new HashMap<>(), user);
+        }
+
+        /**
+         * Retrieve paged {{classname}} Logs
+         * <p>
+         * Parameters:
+         * @param params parameters of the query
+         * @param user [Organization/Project object]: Organization or Project object
+         * <p>
+         * Return:
+         * @return {{classname}}.Log.Page object with logs list and cursor
+         * @throws Exception error in the request
+         */
+        public static Log.Page page(Map<String, Object> params, User user) throws Exception {
+            com.starkcore.utils.Page page = Rest.getPage(data, params, user);
+            List<Log> logs = new ArrayList<>();
+            for (SubResource log: page.entities)
+                logs.add((Log) log);
+            return new Page(logs, page.cursor);
+        }
+    }
+{{/vendorExtensions.x-sdk-log}}
 }
 {{/model}}{{/models}}

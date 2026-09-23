@@ -1,0 +1,80 @@
+# fonte: starkbank/sdk-python@9ef6834 · starkbank/dynamicbrcode/__dynamicbrcode.py
+components:
+  schemas:
+    DynamicBrcode:
+      type: object
+      description: "Check out our API Documentation at https://starkbank.com/docs/api#dynamic-brcode"
+      properties:
+        id:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        amount:
+          type: integer
+          format: int64
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        displayDescription:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        rules:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        uuid:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        pictureUrl:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - id
+        - amount
+
+    DynamicBrcodeCreate:
+      type: object
+      description: "DynamicBrcode creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        expiration:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        displayDescription:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        rules:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        tags:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        uuid:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        pictureUrl:
+          type: string
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        updated:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+        created:
+          type: string
+          format: date-time
+          description: "tipo inferido do __init__, nao declarado no docstring"
+      required:
+        - amount

@@ -15,6 +15,10 @@ on:
 
 run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
+concurrency:
+  group: sdk-sync-${{ inputs.language }}-${{ inputs.resource }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -24,6 +28,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -39,14 +44,119 @@ jobs:
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
 
-      - name: Detect breaking changes
-        run: python3 tools/breaking-change-detector.py
+      - name: Resolve the Python SDK reference
+        run: make clone-sdk-ref
 
       - name: Run tests
         run: make test
 
-  sync:
+  drift:
     needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      blocked: ${{ steps.compare.outputs.blocked }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Resolve the reference SDKs
+        run: make clone-sdk-ref
+
+      - name: Refresh the reference SDKs
+        run: make refresh-sdk-ref
+
+      - name: Compare the versioned schema with the current sdk-python
+        id: compare
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          CODE=0
+          python3 tools/detect-drift.py "$RESOURCE" > drift.log 2>&1 || CODE=$?
+          cat drift.log
+          if [ "$CODE" = "1" ]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "Recurso defasado: esta execucao nao gera $RESOURCE, abre PR de spec."
+            exit 0
+          fi
+          if [ "$CODE" = "0" ] || [ "$CODE" = "3" ]; then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Comparacao falhou (exit $CODE) — nao se gera sem saber se a spec esta atual."
+          exit 1
+
+      - name: Require GitHub App credentials
+        if: steps.compare.outputs.blocked == 'true'
+        env:
+          APP_ID: ${{ secrets.SDK_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
+            echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
+            exit 1
+          fi
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        if: steps.compare.outputs.blocked == 'true'
+        with:
+          app-id: ${{ secrets.SDK_APP_ID }}
+          private-key: ${{ secrets.SDK_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Reapply the schema from the current sdk-python
+        if: steps.compare.outputs.blocked == 'true'
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: python3 tools/apply-schema.py "$RESOURCE"
+
+      - name: Open the spec update pull request
+        if: steps.compare.outputs.blocked == 'true'
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          BRANCH="spec/refresh-$(python3 tools/place-generated.py "$RESOURCE" --slug)"
+          git config user.name "sdk-automation[bot]"
+          git config user.email "sdk-automation[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
+          git add apis/spec-v2.openapi.yaml apis/schemas
+          if git diff --cached --quiet; then
+            echo "Defasagem acusada mas nada a comitar — investigar o detector."
+            exit 1
+          fi
+          git commit -m "Refresh the $RESOURCE schema from the current sdk-python"
+          git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "HEAD:refs/heads/$BRANCH"
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$OPEN" -gt 0 ]; then
+            echo "PR de spec ja aberta para $BRANCH — o push atualizou."
+            exit 0
+          fi
+          gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
+            --title "Refresh the $RESOURCE schema from the current sdk-python" \
+            --body-file drift.log
+
+  sync:
+    needs: [validate, drift]
+    if: needs.drift.outputs.blocked != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,6 +200,9 @@ jobs:
           echo "repo=$REPO" >> "$GITHUB_OUTPUT"
           echo "Alvo: $OWNER/$REPO"
 
+      - name: Resolve the reference SDKs
+        run: make clone-sdk-ref
+
       - name: Build and verify resource
         env:
           RESOURCE: ${{ inputs.resource }}
@@ -99,8 +212,11 @@ jobs:
           python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging
 
       - name: Require GitHub App credentials
+        env:
+          APP_ID: ${{ secrets.SDK_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY }}
         run: |
-          if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
             echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
             echo "Sem credencial este job reprova — nao passa verde sem fazer nada."
             exit 1
@@ -117,7 +233,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout target SDK
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
           token: ${{ steps.app-token.outputs.token }}
@@ -169,6 +285,11 @@ jobs:
       - name: Copy verified artifacts into the target
         run: cp -R staging/. target/
 
+      - name: Compile the target against the real SDK
+        if: inputs.language == 'java'
+        working-directory: target
+        run: mvn -q -B --no-transfer-progress test-compile
+
       - name: Commit when the generated output differs
         id: commit
         working-directory: target
@@ -194,7 +315,9 @@ jobs:
       - name: Push branch
         if: steps.commit.outputs.changed == 'true'
         working-directory: target
-        run: git push -u origin "${{ steps.branch.outputs.branch }}"
+        env:
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: git push -u origin "$BRANCH"
 
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true'
