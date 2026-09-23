@@ -20,44 +20,32 @@ jobs:
         env:
             GH_TOKEN: ${{ github.token }}
             REPO: ${{ github.repository }}
+            NUMBER: ${{ github.event.pull_request.number }}
+            BASE: ${{ github.event.pull_request.base.ref }}
+            HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         steps:
-            - name: Resolve pull request
-              id: pr
-              run: |
-                  set -euo pipefail
-                  number="${{ github.event.pull_request.number }}"
-                  gh pr view "$number" --repo "$REPO" --json number,baseRefName,headRefOid > pr.json
-                  {
-                      echo "number=$number"
-                      echo "base=$(jq -r .baseRefName pr.json)"
-                      echo "head=$(jq -r .headRefOid pr.json)"
-                  } >> "$GITHUB_OUTPUT"
-
             - name: Checkout pull request head
               uses: actions/checkout@v5
               with:
-                  ref: ${{ steps.pr.outputs.head }}
+                  ref: ${{ github.event.pull_request.head.sha }}
                   fetch-depth: 0
 
             - name: Checkout enforcement scripts from the base branch
               uses: actions/checkout@v5
               with:
-                  ref: ${{ steps.pr.outputs.base }}
+                  ref: ${{ github.event.pull_request.base.ref }}
                   path: base
                   fetch-depth: 1
                   sparse-checkout: .github/scripts
 
             - name: Check rebase
               id: check
-              env:
-                  BASE: ${{ steps.pr.outputs.base }}
-                  HEAD_SHA: ${{ steps.pr.outputs.head }}
               run: |
                   set -euo pipefail
                   git fetch --no-tags origin "$BASE"
 
                   scripts=base/.github/scripts
-                  if [ ! -x "$scripts/checkRebase.sh" ]; then
+                  if [ ! -x "$scripts/checkRebase.sh" ] || [ ! -x "$scripts/reportRebase.sh" ]; then
                       echo "::warning::branch $BASE carries no enforcement scripts; falling back to the pull request copy, which the pull request itself can alter"
                       scripts=.github/scripts
                   fi
@@ -86,8 +74,6 @@ jobs:
 
             - name: Report on pull request
               env:
-                  NUMBER: ${{ steps.pr.outputs.number }}
-                  BASE: ${{ steps.pr.outputs.base }}
                   REASON: ${{ steps.check.outputs.reason }}
                   OK: ${{ steps.check.outputs.ok }}
               run: ${{ steps.check.outputs.scripts }}/reportRebase.sh
