@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/boletopayment/__boletopayment.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/boletopayment/__boletopayment.py
 components:
   schemas:
     BoletoPayment:
@@ -32,7 +32,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         status:
           type: string
           description: "current payment status. ex: \"success\" or \"failed\""
@@ -85,7 +85,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
       required:
         - taxId
         - description

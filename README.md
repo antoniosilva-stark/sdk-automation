@@ -15,14 +15,15 @@ person-day plus 15-20 minutes of automation.
 ```
 Developer edits apis/spec-v2.openapi.yaml
     ↓
-Pull request → validate-spec.yaml
-    ├─ openapi-spec-validator (syntax, $ref, constraints)
-    ├─ breaking-change-detector.py (blocks merge on BC without Tech-Lead approval)
-    └─ jest + pytest
+Pull request
+    ├─ validate-spec.yaml
+    │   ├─ openapi-spec-validator (syntax, $ref, constraints)
+    │   └─ breaking-change-detector.py (blocks merge on BC without Tech-Lead approval)
+    └─ tests.yaml: jest + pytest
     ↓
 Merge into development
     ↓
-SDK Sync (sdk-sync.yaml) — manual dispatch, two inputs: resource + language (java | node)
+SDK Sync (sdk-sync.yaml) — manual dispatch, two inputs: resource + language (java only; Node is paused, see Languages)
     ├─ drift: refresh the Python SDK, compare the versioned schema for this resource
     │     └─ drifted? open a spec-update PR here and skip the sync for this resource only
     ├─ validate resource name at the edge (place-generated.py --slug)
@@ -81,9 +82,14 @@ make setup                      # installs Python + Node deps, resolves the SDK 
 make status                     # shows which prerequisites are present
 ```
 
-`make setup` runs `make clone-sdk-ref`, which symlinks `_references/sdk-python` to
-`$HOME/workspace/bank/sdk-python` when present and clones from GitHub otherwise (so CI works).
-Override with `make clone-sdk-ref SDK_PYTHON=/other/path`.
+`make setup` runs `make clone-sdk-ref`, which clones the remote HEAD of `sdk-python`, `sdk-java`
+and `sdk-node` into `_references/`. Generation and drift detection read that HEAD on purpose.
+
+The tests compare the versioned schemas with a fixed commit, so CI uses
+`make clone-sdk-ref-pinned` (pins in the `Makefile`: `SDK_PYTHON_PIN`, `SDK_JAVA_PIN`,
+`SDK_NODE_PIN`). Moving a pin and re-extracting the schemas (`apply-schema`) is one act.
+
+Override with `make clone-sdk-ref SDK_PYTHON=/other/path`; an override is never touched.
 
 > The workspace has two layers and the top one is **Stark Infra**, a different product:
 > `~/workspace/sdk-<lang>` is `starkinfra/*`, `~/workspace/bank/sdk-<lang>` is `starkbank/*`.
@@ -146,17 +152,14 @@ gate now makes visible.
 
 ## Spec status — read this before trusting resource counts
 
-`apis/spec-v2.openapi.yaml` declares 60 resources / 180 operations and holds 120 schemas.
-Measured schema by schema, **4 resources are actually modelled**:
+`apis/spec-v2.openapi.yaml` declares 42 resources / 120 operations. Every resource is a `$ref`
+to `apis/schemas/<resource>.yaml`, extracted from `sdk-python` with a provenance SHA. The 36
+scaffolding resources (only `id` + `created`, with invented paths) were removed: generating from
+one does not fail, it produces plausible and wrong code.
 
-| Group | Count | Content |
-|---|---|---|
-| `$ref` → `apis/schemas/*.yaml` | 6 | `Transaction`, `Invoice`, `Transfer` × (`X` + `XCreate`) |
-| written by hand for the pilot | 2 | `SplitProfile` (7 props) + `SplitProfileCreate` (3) |
-| stub `X` | 56 | only `id` + `created` |
-| stub `XCreate` | 56 | empty |
-
-The remaining 56 are scaffolding. Enriching the spec — not the templates — is the bottleneck.
+Declaring a resource does not make it generatable. Parity with the real SDKs is what the gate
+measures, and it is still low (see above). Enriching the spec — not the templates — is the
+bottleneck.
 Note also that the real `Invoice` carries sub-objects (`Rule`, `Discount`, `Description`,
 `Split`) and a `Log` sub-resource the spec does not describe, so full parity is not reachable
 through Mustache alone.
@@ -165,9 +168,14 @@ through Mustache alone.
 
 Seven generator configs exist in `tools/generator-{node,python,java,ruby,go,php,dotnet}-config.yaml`.
 
-**Exercised end to end: `node` and `java`** — those are the two `SDK Sync` accepts today, and
-the only ones with templates matching the real SDK API. The other five configs generate
-default-shaped output and have neither templates nor contracts yet.
+**Exercised end to end: `java`** — the only language `SDK Sync` accepts today.
+
+**Node is paused.** The templates, the extractor and the tests stay, but the dispatch no longer
+offers it: every resource tried against the derived ruler failed (1 to 13 gaps), and `sdk-node`
+already has all 42 resources, so a Node run can only replace a file in production. Reactivate it
+when the templates cover `put`, `query`, `page`, `delete` and `pdf`.
+
+The other five configs generate default-shaped output and have neither templates nor contracts yet.
 
 ## Layout
 
@@ -177,7 +185,7 @@ apis/schemas/                      transaction.yaml, invoice.yaml, transfer.yaml
 tools/                             Python tooling + 7 generator configs
 templates/nodejs-{axios,impl,barrel,types}/, templates/java/
 tests/                             pytest suites, unit/ for jest, contract/ for manifests
-.github/workflows/                 validate-spec.yaml, sdk-sync.yaml
+.github/workflows/                 validate-spec.yaml, tests.yaml, sdk-sync.yaml
 docs/NODE_GENERATION_GUIDE.md      how Node generation is wired
 generated/                         local output (gitignored)
 _references/                       real SDK clones used as reference (gitignored, read-only)

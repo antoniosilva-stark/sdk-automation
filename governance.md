@@ -43,7 +43,7 @@ Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo s
 
 - OpenAPI Generator (core/JAR): v7.0.1 — pinado via `openapitools.json` (upgrade com aprovação do Tech-Lead)
 - OpenAPI Spec: 3.1
-- Python SDK Reference: v0.28.0
+- SDK references used by the tests: pinned by commit in the `Makefile` (`SDK_PYTHON_PIN`, `SDK_JAVA_PIN`, `SDK_NODE_PIN`); drift detection and generation read the remote HEAD
 
 ## PR Process (Spec Changes)
 

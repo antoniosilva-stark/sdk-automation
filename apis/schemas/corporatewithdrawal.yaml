@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/corporatewithdrawal/__corporatewithdrawal.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/corporatewithdrawal/__corporatewithdrawal.py
 components:
   schemas:
     CorporateWithdrawal:
@@ -12,6 +12,9 @@ components:
           type: integer
           format: int64
           description: "CorporateWithdrawal value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+        externalId:
+          type: string
+          description: "CorporateWithdrawal external ID. ex: \"12345\""
         tags:
           type: array
           items:
@@ -34,6 +37,7 @@ components:
       required:
         - id
         - amount
+        - externalId
         - transactionId
         - corporateTransactionId
         - updated
@@ -47,6 +51,9 @@ components:
           type: integer
           format: int64
           description: "CorporateWithdrawal value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+        externalId:
+          type: string
+          description: "CorporateWithdrawal external ID. ex: \"12345\""
         tags:
           type: array
           items:
@@ -54,3 +61,4 @@ components:
           description: "list of strings for tagging. ex: [\"tony\", \"stark\"]"
       required:
         - amount
+        - externalId

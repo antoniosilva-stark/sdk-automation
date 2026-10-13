@@ -1,77 +1,46 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/merchantcard/__merchantcard.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantcard/__merchantcard.py
 components:
   schemas:
     MerchantCard:
       type: object
-      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-card"
+      description: "Stores information about a card used in an approved purchase, so it can be reused in new purchases without a new MerchantSession."
       properties:
         id:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
         ending:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
         fundingType:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
         holderName:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
         network:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
         status:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "current status. ex: \"active\", \"expired\", \"canceled\" or \"blocked\""
         tags:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          type: array
+          items:
+            type: string
         expiration:
           type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
         created:
           type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
         updated:
           type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
       required:
         - id
+        - ending
+        - fundingType
+        - holderName
+        - network
+        - status
+        - tags
+        - expiration
+        - created
+        - updated
 
     MerchantCardCreate:
       type: object
       description: "MerchantCard creation request"
-      properties:
-        ending:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        fundingType:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        holderName:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        network:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        status:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        tags:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        expiration:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        created:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        updated:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
+      properties: {}

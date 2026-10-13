@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/corporatebalance/__corporatebalance.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/corporatebalance/__corporatebalance.py
 components:
   schemas:
     CorporateBalance:

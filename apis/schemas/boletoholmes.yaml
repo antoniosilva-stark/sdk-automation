@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/boletoholmes/__boletoholmes.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/boletoholmes/__boletoholmes.py
 components:
   schemas:
     BoletoHolmes:

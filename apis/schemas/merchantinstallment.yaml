@@ -1,91 +1,69 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/merchantinstallment/__merchantinstallment.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantinstallment/__merchantinstallment.py
 components:
   schemas:
     MerchantInstallment:
       type: object
-      description: "Check out our API Documentation at https://starkbank.com/docs/api#merchant-installment"
+      description: "Represents one installment of a MerchantPurchase, generated automatically by the Stark Bank API when the purchase is split."
       properties:
         id:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "unique id returned when MerchantInstallment is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "MerchantInstallment value in cents. ex: 1234 (= R$ 12.34)"
         due:
           type: string
           format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "MerchantInstallment due date. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
         fee:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          type: integer
+          description: "fee charged when the MerchantInstallment is processed. ex: 200 (= R$ 2.00)"
         fundingType:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "installment funding type. ex: \"credit\""
         network:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "card network flag. ex: \"visa\", \"mastercard\""
         purchaseId:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "unique id of the MerchantPurchase to which this installment belongs. ex: \"5656565656565656\""
         status:
           type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "current MerchantInstallment status. ex: \"created\", \"success\", \"failed\""
         tags:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
         transactionIds:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this MerchantInstallment"
         created:
           type: string
           format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "creation datetime for the MerchantInstallment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
         updated:
           type: string
           format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
+          description: "latest update datetime for the MerchantInstallment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
         - id
+        - amount
+        - due
+        - fee
+        - fundingType
+        - network
+        - purchaseId
+        - status
+        - tags
+        - transactionIds
+        - created
+        - updated
 
     MerchantInstallmentCreate:
       type: object
       description: "MerchantInstallment creation request"
-      properties:
-        amount:
-          type: integer
-          format: int64
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        due:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        fee:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        fundingType:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        network:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        purchaseId:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        status:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        tags:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        transactionIds:
-          type: string
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        created:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
-        updated:
-          type: string
-          format: date-time
-          description: "tipo inferido do __init__, nao declarado no docstring"
+      properties: {}

@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/paymentpreview/__paymentpreview.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/paymentpreview/__paymentpreview.py
 components:
   schemas:
     PaymentPreview:

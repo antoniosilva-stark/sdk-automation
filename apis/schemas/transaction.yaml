@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/transaction/__transaction.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/transaction/__transaction.py
 components:
   schemas:
     Transaction:

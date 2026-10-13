@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/brcodepayment/__brcodepayment.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/brcodepayment/__brcodepayment.py
 components:
   schemas:
     BrcodePayment:
@@ -29,7 +29,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         rules:
           type: array
           items:
@@ -98,7 +98,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         rules:
           type: array
           items:

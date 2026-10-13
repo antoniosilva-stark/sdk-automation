@@ -20,7 +20,7 @@ describe('OpenAPI Specification Tests', () => {
       const schemas = new Set(Object.keys(spec.components.schemas));
       for (const route of paths) {
         const resource = route.replace('/{id}', '').replace(/^\//, '').split(/[-_]/)
-.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('');
         const known = [...schemas].some((name) => name.toLowerCase() === resource.toLowerCase());
         expect(known).toBe(true);
       }
@@ -67,16 +67,12 @@ describe('OpenAPI Specification Tests', () => {
       }
     });
 
-    test('should keep not yet applied resources inline', () => {
-      const stubs = Object.entries(spec.components.schemas)
-.filter(([name, schema]) => !name.endsWith('Create') && !schema.$ref);
+    test('should not declare inline scaffolding resources', () => {
+      const inline = Object.entries(spec.components.schemas)
+        .filter(([name, schema]) => !name.endsWith('Create') && !schema.$ref)
+        .map(([name]) => name);
 
-      expect(stubs.length).toBeGreaterThan(0);
-
-      const [, schema] = stubs[0];
-      expect(schema.type).toBe('object');
-      expect(schema.properties).toBeDefined();
-      expect(schema.required).toContain('id');
+      expect(inline).toEqual([]);
     });
 
     test('every resource schema should have a Create counterpart', () => {

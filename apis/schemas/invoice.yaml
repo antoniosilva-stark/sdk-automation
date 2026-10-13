@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/invoice/__invoice.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/invoice/__invoice.py
 components:
   schemas:
     Invoice:
@@ -11,7 +11,7 @@ components:
         amount:
           type: integer
           format: int64
-          description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+          description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34). If amount = 0, the Invoice will accept any amount paid by the customer; otherwise, only the exact amount will be accepted. When paid, this attribute is updated with the amount actually paid."
         taxId:
           type: string
           description: "payer tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
@@ -24,7 +24,7 @@ components:
           description: "Invoice due date in UTC ISO format. ex: \"2020-10-28T17:59:26.249976+00:00\" for immediate invoices and \"2020-10-28\" for scheduled invoices"
         expiration:
           type: integer
-          description: "time interval in seconds between due date and expiration date. ex 123456789"
+          description: "time interval in seconds between due date and expiration date. After the expiration, the Invoice can no longer be paid. ex 123456789"
         fine:
           type: number
           format: float
@@ -37,7 +37,7 @@ components:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"percentage\":float and \"due\":datetime.datetime or string pairs"
+          description: "list of up to 5 dictionaries with \"percentage\":float and \"due\":datetime.datetime or string pairs"
         rules:
           type: array
           items:
@@ -52,12 +52,12 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         descriptions:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"key\":string and (optional) \"value\":string pairs"
+          description: "list of up to 15 dictionaries with \"key\":string and (optional) \"value\":string pairs"
         pdf:
           type: string
           format: uri
@@ -129,7 +129,7 @@ components:
         amount:
           type: integer
           format: int64
-          description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34)"
+          description: "Invoice value in cents. Minimum = 0 (any value will be accepted). ex: 1234 (= R$ 12.34). If amount = 0, the Invoice will accept any amount paid by the customer; otherwise, only the exact amount will be accepted. When paid, this attribute is updated with the amount actually paid."
         taxId:
           type: string
           description: "payer tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
@@ -142,7 +142,7 @@ components:
           description: "Invoice due date in UTC ISO format. ex: \"2020-10-28T17:59:26.249976+00:00\" for immediate invoices and \"2020-10-28\" for scheduled invoices"
         expiration:
           type: integer
-          description: "time interval in seconds between due date and expiration date. ex 123456789"
+          description: "time interval in seconds between due date and expiration date. After the expiration, the Invoice can no longer be paid. ex 123456789"
         fine:
           type: number
           format: float
@@ -155,7 +155,7 @@ components:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"percentage\":float and \"due\":datetime.datetime or string pairs"
+          description: "list of up to 5 dictionaries with \"percentage\":float and \"due\":datetime.datetime or string pairs"
         rules:
           type: array
           items:
@@ -170,12 +170,12 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         descriptions:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"key\":string and (optional) \"value\":string pairs"
+          description: "list of up to 15 dictionaries with \"key\":string and (optional) \"value\":string pairs"
       required:
         - amount
         - taxId

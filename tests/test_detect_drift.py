@@ -13,7 +13,6 @@ def _schemaDir(tmpPath: Path, resource: str, document: dict) -> Path:
 
 
 def _appliedResources() -> list[str]:
-    """O nome da classe vem do proprio schema: `boletopayment.yaml` declara `BoletoPayment`."""
     names = []
     for path in (REPO_ROOT / "apis/schemas").glob("*.yaml"):
         schemas = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"]
@@ -63,7 +62,6 @@ def test_changedTypeIsDetected(tmpPath):
 
 
 def test_resourceWithoutVersionedSchemaHasItsOwnCode(tmpPath):
-    """Recurso novo nao esta defasado: ainda nao foi aplicado. Quem chama decide."""
     code, out = runTool("detect-drift.py", "NaoExiste", "--schemas", str(tmpPath))
 
     assert code == 3
@@ -83,7 +81,6 @@ def test_extractionFailureIsNotSilentSuccess(tmpPath):
 @requiresPythonSdk
 @pytest.mark.parametrize("resource", sorted(_appliedResources()))
 def test_everyAppliedSchemaIsInSyncWithThePython(resource):
-    """O mesmo guarda do golden, agora por recurso: e o que permite bloqueio seletivo."""
     code, out = runTool("detect-drift.py", resource, "--from", str(PYTHON_SDK))
 
     assert code == 0, out
@@ -91,7 +88,6 @@ def test_everyAppliedSchemaIsInSyncWithThePython(resource):
 
 @requiresPythonSdk
 def test_onlyTheDriftedResourceIsBlocked(tmpPath):
-    """Decisao 61: release do sdk-python nao pode travar os 39 recursos que nao mudaram."""
     directory = tmpPath / "schemas"
     directory.mkdir()
     for resource in ("DictKey", "Balance"):
@@ -111,10 +107,6 @@ def test_onlyTheDriftedResourceIsBlocked(tmpPath):
 
 @requiresPythonSdk
 def test_thePilotResourceHasAVersionedSchema():
-    """`SplitProfile` e o default do workflow_dispatch e nao tinha `apis/schemas/splitprofile.yaml`:
-    o detector devolvia exit 3 e o workflow tratava como "nao defasado". A protecao que o README
-    anuncia nunca rodava no unico caminho que o piloto exercita.
-    """
     code, out = runTool("detect-drift.py", "SplitProfile", "--from", str(PYTHON_SDK))
 
     assert code == 0, out

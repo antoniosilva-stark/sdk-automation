@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/invoicepullsubscription/__invoicepullsubscription.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/invoicepullsubscription/__invoicepullsubscription.py
 components:
   schemas:
     InvoicePullSubscription:
@@ -38,8 +38,9 @@ components:
           type: string
           description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
         due:
-          type: integer
-          description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
+          type: string
+          format: date-time
+          description: "date by which the payer must approve or deny the subscription; defaults to 2 days after creation if not informed. Applies to every subscription type. ex: \"2022-04-08\""
         externalId:
           type: string
           description: "string that must be unique among all your InvoicePullSubscriptions. Duplicated external_ids will cause failures. ex: \"my-external-id\""
@@ -52,7 +53,7 @@ components:
           description: "subscription end date. ex: \"2023-04-01\""
         data:
           type: object
-          description: "additional data for the subscription based on type"
+          description: "additional data for the subscription, required for types \"push\" (payer's account details), \"qrcodeAndPayment\" and \"paymentAndOrQrcode\" (immediate payment parameters); not required for type \"qrcode\""
         name:
           type: string
           description: "subscription debtor name. ex: \"Iron Bank S.A.\""
@@ -128,8 +129,9 @@ components:
           type: string
           description: "Invoice description to be shown to the payer. ex: \"Subscription payment\""
         due:
-          type: integer
-          description: "subscription invoice due offset. Available only for type \"push\". ex: timedelta(days=7)"
+          type: string
+          format: date-time
+          description: "date by which the payer must approve or deny the subscription; defaults to 2 days after creation if not informed. Applies to every subscription type. ex: \"2022-04-08\""
         externalId:
           type: string
           description: "string that must be unique among all your InvoicePullSubscriptions. Duplicated external_ids will cause failures. ex: \"my-external-id\""
@@ -142,7 +144,7 @@ components:
           description: "subscription end date. ex: \"2023-04-01\""
         data:
           type: object
-          description: "additional data for the subscription based on type"
+          description: "additional data for the subscription, required for types \"push\" (payer's account details), \"qrcodeAndPayment\" and \"paymentAndOrQrcode\" (immediate payment parameters); not required for type \"qrcode\""
         name:
           type: string
           description: "subscription debtor name. ex: \"Iron Bank S.A.\""

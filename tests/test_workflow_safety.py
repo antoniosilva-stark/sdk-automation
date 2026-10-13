@@ -1,5 +1,6 @@
 import re
 import yaml
+import subprocess
 import pytest
 from pathlib import Path
 
@@ -7,18 +8,14 @@ from conftest import REPO_ROOT
 
 WORKFLOW_DIR = REPO_ROOT / ".github/workflows"
 SYNC = WORKFLOW_DIR / "sdk-sync.yaml"
-SAFE_IN_RUN = ("secrets.GITHUB_TOKEN",)
-UNTRUSTED = (
-    "inputs.",
-    "github.event.",
-    "github.ref_name",
-    "github.head_ref",
-    "github.actor",
-    "github.triggering_actor",
-    "secrets.",
-    "steps.",
-    "needs.",
-    "env.",
+SAFE_IN_RUN = (
+    "github.repository",
+    "github.run_id",
+    "github.run_number",
+    "github.workflow",
+    "github.job",
+    "runner.os",
+    "runner.temp",
 )
 
 _EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
@@ -73,9 +70,7 @@ def untrustedInRun(workflow: dict) -> list[str]:
     found = []
     for jobName, stepName, script in runBlocks(workflow):
         for expression in _EXPRESSION.findall(script):
-            if expression.startswith(SAFE_IN_RUN):
-                continue
-            if expression.startswith(UNTRUSTED):
+            if not expression.startswith(SAFE_IN_RUN):
                 found.append(f"{jobName}/{stepName}: {expression}")
     return found
 
@@ -84,13 +79,13 @@ def test_findsTheWorkflows():
     assert len(workflowFiles()) >= 2, "glob nao achou workflow — teste seria vacuo"
 
 
-def test_theInjectionGuardCoversWhatTheWorkflowsActuallyUse():
-    """A lista cobria so `inputs.` e `github.event.`, e o `${{ github.ref_name }}` que eu
-    interpolei no step do token do App passava verde — com o README afirmando o contrario.
-    """
-    for expression in ("github.ref_name", "github.head_ref", "github.actor",
-                       "secrets.SDK_APP_PRIVATE_KEY", "steps.app-token.outputs.token"):
-        assert expression.startswith(UNTRUSTED), f"nao coberto pela guarda: {expression}"
+def test_theInjectionGuardIsAnAllowlist():
+    perigosas = ("inputs.resource", "github.event.pull_request.title", "github.ref_name",
+                 "github.ref", "github.base_ref", "github.head_ref", "github.actor",
+                 "secrets.SDK_APP_PRIVATE_KEY", "secrets.GITHUB_TOKEN",
+                 "steps.app-token.outputs.token", "needs.drift.outputs.blocked", "env.QUALQUER")
+    for expression in perigosas:
+        assert not expression.startswith(SAFE_IN_RUN), f"expressao perigosa liberada: {expression}"
 
 
 @pytest.mark.parametrize("path", workflowFiles(), ids=lambda p: p.name)
@@ -140,11 +135,6 @@ def test_generatorRunsBeforeTheTokenExists():
 
 
 def test_targetIsCompiledBeforeTheCommit():
-    """O sdk-java nao tem CI nenhuma: este gate e o unico que pega Java que nao compila.
-
-    Tem de rodar depois do copy, porque so ali o pom.xml do alvo e o gerado coexistem,
-    e antes do commit, para nao abrir PR com codigo que nao compila.
-    """
     steps = syncSteps()
     copy = stepIndex(steps, "cp -R staging/.", "run")
     build = stepIndex(steps, "test-compile", "run")
@@ -156,11 +146,6 @@ def test_targetIsCompiledBeforeTheCommit():
 
 
 def test_compilationCoversGeneratedTestAndRunsNothing():
-    """`mvn compile` nao compila src/test — o teste gerado passaria sem verificacao.
-
-    E `mvn test` exigiria PROJECT_ID/PROJECT_PRIVATE_KEY de sandbox, que este repo
-    nao tem e nao deve ter.
-    """
     scripts = [step.get("run") or "" for step in syncSteps()]
     mvn = [script for script in scripts if "mvn" in script]
 
@@ -171,7 +156,6 @@ def test_compilationCoversGeneratedTestAndRunsNothing():
 
 
 def test_ownRepoCheckoutDoesNotPersistCredentials():
-    """Credencial ambiente de escrita e o que permite push acidental no proprio repo."""
     workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
     for jobName, job in (workflow.get("jobs") or {}).items():
         for step in (job.get("steps") or []):
@@ -264,11 +248,6 @@ def test_everyWorkflowUsesTheSameNodeMajor():
 
 
 def test_whoeverRunsTestsResolvesTheReferenceFirst():
-    """47 testes pytest ficavam skipped no CI por falta de _references/sdk-python.
-
-    O golden, o teste de gap e o de cobertura estavam entre eles: o CI nao verificava
-    fidelidade ao SDK Python, que e o proposito do projeto.
-    """
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for jobName, job in (workflow.get("jobs") or {}).items():
@@ -285,10 +264,6 @@ def test_whoeverRunsTestsResolvesTheReferenceFirst():
 
 
 def test_whoeverBuildsResolvesTheReferenceFirst():
-    """A regua e derivada do SDK real a cada execucao: sem a referencia nao ha o que medir.
-
-    Roda antes do token do App de proposito: os SDKs sao publicos.
-    """
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         for jobName, job in (workflow.get("jobs") or {}).items():
@@ -339,7 +314,6 @@ def driftJob() -> dict:
 
 
 def test_driftIsCheckedBeforeAnythingIsGenerated():
-    """Decisao 61: recurso defasado espera; os outros seguem. O bloqueio e por recurso."""
     workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
     jobs = workflow.get("jobs") or {}
 
@@ -358,7 +332,6 @@ def test_syncIsSkippedOnlyForTheDriftedResource():
 
 
 def test_driftJobRefreshesTheReferenceBeforeComparing():
-    """Decisao 62: o fetch vive no sdk-sync. Comparar contra clone velho e nao comparar."""
     scripts = [step.get("run") or "" for step in (driftJob().get("steps") or [])]
     refresh = next((i for i, script in enumerate(scripts) if "refresh-sdk-ref" in script), None)
     compare = next((i for i, script in enumerate(scripts) if "detect-drift.py" in script), None)
@@ -369,7 +342,6 @@ def test_driftJobRefreshesTheReferenceBeforeComparing():
 
 
 def test_specPrIsNeverAutoMerged():
-    """A spec e o artefato que a governanca de BC protege: PR de spec e revisada por gente."""
     workflow = SYNC.read_text(encoding="utf-8")
 
     assert "gh pr merge" not in workflow
@@ -377,7 +349,6 @@ def test_specPrIsNeverAutoMerged():
 
 
 def test_specPrUsesTheAppTokenNotTheDefaultOne():
-    """PR aberta com GITHUB_TOKEN nao dispara workflow nenhum: a PR nasceria sem validacao."""
     steps = driftJob().get("steps") or []
     prStep = next((step for step in steps if "gh pr create" in (step.get("run") or "")), None)
 
@@ -388,33 +359,42 @@ def test_specPrUsesTheAppTokenNotTheDefaultOne():
 
 @pytest.mark.parametrize("path", workflowFiles(), ids=lambda p: p.name)
 def test_everyWorkflowDeclaresConcurrency(path):
-    """Dois dispatches do mesmo recurso competiam pela mesma branch no alvo.
-
-    Foi o que me obrigou a serializar os dois runs de idempotencia na mao em 2026-09-15.
-    """
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
 
     assert "concurrency" in workflow, f"{path.name} sem concurrency"
     assert "group" in workflow["concurrency"]
 
 
-def test_theSpecPullRequestIsNotDuplicated():
-    """O `sync` ja checava PR aberta antes de criar; o `drift` criava direto, entao dois
-    runs seguidos com o mesmo recurso defasado abririam duas PRs de spec.
-    """
+def test_theSpecPullRequestIsNotDuplicated(tmpPath):
     steps = driftJob().get("steps") or []
-    prStep = next(step for step in steps if "gh pr create" in (step.get("run") or ""))
+    script = next(step["run"] for step in steps if "gh pr create" in (step.get("run") or ""))
 
-    assert "gh pr list" in prStep["run"], "PR de spec criada sem checar se ja existe"
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    chamadas = tmpPath / "chamadas.txt"
+    (binario / "git").write_text(
+        '#!/bin/sh\n'
+        'case "$1 $2 $3" in "diff --cached --quiet") exit 1;; *) exit 0;; esac\n',
+        encoding="utf-8")
+    (binario / "gh").write_text(
+        f'#!/bin/sh\necho "$@" >> {chamadas}\n'
+        'case "$1 $2" in "pr list") echo 1;; *) ;; esac\n',
+        encoding="utf-8")
+    (binario / "python3").write_text("#!/bin/sh\necho split-profile\n", encoding="utf-8")
+    for nome in ("git", "gh", "python3"):
+        (binario / nome).chmod(0o755)
+
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", script], capture_output=True, text=True,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "RESOURCE": "SplitProfile",
+                                    "GH_TOKEN": "x", "BASE_BRANCH": "development",
+                                    "GITHUB_REPOSITORY": "dono/repo"})
+
+    executadas = chamadas.read_text(encoding="utf-8") if chamadas.exists() else ""
+    assert "pr create" not in executadas, f"criou PR duplicada: {executadas}"
+    assert resultado.returncode == 0, resultado.stderr
 
 
 def test_theBreakingChangeGateLivesInThePullRequestOnly():
-    """BC protege o merge, e so a PR tem como aprova-lo.
-
-    Dentro do `sdk-sync` o mesmo gate vira impasse: para gerar seria preciso aprovar o BC,
-    a aprovacao acontece no fluxo da PR, e gerar e justamente como se testa a branch antes
-    de pedir merge. A geracao le a spec desta branch, seja ela mergeavel ou nao.
-    """
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         usa = [f"{jobName}/{step.get('name') or step.get('run')}"
@@ -426,3 +406,41 @@ def test_theBreakingChangeGateLivesInThePullRequestOnly():
             assert usa, "a PR precisa do gate de BC"
             continue
         assert usa == [], f"{path.name}: gate de BC fora da PR bloqueia sem caminho de aprovacao: {usa}"
+
+
+def test_everyBranchCreationChecksTheRemoteFirst():
+    for jobName, job in (yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"]).items():
+        scripts = [step.get("run") or "" for step in (job.get("steps") or [])]
+        empurra = next((i for i, script in enumerate(scripts)
+                        if "git push" in script and "$BRANCH" in script), None)
+        if empurra is None:
+            continue
+
+        protegido = any("ls-remote" in script or "--force-with-lease" in script
+                        for script in scripts[:empurra + 1])
+        assert protegido, f"{jobName}: push de branch sem checar o remoto antes"
+
+
+def test_theStepThatReceivesTheAppTokenIsPinnedBySha():
+    workflow = yaml.safe_load(SYNC.read_text(encoding="utf-8"))
+    for jobName, job in (workflow.get("jobs") or {}).items():
+        for step in (job.get("steps") or []):
+            recebe = "app-token" in str(step.get("with") or {}) or "app-token" in str(step.get("env") or {})
+            if not recebe or not step.get("uses"):
+                continue
+            referencia = step["uses"].split("@")[-1]
+            assert _SHA.match(referencia), \
+                f"{jobName}/{step.get('name') or step['uses']}: recebe o token do App em tag móvel"
+
+
+def test_theApprovalFileRequiresReviewAndRetriggersTheGate():
+    donos = REPO_ROOT / ".github/CODEOWNERS"
+    assert donos.is_file(), "aprovacao de BC sem CODEOWNERS e autoassinada"
+    assert "bc-approvals" in donos.read_text(encoding="utf-8")
+
+    workflow = yaml.safe_load((WORKFLOW_DIR / "validate-spec.yaml").read_text(encoding="utf-8"))
+    trigger = workflow["on"] if "on" in workflow else workflow[True]
+    caminhos = trigger["pull_request"]["paths"]
+
+    assert any("bc-approvals" in path for path in caminhos), \
+        "PR que so adiciona aprovacao nao dispara o gate que a aprovacao dispensa"

@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/corporateholder/__corporateholder.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/corporateholder/__corporateholder.py
 components:
   schemas:
     CorporateHolder:

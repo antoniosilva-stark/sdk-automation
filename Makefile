@@ -1,8 +1,15 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref refresh-sdk-ref reference
+.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
 BC_BASE ?= origin/development
 SDK_PYTHON ?=
 SDK_JAVA ?=
+SDK_REMOTE ?= https://github.com/starkbank
+
+# Commits que os testes comparam com os schemas versionados. Subir um pin e reextrair os
+# schemas (apply-schema) e um mesmo ato; o HEAD fica so no drift e no sync.
+SDK_PYTHON_PIN ?= 65fc3f89dc2f05751bc9376f3885d6893d57fa9b
+SDK_JAVA_PIN ?= c7f40b871bfa45fe4b448aa40af62b4d457aabd8
+SDK_NODE_PIN ?= cd8b4eba50aeb5c40faffc7fa04d28ead4effaf4
 
 GREEN := \033[0;32m
 RED := \033[0;31m
@@ -59,6 +66,12 @@ clone-sdk-ref: ## Clone the SDK references into _references/ (override with SDK_
 	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)"
 	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)"
 
+clone-sdk-ref-pinned: ## Clone the SDK references at the pinned commits, for tests (override with SDK_PYTHON / SDK_JAVA)
+	@mkdir -p _references
+	@$(MAKE) --no-print-directory reference REPO=sdk-python MARKER=starkbank OVERRIDE="$(SDK_PYTHON)" PIN=$(SDK_PYTHON_PIN)
+	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)" PIN=$(SDK_JAVA_PIN)
+	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)" PIN=$(SDK_NODE_PIN)
+
 refresh-sdk-ref: ## Atualiza os clones em _references/ (override por symlink e preservado)
 	@for repo in sdk-python sdk-java sdk-node; do \
 		if [ -L "_references/$$repo" ]; then \
@@ -75,17 +88,29 @@ refresh-sdk-ref: ## Atualiza os clones em _references/ (override por symlink e p
 		fi; \
 	done
 
-reference: ## Internal: resolve one reference clone
+reference: ## Internal: resolve one reference clone (PIN fixes the commit; empty means remote HEAD)
 	@if [ -n "$(OVERRIDE)" ]; then \
 		if [ ! -d "$(OVERRIDE)/$(MARKER)" ]; then \
 			echo "$(RED)❌ $(REPO): $(OVERRIDE) nao contem $(MARKER)$(NC)"; exit 1; \
 		fi; \
 		ln -sfn "$(OVERRIDE)" _references/$(REPO); \
 		echo "$(GREEN)✅ $(REPO): $(OVERRIDE) (override)$(NC)"; \
+	elif [ -L "_references/$(REPO)" ]; then \
+		echo "$(BLUE)↷ $(REPO): override existente, nao alterado$(NC)"; \
+	elif [ -n "$(PIN)" ]; then \
+		if [ ! -d "_references/$(REPO)/.git" ]; then \
+			git init -q _references/$(REPO); \
+			git -C _references/$(REPO) remote add origin $(SDK_REMOTE)/$(REPO).git; \
+		fi; \
+		if ! git -C _references/$(REPO) fetch -q --depth 1 origin $(PIN) \
+		  || ! git -C _references/$(REPO) checkout -q --detach FETCH_HEAD; then \
+			echo "$(RED)❌ $(REPO): nao foi possivel fixar $(PIN)$(NC)"; exit 1; \
+		fi; \
+		echo "$(GREEN)✅ $(REPO): $$(echo $(PIN) | cut -c1-7) (fixado)$(NC)"; \
 	elif [ -d "_references/$(REPO)/$(MARKER)" ]; then \
 		echo "$(GREEN)✅ $(REPO): _references/$(REPO)$(NC)"; \
 	else \
-		git clone -q --depth 1 https://github.com/starkbank/$(REPO).git _references/$(REPO); \
+		git clone -q --depth 1 $(SDK_REMOTE)/$(REPO).git _references/$(REPO); \
 		echo "$(GREEN)✅ $(REPO): clonado em _references/$(REPO)$(NC)"; \
 	fi
 

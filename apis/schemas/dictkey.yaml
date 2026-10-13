@@ -1,9 +1,9 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/dictkey/__dictkey.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/dictkey/__dictkey.py
 components:
   schemas:
     DictKey:
       type: object
-      description: "DictKey represents a PIX key registered in Bacen's DICT system."
+      description: "DictKey represents a PIX key registered in Bacen's DICT system. An EVP (random) DictKey is automatically created for every new Workspace, since an active DICT key is required for the Invoice service to work."
       properties:
         id:
           type: string

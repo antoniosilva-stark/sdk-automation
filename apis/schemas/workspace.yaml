@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/workspace/__workspace.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/workspace/__workspace.py
 components:
   schemas:
     Workspace:
@@ -10,7 +10,7 @@ components:
           description: "unique id returned when the workspace is created. ex: \"5656565656565656\""
         username:
           type: string
-          description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+          description: "Simplified, URL-safe name that defines the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
         name:
           type: string
           description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""
@@ -48,7 +48,7 @@ components:
       properties:
         username:
           type: string
-          description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+          description: "Simplified, URL-safe name that defines the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
         name:
           type: string
           description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""

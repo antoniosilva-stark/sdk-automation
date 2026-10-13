@@ -6,6 +6,7 @@ on:
       - 'apis/spec-v2.openapi.yaml'
       - 'apis/schemas/**'
       - 'tools/breaking-change-detector.py'
+      - 'apis/bc-approvals.yaml'
 
 concurrency:
   group: validate-spec-${{ github.ref }}

@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/corporateinvoice/__corporateinvoice.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/corporateinvoice/__corporateinvoice.py
 components:
   schemas:
     CorporateInvoice:

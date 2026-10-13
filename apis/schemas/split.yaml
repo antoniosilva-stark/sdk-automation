@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/split/__split.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/split/__split.py
 components:
   schemas:
     Split:

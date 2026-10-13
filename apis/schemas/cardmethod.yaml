@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/cardmethod/__cardmethod.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/cardmethod/__cardmethod.py
 components:
   schemas:
     CardMethod:

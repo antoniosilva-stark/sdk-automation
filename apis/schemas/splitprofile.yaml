@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/splitprofile/__splitprofile.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/splitprofile/__splitprofile.py
 components:
   schemas:
     SplitProfile:

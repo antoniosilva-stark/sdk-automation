@@ -25,8 +25,8 @@ field public String[] tags;  # array Java vs List do gerador; o generator java n
 field public String[] transactionIds;  # array Java vs List do gerador; o generator java nao expoe a opcao
 
 [splitprofile/main]
-signature public static List<SplitProfile> put(List<?> splitProfiles)  # Rest.put nao existe no sdk-java @ c7f40b8 (decisao 43)
-signature public static List<SplitProfile> put(List<?> splitProfiles, User user)  # Rest.put nao existe no sdk-java @ c7f40b8 (decisao 43)
+signature public static List<SplitProfile> put(List<?> splitProfiles)  # Rest.put nao existe no sdk-java @ c7f40b8
+signature public static List<SplitProfile> put(List<?> splitProfiles, User user)  # Rest.put nao existe no sdk-java @ c7f40b8
 field public String[] tags;  # array Java vs List do gerador; o generator java nao expoe a opcao
 
 [transaction/main]

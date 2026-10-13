@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/merchantcountry/__merchantcountry.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantcountry/__merchantcountry.py
 components:
   schemas:
     MerchantCountry:

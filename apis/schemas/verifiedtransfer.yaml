@@ -1,0 +1,110 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/verifiedtransfer/__verifiedtransfer.py
+components:
+  schemas:
+    VerifiedTransfer:
+      type: object
+      description: "When you initialize a VerifiedTransfer, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when the VerifiedTransfer is created. ex: \"5656565656565656\""
+        amount:
+          type: integer
+          format: int64
+          description: "transfer value in cents. ex: 1234 (= R$ 12.34)"
+        accountId:
+          type: string
+          description: "receiver's VerifiedAccount ID. ex: \"5656565656565656\""
+        externalId:
+          type: string
+          description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
+        scheduled:
+          type: string
+          format: date-time
+          description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: \"2020-11-12T00:14:22.806+00:00\" or \"2020-11-30\""
+        description:
+          type: string
+          description: "optional description to override default description to be shown in the bank statement. ex: \"Payment for service #1234\""
+        displayDescription:
+          type: string
+          description: "optional description to be shown in the receiver bank interface. ex: \"Payment for service #1234\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for reference when searching for verified transfers. ex: [\"employees\", \"monthly\"]"
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of transfer.Rule objects for modifying transfer behaviour. ex: [transfer.Rule(key=\"resendingLimit\", value=5)]"
+        fee:
+          type: integer
+          description: "fee charged when the transfer is created. ex: 200 (= R$ 2.00)"
+        status:
+          type: string
+          description: "current verified transfer status. ex: \"created\", \"processing\", \"success\" or \"failed\""
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this transfer (if there are two, second is the chargeback). ex: [\"19827356981273\"]"
+        metadata:
+          type: object
+          description: "dictionary object used to store additional information about the VerifiedTransfer object."
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the verified transfer. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the verified transfer. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - amount
+        - accountId
+        - fee
+        - status
+        - transactionIds
+        - metadata
+        - created
+        - updated
+
+    VerifiedTransferCreate:
+      type: object
+      description: "VerifiedTransfer creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "transfer value in cents. ex: 1234 (= R$ 12.34)"
+        accountId:
+          type: string
+          description: "receiver's VerifiedAccount ID. ex: \"5656565656565656\""
+        externalId:
+          type: string
+          description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
+        scheduled:
+          type: string
+          format: date-time
+          description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: \"2020-11-12T00:14:22.806+00:00\" or \"2020-11-30\""
+        description:
+          type: string
+          description: "optional description to override default description to be shown in the bank statement. ex: \"Payment for service #1234\""
+        displayDescription:
+          type: string
+          description: "optional description to be shown in the receiver bank interface. ex: \"Payment for service #1234\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for reference when searching for verified transfers. ex: [\"employees\", \"monthly\"]"
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of transfer.Rule objects for modifying transfer behaviour. ex: [transfer.Rule(key=\"resendingLimit\", value=5)]"
+      required:
+        - amount
+        - accountId

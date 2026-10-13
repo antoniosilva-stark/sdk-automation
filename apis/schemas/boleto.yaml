@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/boleto/__boleto.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/boleto/__boleto.py
 components:
   schemas:
     Boleto:
@@ -55,12 +55,12 @@ components:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"text\":string and (optional) \"amount\":int pairs"
+          description: "list of up to 15 dictionaries with \"text\":string and (optional) \"amount\":int pairs. If the \"booklet\" PDF layout is used, only the text of the first description is shown, filling the installment cell."
         discounts:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
+          description: "list of up to 2 dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
         tags:
           type: array
           items:
@@ -68,10 +68,10 @@ components:
           description: "list of strings for tagging"
         receiverName:
           type: string
-          description: "receiver (Sacador Avalista) full name. ex: \"Anthony Edward Stark\""
+          description: "receiver (Sacador Avalista) full name. If omitted, the workspace owner's name is used. Must be informed together with receiver_tax_id. ex: \"Anthony Edward Stark\""
         receiverTaxId:
           type: string
-          description: "receiver (Sacador Avalista) tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+          description: "receiver (Sacador Avalista) tax ID. If omitted, the workspace owner's tax ID is used. Must be informed together with receiver_name. ex: \"01234567890\" or \"20.018.183/0001-80\""
         fee:
           type: integer
           description: "fee charged when Boleto is paid. ex: 200 (= R$ 2.00)"
@@ -170,12 +170,12 @@ components:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"text\":string and (optional) \"amount\":int pairs"
+          description: "list of up to 15 dictionaries with \"text\":string and (optional) \"amount\":int pairs. If the \"booklet\" PDF layout is used, only the text of the first description is shown, filling the installment cell."
         discounts:
           type: array
           items:
             type: object
-          description: "list of dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
+          description: "list of up to 2 dictionaries with \"percentage\":float and \"date\":datetime.datetime or string pairs"
         tags:
           type: array
           items:
@@ -183,10 +183,10 @@ components:
           description: "list of strings for tagging"
         receiverName:
           type: string
-          description: "receiver (Sacador Avalista) full name. ex: \"Anthony Edward Stark\""
+          description: "receiver (Sacador Avalista) full name. If omitted, the workspace owner's name is used. Must be informed together with receiver_tax_id. ex: \"Anthony Edward Stark\""
         receiverTaxId:
           type: string
-          description: "receiver (Sacador Avalista) tax ID (CPF or CNPJ) with or without formatting. ex: \"01234567890\" or \"20.018.183/0001-80\""
+          description: "receiver (Sacador Avalista) tax ID. If omitted, the workspace owner's tax ID is used. Must be informed together with receiver_name. ex: \"01234567890\" or \"20.018.183/0001-80\""
       required:
         - amount
         - name

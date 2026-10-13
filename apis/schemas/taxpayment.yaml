@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/taxpayment/__taxpayment.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/taxpayment/__taxpayment.py
 components:
   schemas:
     TaxPayment:
@@ -25,7 +25,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         type:
           type: string
           description: "tax type. ex: \"das\""
@@ -84,6 +84,6 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
       required:
         - description

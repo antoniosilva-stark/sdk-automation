@@ -1,4 +1,4 @@
-# fonte: starkbank/sdk-python@9ef6834 · starkbank/darfpayment/__darfpayment.py
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/darfpayment/__darfpayment.py
 components:
   schemas:
     DarfPayment:
@@ -48,7 +48,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
         status:
           type: string
           description: "current payment status. ex: \"success\" or \"failed\""
@@ -133,7 +133,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for tagging"
+          description: "list of strings for tagging. All tags will be converted to lowercase."
       required:
         - description
         - revenueCode
