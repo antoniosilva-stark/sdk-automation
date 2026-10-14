@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a DarfPayment, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when payment is created. ex: \"5656565656565656\""
         description:
           type: string
           description: "Text to be displayed in your statement (min. 10 characters). ex: \"payment ABC\""
@@ -49,6 +46,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. All tags will be converted to lowercase."
+        id:
+          type: string
+          description: "unique id returned when payment is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current payment status. ex: \"success\" or \"failed\""
@@ -73,7 +74,6 @@ components:
           format: date-time
           description: "creation datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - description
         - revenueCode
         - taxId
@@ -82,6 +82,7 @@ components:
         - fineAmount
         - interestAmount
         - due
+        - id
         - status
         - amount
         - fee

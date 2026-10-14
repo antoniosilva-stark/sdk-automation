@@ -8,6 +8,7 @@ components:
         id:
           type: string
           description: "unique id returned when CorporateTransaction is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         amount:
           type: integer
           format: int64

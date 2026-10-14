@@ -15,7 +15,7 @@ CREATE_SUFFIX = "Create"
 
 CODE_SCAFFOLDING = "SCAFFOLDING"
 CODE_UNDECLARED = "UNDECLARED"
-CODE_ID_ORDER = "ID_ORDER"
+CODE_ID_MARKER = "ID_MARKER"
 CODE_NO_OPERATION = "NO_OPERATION"
 CODE_NO_PROVENANCE = "NO_PROVENANCE"
 CODE_NO_ID = "NO_ID"
@@ -164,8 +164,8 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
                         "schema sem 'id': o template emite 'extends Resource' com 'super(null)'"
                         " e nao declara a primeira propriedade — no SDK real esses recursos sao"
                         " SubResource, que ainda nao tem template"))
-    if "id" in names and names[0] != "id":
-        reasons.append((CODE_ID_ORDER, f"'id' deve ser a primeira propriedade, mas veio depois de '{names[0]}'"))
+    if "id" in names and not (readProps["id"] or {}).get("x-sdk-id"):
+        reasons.append((CODE_ID_MARKER, "'id' sem x-sdk-id: o construtor emitido não saberia onde ele cai"))
     if len(readProps) < MIN_READ_PROPS:
         reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
     if writes and len(createProps) < MIN_CREATE_PROPS:

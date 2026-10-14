@@ -54,12 +54,6 @@ def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
     assert report["withPending"] == [{"resource": "Widget", "pending": ["qrcode"]}]
 
 
-def test_resourceWithOnlySuppressedOperationIsOutOfReach(tmpPath):
-    report = _report(tmpPath, "put")
-
-    assert report["outOfReach"] == [{"resource": "Widget", "reason": "sem operação suportada"}]
-
-
 def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
     report = _report(tmpPath, "parse_rules")
 

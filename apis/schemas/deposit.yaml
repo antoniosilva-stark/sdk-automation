@@ -8,6 +8,7 @@ components:
         id:
           type: string
           description: "unique id associated with a Deposit when it is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         name:
           type: string
           description: "payer name. ex: \"Iron Bank S.A.\""

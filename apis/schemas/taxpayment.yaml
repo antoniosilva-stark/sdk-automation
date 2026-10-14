@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a TaxPayment, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when payment is created. ex: \"5656565656565656\""
         line:
           type: string
           description: "Number sequence that describes the payment. Either 'line' or 'bar_code' parameters are required. If both are sent, they must match. ex: \"85800000003 0 28960328203 1 56072020190 5 22109674804 0\""
@@ -26,6 +23,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. All tags will be converted to lowercase."
+        id:
+          type: string
+          description: "unique id returned when payment is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         type:
           type: string
           description: "tax type. ex: \"das\""
@@ -53,8 +54,8 @@ components:
           format: date-time
           description: "creation datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - description
+        - id
         - type
         - status
         - amount

@@ -5,7 +5,8 @@ package {{package}};
 {{/usesRest}}import com.starkbank.utils.Resource;
 {{#usesGenerator}}import com.starkbank.utils.Generator;
 {{/usesGenerator}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
-{{/usesSubResource}}
+{{/usesSubResource}}{{#vendorExtensions.x-sdk-log}}import com.starkbank.error.ErrorElement;
+{{/vendorExtensions.x-sdk-log}}
 {{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
 {{/usesList}}import java.util.HashMap;
@@ -21,23 +22,23 @@ package {{package}};
 {{#vars}} * {{name}} [{{{dataType}}}]{{^required}}, optional{{/required}}: {{{description}}}
 {{/vars}} *
  */
-public class {{classname}} extends Resource {
+public final class {{classname}} extends Resource {
     static ClassData data = new ClassData({{classname}}.class, "{{classname}}");
 
-{{#vars}}{{^-first}}    public {{{dataType}}} {{name}};
-{{/-first}}{{/vars}}
+{{#vars}}{{^vendorExtensions.x-sdk-id}}    public {{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}};
+{{/vendorExtensions.x-sdk-id}}{{/vars}}
 
-    public {{classname}}({{#vars}}{{^-first}}{{{dataType}}} {{name}}{{^-last}}, {{/-last}}{{/-first}}{{/vars}}) {
-        super(null);
-{{#vars}}{{^-first}}        this.{{name}} = {{name}};
-{{/-first}}{{/vars}}    }
+    public {{classname}}({{#vars}}{{#vendorExtensions.x-sdk-id}}String id{{/vendorExtensions.x-sdk-id}}{{^vendorExtensions.x-sdk-id}}{{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}}{{/vendorExtensions.x-sdk-id}}{{^-last}}, {{/-last}}{{/vars}}) {
+        super(id);
+{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = {{name}};
+{{/vendorExtensions.x-sdk-id}}{{/vars}}    }
 
     @SuppressWarnings("unchecked")
     public {{classname}}(Map<String, Object> data) throws Exception {
         super(null);
         HashMap<String, Object> dataCopy = new HashMap<>(data);
-{{#vars}}{{^-first}}        this.{{name}} = ({{{dataType}}}) dataCopy.remove("{{name}}");
-{{/-first}}{{/vars}}
+{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = ({{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}}) dataCopy.remove("{{name}}");
+{{/vendorExtensions.x-sdk-id}}{{/vars}}
         if (!dataCopy.isEmpty()) {
             throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
         }
@@ -450,12 +451,12 @@ public class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-log}}
 
     public final static class Log extends Resource {
-        static ClassData data = new ClassData(Log.class, "{{classname}}Log");
+        static ClassData data = new ClassData({{classname}}.Log.class, "{{classname}}Log");
 
         public String created;
         public String type;
-        public String[] errors;
-        public {{classname}} {{classVarName}};
+        public List<ErrorElement> errors;
+        public {{classname}} {{vendorExtensions.x-sdk-log-entity}};
 
         /**
          * {{classname}} Log object
@@ -471,12 +472,12 @@ public class {{classname}} extends Resource {
          * @param type [string]: type of the {{classname}} event which triggered the log creation
          * @param created [string]: creation datetime for the log
          */
-        public Log(String created, String type, String[] errors, {{classname}} {{classVarName}}, String id) {
+        public Log(String created, String type, List<ErrorElement> errors, {{classname}} {{vendorExtensions.x-sdk-log-entity}}, String id) {
             super(id);
             this.created = created;
             this.type = type;
             this.errors = errors;
-            this.{{classVarName}} = {{classVarName}};
+            this.{{vendorExtensions.x-sdk-log-entity}} = {{vendorExtensions.x-sdk-log-entity}};
         }
 
         public Log() {
@@ -493,7 +494,7 @@ public class {{classname}} extends Resource {
          * @return {{classname}} Log object with updated attributes
          * @throws Exception error in the request
          */
-        public static Log get(String id) throws Exception {
+        public static {{classname}}.Log get(String id) throws Exception {
             return Log.get(id, null);
         }
 
@@ -508,7 +509,7 @@ public class {{classname}} extends Resource {
          * @return {{classname}} Log object with updated attributes
          * @throws Exception error in the request
          */
-        public static Log get(String id, User user) throws Exception {
+        public static {{classname}}.Log get(String id, User user) throws Exception {
             return Rest.getId(data, id, user);
         }
 
@@ -519,7 +520,7 @@ public class {{classname}} extends Resource {
          * @return generator of {{classname}} Log objects with updated attributes
          * @throws Exception error in the request
          */
-        public static Generator<Log> query() throws Exception {
+        public static Generator<{{classname}}.Log> query() throws Exception {
             return Log.query(new HashMap<>(), null);
         }
 
@@ -533,7 +534,7 @@ public class {{classname}} extends Resource {
          * @return generator of {{classname}} Log objects with updated attributes
          * @throws Exception error in the request
          */
-        public static Generator<Log> query(Map<String, Object> params) throws Exception {
+        public static Generator<{{classname}}.Log> query(Map<String, Object> params) throws Exception {
             return Log.query(params, null);
         }
 
@@ -547,7 +548,7 @@ public class {{classname}} extends Resource {
          * @return generator of {{classname}} Log objects with updated attributes
          * @throws Exception error in the request
          */
-        public static Generator<Log> query(User user) throws Exception {
+        public static Generator<{{classname}}.Log> query(User user) throws Exception {
             return Log.query(new HashMap<>(), user);
         }
 
@@ -562,15 +563,15 @@ public class {{classname}} extends Resource {
          * @return generator of {{classname}} Log objects with updated attributes
          * @throws Exception error in the request
          */
-        public static Generator<Log> query(Map<String, Object> params, User user) throws Exception {
+        public static Generator<{{classname}}.Log> query(Map<String, Object> params, User user) throws Exception {
             return Rest.getStream(data, params, user);
         }
 
         public final static class Page {
-            public List<Log> logs;
+            public List<{{classname}}.Log> logs;
             public String cursor;
 
-            public Page(List<Log> logs, String cursor) {
+            public Page(List<{{classname}}.Log> logs, String cursor) {
                 this.logs = logs;
                 this.cursor = cursor;
             }
@@ -583,7 +584,7 @@ public class {{classname}} extends Resource {
          * @return {{classname}}.Log.Page object with logs list and cursor
          * @throws Exception error in the request
          */
-        public static Log.Page page() throws Exception {
+        public static {{classname}}.Log.Page page() throws Exception {
             return Log.page(new HashMap<>(), null);
         }
 
@@ -597,7 +598,7 @@ public class {{classname}} extends Resource {
          * @return {{classname}}.Log.Page object with logs list and cursor
          * @throws Exception error in the request
          */
-        public static Log.Page page(Map<String, Object> params) throws Exception {
+        public static {{classname}}.Log.Page page(Map<String, Object> params) throws Exception {
             return Log.page(params, null);
         }
 
@@ -611,7 +612,7 @@ public class {{classname}} extends Resource {
          * @return {{classname}}.Log.Page object with logs list and cursor
          * @throws Exception error in the request
          */
-        public static Log.Page page(User user) throws Exception {
+        public static {{classname}}.Log.Page page(User user) throws Exception {
             return Log.page(new HashMap<>(), user);
         }
 
@@ -626,9 +627,9 @@ public class {{classname}} extends Resource {
          * @return {{classname}}.Log.Page object with logs list and cursor
          * @throws Exception error in the request
          */
-        public static Log.Page page(Map<String, Object> params, User user) throws Exception {
+        public static {{classname}}.Log.Page page(Map<String, Object> params, User user) throws Exception {
             com.starkcore.utils.Page page = Rest.getPage(data, params, user);
-            List<Log> logs = new ArrayList<>();
+            List<{{classname}}.Log> logs = new ArrayList<>();
             for (SubResource log: page.entities)
                 logs.add((Log) log);
             return new Page(logs, page.cursor);

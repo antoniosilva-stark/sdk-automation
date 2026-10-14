@@ -3079,6 +3079,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: account
       $ref: ./schemas/verifiedaccount.yaml#/components/schemas/VerifiedAccount
     VerifiedAccountCreate:
       $ref: ./schemas/verifiedaccount.yaml#/components/schemas/VerifiedAccountCreate
@@ -3095,6 +3096,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: payment
       $ref: ./schemas/utilitypayment.yaml#/components/schemas/UtilityPayment
     UtilityPaymentCreate:
       $ref: ./schemas/utilitypayment.yaml#/components/schemas/UtilityPaymentCreate
@@ -3104,6 +3106,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: receiver
       $ref: ./schemas/splitreceiver.yaml#/components/schemas/SplitReceiver
     SplitReceiverCreate:
       $ref: ./schemas/splitreceiver.yaml#/components/schemas/SplitReceiverCreate
@@ -3112,6 +3115,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: split
       $ref: ./schemas/split.yaml#/components/schemas/Split
     SplitCreate:
       $ref: ./schemas/split.yaml#/components/schemas/SplitCreate
@@ -3128,6 +3132,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: session
       $ref: ./schemas/merchantsession.yaml#/components/schemas/MerchantSession
     MerchantSessionCreate:
       $ref: ./schemas/merchantsession.yaml#/components/schemas/MerchantSessionCreate
@@ -3138,6 +3143,7 @@ components:
       x-sdk-page: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: purchase
       $ref: ./schemas/merchantpurchase.yaml#/components/schemas/MerchantPurchase
     MerchantPurchaseCreate:
       $ref: ./schemas/merchantpurchase.yaml#/components/schemas/MerchantPurchaseCreate
@@ -3146,6 +3152,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: installment
       $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallment
     MerchantInstallmentCreate:
       $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallmentCreate
@@ -3159,6 +3166,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: card
       $ref: ./schemas/merchantcard.yaml#/components/schemas/MerchantCard
     MerchantCardCreate:
       $ref: ./schemas/merchantcard.yaml#/components/schemas/MerchantCardCreate
@@ -3169,6 +3177,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: subscription
       $ref: ./schemas/invoicepullsubscription.yaml#/components/schemas/InvoicePullSubscription
     InvoicePullSubscriptionCreate:
       $ref: ./schemas/invoicepullsubscription.yaml#/components/schemas/InvoicePullSubscriptionCreate
@@ -3179,6 +3188,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: request
       $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequest
     InvoicePullRequestCreate:
       $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequestCreate
@@ -3203,6 +3213,7 @@ components:
       x-sdk-pdf: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: payment
       $ref: ./schemas/brcodepayment.yaml#/components/schemas/BrcodePayment
     BrcodePaymentCreate:
       $ref: ./schemas/brcodepayment.yaml#/components/schemas/BrcodePaymentCreate
@@ -3212,6 +3223,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-query: true
+      x-sdk-log-entity: holmes
       $ref: ./schemas/boletoholmes.yaml#/components/schemas/BoletoHolmes
     BoletoHolmesCreate:
       $ref: ./schemas/boletoholmes.yaml#/components/schemas/BoletoHolmesCreate
@@ -3231,6 +3243,7 @@ components:
       x-sdk-pdf: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: invoice
       $ref: ./schemas/invoice.yaml#/components/schemas/Invoice
     InvoiceCreate:
       $ref: ./schemas/invoice.yaml#/components/schemas/InvoiceCreate
@@ -3242,6 +3255,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: transfer
       $ref: ./schemas/transfer.yaml#/components/schemas/Transfer
     TransferCreate:
       $ref: ./schemas/transfer.yaml#/components/schemas/TransferCreate
@@ -3258,6 +3272,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: boleto
       $ref: ./schemas/boleto.yaml#/components/schemas/Boleto
     BoletoCreate:
       $ref: ./schemas/boleto.yaml#/components/schemas/BoletoCreate
@@ -3269,6 +3284,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: payment
       $ref: ./schemas/boletopayment.yaml#/components/schemas/BoletoPayment
     BoletoPaymentCreate:
       $ref: ./schemas/boletopayment.yaml#/components/schemas/BoletoPaymentCreate
@@ -3310,6 +3326,7 @@ components:
       x-sdk-page: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: card
       $ref: ./schemas/corporatecard.yaml#/components/schemas/CorporateCard
     CorporateCardCreate:
       $ref: ./schemas/corporatecard.yaml#/components/schemas/CorporateCardCreate
@@ -3321,6 +3338,7 @@ components:
       x-sdk-page: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: holder
       $ref: ./schemas/corporateholder.yaml#/components/schemas/CorporateHolder
     CorporateHolderCreate:
       $ref: ./schemas/corporateholder.yaml#/components/schemas/CorporateHolderCreate
@@ -3328,6 +3346,7 @@ components:
       x-sdk-get: true
       x-sdk-log: true
       x-sdk-query: true
+      x-sdk-log-entity: purchase
       $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchase
     CorporatePurchaseCreate:
       $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchaseCreate
@@ -3371,7 +3390,9 @@ components:
       x-sdk-get: true
       x-sdk-log: true
       x-sdk-page: true
+      x-sdk-put: true
       x-sdk-query: true
+      x-sdk-log-entity: profile
       $ref: ./schemas/splitprofile.yaml#/components/schemas/SplitProfile
     SplitProfileCreate:
       $ref: ./schemas/splitprofile.yaml#/components/schemas/SplitProfileCreate
@@ -3383,6 +3404,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: payment
       $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPayment
     DarfPaymentCreate:
       $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPaymentCreate
@@ -3397,6 +3419,7 @@ components:
       x-sdk-page: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-log-entity: deposit
       $ref: ./schemas/deposit.yaml#/components/schemas/Deposit
     DepositCreate:
       $ref: ./schemas/deposit.yaml#/components/schemas/DepositCreate
@@ -3413,6 +3436,7 @@ components:
       x-sdk-page: true
       x-sdk-pdf: true
       x-sdk-query: true
+      x-sdk-log-entity: payment
       $ref: ./schemas/taxpayment.yaml#/components/schemas/TaxPayment
     TaxPaymentCreate:
       $ref: ./schemas/taxpayment.yaml#/components/schemas/TaxPaymentCreate

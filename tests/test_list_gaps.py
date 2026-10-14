@@ -96,9 +96,9 @@ def test_invalidRootReturnsTwo(tmpPath):
 
 @requiresPythonSdk
 @requiresJavaSdk
-def test_realGapsAreSplitProfileAndVerifiedTransfer():
+def test_realReportHasNoGapAtThePinnedCommits():
     code, out = runTool("list-gaps.py", "--json")
     assert code == 0, out
 
     report = json.loads(out)
-    assert report["gaps"] == ["SplitProfile", "VerifiedTransfer"], report["gaps"]
+    assert report["gaps"] == [], report["gaps"]

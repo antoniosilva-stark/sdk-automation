@@ -112,11 +112,6 @@ def test_fieldWithEmptyDefaultIsNotLost(extractSchema):
     assert fields[0]["schema"] == {"type": "array", "items": {"type": "string"}}
 
 
-def test_idComesFirst(extractSchema):
-    fields = [{"name": "amount"}, {"name": "id"}, {"name": "tags"}]
-    assert [f["name"] for f in extractSchema.orderFields(fields)][0] == "id"
-
-
 def test_sectionsBecomeRequiredness(extractSchema, tmpPath):
     root = _fakeSdk(tmpPath)
     code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
@@ -125,7 +120,8 @@ def test_sectionsBecomeRequiredness(extractSchema, tmpPath):
     schemas = yaml.safe_load(out)["components"]["schemas"]
     read, create = schemas["Widget"], schemas["WidgetCreate"]
 
-    assert list(read["properties"])[0] == "id"
+    assert list(read["properties"]) == ["amount", "externalId", "tags", "due", "expiration", "rules", "id", "created"]
+    assert list(read["properties"]).index("id") > list(read["properties"]).index("rules")
     assert set(read["required"]) == {"id", "amount", "externalId", "created"}
     assert "tags" not in read["required"]
     assert set(create["properties"]) == {"amount", "externalId", "tags", "due", "expiration", "rules"}
@@ -337,7 +333,8 @@ def test_documentDoesNotChangeWithTheOperations(tmpPath):
     code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
 
     assert code == 0
-    assert "x-sdk" not in out
+    for flag in ("x-sdk-create", "x-sdk-get", "x-sdk-query", "x-sdk-page", "x-sdk-log:"):
+        assert flag not in out
 
 
 def test_operationsAreEmittedWithTheDedicatedFlag(tmpPath):
@@ -566,3 +563,68 @@ def test_exampleNeverBecomesAnEnum(extractSchema):
     _, fields = extractSchema.parseDocstring("## Attributes (return-only):\n" + doc)
 
     assert "enum" not in fields[0]["schema"]
+
+
+LOG_MODULE = '''
+from starkcore.utils.api import from_api_json
+from starkcore.utils.resource import Resource
+from starkcore.utils.checks import check_datetime
+from ..__widget import _resource as _holder_resource
+
+
+class Log(Resource):
+    """# widget.Log object"""
+
+    def __init__(self, id, created, type, errors, holder):
+        Resource.__init__(self, id=id)
+        self.created = check_datetime(created)
+        self.type = type
+        self.errors = errors
+        self.holder = from_api_json(_holder_resource, holder)
+'''
+
+
+def _withLog(root: Path, body: str = LOG_MODULE) -> Path:
+    _withInit(root, "widget", "get, query", log=True)
+    (root / "starkbank" / "widget" / "log" / "__log.py").write_text(body, encoding="utf-8")
+    return root
+
+
+def test_idIsMarkedSoTheTemplateCanTellItApart(tmpPath):
+    root = _fakeSdk(tmpPath)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert [name for name, spec in properties.items() if spec.get("x-sdk-id")] == ["id"]
+
+
+def test_idMarkerStaysOutOfTheCreateSchema(tmpPath):
+    root = _fakeSdk(tmpPath)
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    create = yaml.safe_load(out)["components"]["schemas"]["WidgetCreate"]["properties"]
+    assert not [name for name, spec in create.items() if "x-sdk-id" in spec]
+
+
+def test_logEntityIsTheAttributeBuiltFromTheParentResource(extractSchema, tmpPath):
+    root = _withLog(_fakeSdk(tmpPath))
+
+    assert extractSchema.logEntity(root, "Widget") == "holder"
+
+
+def test_logEntityIsAbsentWithoutALogModule(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query")
+
+    assert extractSchema.logEntity(root, "Widget") is None
+
+
+def test_logEntityIsEmittedAsAValuedFlag(tmpPath):
+    root = _withLog(_fakeSdk(tmpPath))
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
+
+    assert code == 0, out
+    assert "x-sdk-log: true" in out
+    assert "x-sdk-log-entity: holder" in out

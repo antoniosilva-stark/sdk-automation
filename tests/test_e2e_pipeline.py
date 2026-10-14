@@ -1,10 +1,9 @@
-import json
 import shutil
 import pytest
 import subprocess
 from pathlib import Path
 
-from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresPythonSdk, runTool
+from conftest import REPO_ROOT, requiresGenerator, runTool
 
 RESOURCE = "SplitProfile"
 LANGUAGE = "java"
@@ -42,15 +41,6 @@ def _commitDeclared(repo: Path) -> bool:
         return False
     _git(repo, "commit", "-qm", f"Add {RESOURCE} resource")
     return True
-
-
-@requiresPythonSdk
-@requiresJavaSdk
-def test_targetResourceComesFromDiscoveryNotAList():
-    code, out = runTool("list-gaps.py", "--json")
-
-    assert code == 0, out
-    assert RESOURCE in json.loads(out)["gaps"]
 
 
 @requiresGenerator

@@ -8,6 +8,7 @@ components:
         id:
           type: string
           description: "unique id returned when the event is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         log:
           type: string
           description: "a Log object from one of the subscribed services (TransferLog, InvoiceLog, DepositLog, BoletoLog, BoletoHolmesLog, BrcodePaymentLog, BoletoPaymentLog, UtilityPaymentLog, TaxPaymentLog or DarfPaymentLog)"

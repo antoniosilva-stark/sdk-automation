@@ -155,19 +155,19 @@ def test_pilotProducesAVerifiedArtifact(builtOnce):
     assert source.count("public static SplitProfile get(") == 2
     assert source.count("public static Generator<SplitProfile> query(") == 4
     assert source.count("public static Page page(") == 4
-    assert source.count("public static Log get(") == 2
-    assert source.count("public static Generator<Log> query(") == 4
-    assert source.count("public static Log.Page page(") == 4
+    assert source.count("public static SplitProfile.Log get(") == 2
+    assert source.count("public static Generator<SplitProfile.Log> query(") == 4
+    assert source.count("public static SplitProfile.Log.Page page(") == 4
     assert "{{" not in source
 
 
 @requiresGenerator
-def test_generatedCodeDoesNotCallRestPutMissingFromSdkJava(builtOnce):
+def test_putAndPageGoThroughTheRestPrimitives(builtOnce):
     code, out, target = builtOnce("SplitProfile", "java")
 
     assert code == 0, out
     source = (target / ARTIFACT).read_text(encoding="utf-8")
-    assert "Rest.put(" not in source, "chama primitivo que nao existe no SDK real"
+    assert "Rest.put(" in source
     assert "Rest.getPage(" in source
 
 
@@ -323,10 +323,12 @@ def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public final static class Log extends Resource" in source
-    assert 'new ClassData(Log.class, "InvoiceLog")' in source
-    assert "public static Log get(String id)" in source
-    assert "public static Generator<Log> query()" in source
-    assert "public static Log.Page page()" in source
+    assert 'new ClassData(Invoice.Log.class, "InvoiceLog")' in source
+    assert "public static Invoice.Log get(String id)" in source
+    assert "public static Generator<Invoice.Log> query()" in source
+    assert "public static Invoice.Log.Page page()" in source
+    assert "public List<ErrorElement> errors;" in source
+    assert "import com.starkbank.error.ErrorElement;" in source
     assert "public Invoice invoice;" in source
 
 
@@ -366,7 +368,7 @@ def test_generatorReturningZeroWithoutOutputIsReported(tmpPath):
 
     target = _target(tmpPath)
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java",
-                        "--into", str(target), env={"PATH": str(fakeBin)})
+                        "--into", str(target), env={"PATH": f"{fakeBin}:/usr/bin:/bin"})
 
     assert code == 1
     assert "retornou 0 mas não produziu o artefato" in out
@@ -417,12 +419,10 @@ def test_substitutionIsAnnouncedAsSuch(builtOnce):
     assert "SUBSTITUI" in out
 
 
-@requiresGenerator
-def test_gapFillingIsAnnouncedAsSuch(builtOnce):
-    code, out, target = builtOnce("SplitProfile", "java")
+def test_gapFillingIsAnnouncedAsSuch(buildResource, capsys):
+    buildResource.announceIntent("Widget", "java", absent=2, total=2)
 
-    assert code == 0, out
-    assert "preenche a lacuna" in out
+    assert "preenche a lacuna" in capsys.readouterr().out
 
 
 @requiresGenerator

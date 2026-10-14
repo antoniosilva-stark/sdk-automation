@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you create a Split, the entity SplitProfile will be automatically created, if you haven't create a Split yet, you can use the put method to create your SplitProfile."
       properties:
-        id:
-          type: string
-          description: "unique id returned when the splitProfile is created. ex: \"5656565656565656\""
         interval:
           type: string
           enum: ['day', 'week', 'month']
@@ -20,6 +17,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging"
+        id:
+          type: string
+          description: "unique id returned when the splitProfile is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current splitProfile status. ex: \"created\""
@@ -32,9 +33,9 @@ components:
           format: date-time
           description: "latest update datetime for the splitProfile. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - interval
         - delay
+        - id
         - status
         - created
         - updated

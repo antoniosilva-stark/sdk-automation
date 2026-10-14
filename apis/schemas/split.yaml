@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a Split, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when split is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -15,6 +12,10 @@ components:
         receiverId:
           type: string
           description: "split receiver unique id. ex: \"5656565656565656\""
+        id:
+          type: string
+          description: "unique id returned when split is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         source:
           type: string
           description: "source receivable which generated this split object. ex: \"5656565656565656\""
@@ -42,9 +43,9 @@ components:
           format: date-time
           description: "update datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - receiverId
+        - id
         - source
         - externalId
         - tags

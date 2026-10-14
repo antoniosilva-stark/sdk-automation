@@ -5,9 +5,6 @@ components:
       type: object
       description: "Workspaces are bank accounts. They have independent balances, statements, operations and permissions. The only property that is shared between your workspaces is that they are linked to your organization, which carries your basic informations, such as tax ID, name, etc.."
       properties:
-        id:
-          type: string
-          description: "unique id returned when the workspace is created. ex: \"5656565656565656\""
         username:
           type: string
           description: "Simplified, URL-safe name that defines the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
@@ -19,6 +16,10 @@ components:
           items:
             type: string
           description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
+        id:
+          type: string
+          description: "unique id returned when the workspace is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           enum: ['active', 'closed', 'frozen', 'blocked']
@@ -34,9 +35,9 @@ components:
           format: date-time
           description: "creation datetime of the workspace. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - username
         - name
+        - id
         - status
         - organizationId
         - pictureUrl

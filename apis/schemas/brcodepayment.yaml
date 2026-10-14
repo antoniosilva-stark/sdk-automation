@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a BrcodePayment, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when payment is created. ex: \"5656565656565656\""
         brcode:
           type: string
           description: "String loaded directly from the QR Code or copied from the invoice. ex: \"00020126580014br.gov.bcb.pix0136a629532e-7693-4846-852d-1bbff817b5a8520400005303986540510.005802BR5908T'Challa6009Sao Paulo62090505123456304B14A\""
@@ -35,6 +32,10 @@ components:
           items:
             type: object
           description: "list of BrcodePayment.Rule objects for modifying payment behavior. ex: [Rule(key=\"resendingLimit\", value=5)]"
+        id:
+          type: string
+          description: "unique id returned when payment is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         name:
           type: string
           description: "receiver name. ex: \"Jon Snow\""
@@ -61,10 +62,10 @@ components:
           format: date-time
           description: "creation datetime for the payment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - brcode
         - taxId
         - description
+        - id
         - name
         - status
         - type

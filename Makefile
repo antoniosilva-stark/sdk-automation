@@ -8,7 +8,7 @@ SDK_REMOTE ?= https://github.com/starkbank
 # Commits que os testes comparam com os schemas versionados. Subir um pin e reextrair os
 # schemas (apply-schema) e um mesmo ato; o HEAD fica so no drift e no sync.
 SDK_PYTHON_PIN ?= 65fc3f89dc2f05751bc9376f3885d6893d57fa9b
-SDK_JAVA_PIN ?= c7f40b871bfa45fe4b448aa40af62b4d457aabd8
+SDK_JAVA_PIN ?= f60902a1702aab081a25012bd200db00a9e25c4e
 SDK_NODE_PIN ?= cd8b4eba50aeb5c40faffc7fa04d28ead4effaf4
 
 GREEN := \033[0;32m

@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a MerchantSession, the entity will not be automatically to the Stark Bank API and returns the created object."
       properties:
-        id:
-          type: string
-          description: "unique id returned when MerchantSession is created. ex: \"5656565656565656\""
         allowedFundingTypes:
           type: array
           items:
@@ -35,6 +32,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. All tags will be converted to lowercase."
+        id:
+          type: string
+          description: "unique id returned when MerchantSession is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         uuid:
           type: string
           description: "unique uuid returned when MerchantSession is created, used to create a MerchantSession Purchase. ex: \"901e71f2447c43c886f58366a5432c4b\""
@@ -56,10 +57,10 @@ components:
           format: date-time
           description: "latest update datetime for the MerchantSession. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - allowedFundingTypes
         - allowedInstallments
         - expiration
+        - id
         - uuid
         - holderId
         - softDescriptor

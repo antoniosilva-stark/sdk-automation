@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a BoletoHolmes, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when holmes is created. ex: \"5656565656565656\""
         boletoId:
           type: string
           description: "investigated boleto entity ID. ex: \"5656565656565656\""
@@ -16,6 +13,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging"
+        id:
+          type: string
+          description: "unique id returned when holmes is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current holmes status. ex: \"solving\" or \"solved\""
@@ -31,8 +32,8 @@ components:
           format: date-time
           description: "latest update datetime for the holmes. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - boletoId
+        - id
         - status
         - result
         - created

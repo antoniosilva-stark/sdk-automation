@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a Boleto, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when Boleto is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -72,6 +69,10 @@ components:
         receiverTaxId:
           type: string
           description: "receiver (Sacador Avalista) tax ID. If omitted, the workspace owner's tax ID is used. Must be informed together with receiver_name. ex: \"01234567890\" or \"20.018.183/0001-80\""
+        id:
+          type: string
+          description: "unique id returned when Boleto is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         fee:
           type: integer
           description: "fee charged when Boleto is paid. ex: 200 (= R$ 2.00)"
@@ -100,7 +101,6 @@ components:
           format: date-time
           description: "creation datetime for the Boleto. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - name
         - taxId
@@ -110,6 +110,7 @@ components:
         - city
         - stateCode
         - zipCode
+        - id
         - fee
         - line
         - barCode

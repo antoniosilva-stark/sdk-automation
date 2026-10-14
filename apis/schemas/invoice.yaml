@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize an Invoice, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects. To create scheduled Invoices, which will display the discount, interest, etc. on the final users banking interface, use dates instead of datetimes on the \"due\" and \"discounts\" fields."
       properties:
-        id:
-          type: string
-          description: "unique id returned when Invoice is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -82,6 +79,10 @@ components:
           type: integer
           format: int64
           description: "Invoice discount value calculated over nominal_amount. ex: 3000"
+        id:
+          type: string
+          description: "unique id returned when Invoice is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         brcode:
           type: string
           description: "BR Code for the Invoice payment. ex: \"00020101021226800014br.gov.bcb.pix2558invoice.starkbank.com/f5333103-3279-4db2-8389-5efe335ba93d5204000053039865802BR5913Arya Stark6009Sao Paulo6220051656565656565656566304A9A0\""
@@ -105,7 +106,6 @@ components:
           format: date-time
           description: "latest update datetime for the Invoice. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - taxId
         - name
@@ -115,6 +115,7 @@ components:
         - fineAmount
         - interestAmount
         - discountAmount
+        - id
         - brcode
         - status
         - fee

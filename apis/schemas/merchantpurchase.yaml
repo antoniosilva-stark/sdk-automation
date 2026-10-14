@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a MerchantPurchase, the entity will not be automatically to the Stark Bank API and returns the created object."
       properties:
-        id:
-          type: string
-          description: "unique id returned when MerchantPurchase is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -71,6 +68,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging"
+        id:
+          type: string
+          description: "unique id returned when MerchantPurchase is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         cardEnding:
           type: string
           description: "last 4 digits of the card used. ex: \"1234\""
@@ -107,11 +108,11 @@ components:
           format: date-time
           description: "latest update datetime for the MerchantPurchase. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - cardId
         - fundingType
         - installmentCount
+        - id
         - cardEnding
         - challengeMode
         - challengeUrl

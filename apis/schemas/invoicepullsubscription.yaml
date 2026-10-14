@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize an InvoicePullSubscription, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when InvoicePullSubscription is created. ex: \"5656565656565656\""
         start:
           type: string
           format: date
@@ -65,6 +62,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging"
+        id:
+          type: string
+          description: "unique id returned when InvoicePullSubscription is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current InvoicePullSubscription status. ex: \"active\", \"canceled\""
@@ -83,12 +84,12 @@ components:
           format: date-time
           description: "latest update datetime for the InvoicePullSubscription. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - start
         - interval
         - pullMode
         - pullRetryLimit
         - type
+        - id
         - status
         - bacenId
         - brcode

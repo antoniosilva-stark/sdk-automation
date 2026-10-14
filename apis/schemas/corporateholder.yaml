@@ -5,9 +5,6 @@ components:
       type: object
       description: "The CorporateHolder describes a card holder that may group several cards. When you initialize a CorporateHolder, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the created object."
       properties:
-        id:
-          type: string
-          description: "unique id returned when CorporateHolder is created. ex: \"5656565656565656\""
         name:
           type: string
           description: "cardholder name. ex: \"Tony Stark\""
@@ -29,6 +26,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. ex: [\"travel\", \"food\"]"
+        id:
+          type: string
+          description: "unique id returned when CorporateHolder is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current CorporateHolder status. ex: \"active\", \"blocked\", \"canceled\""
@@ -41,8 +42,8 @@ components:
           format: date-time
           description: "creation datetime for the CorporateHolder. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - name
+        - id
         - status
         - updated
         - created

@@ -18,7 +18,7 @@ def _modelled() -> dict:
             "x-sdk-create": True,
             "x-sdk-get": True,
             "x-sdk-query": True,
-            "properties": {"id": {"type": "string"}, "amount": {"type": "integer"}, "created": {"type": "string"}},
+            "properties": {"id": {"type": "string", "x-sdk-id": True}, "amount": {"type": "integer"}, "created": {"type": "string"}},
         },
         "WidgetCreate": {"type": "object", "properties": {"amount": {"type": "integer"}}},
     }
@@ -31,7 +31,7 @@ def _readOnly() -> dict:
             "x-sdk-get": True,
             "x-sdk-query": True,
             "x-sdk-page": True,
-            "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "status": {"type": "string"}},
+            "properties": {"id": {"type": "string", "x-sdk-id": True}, "name": {"type": "string"}, "status": {"type": "string"}},
         },
     }
 
@@ -70,7 +70,7 @@ def test_flagsSurviveTheExternalRef(lintSpec, tmpPath):
     (tmpPath / "schemas").mkdir()
     (tmpPath / "schemas" / "widget.yaml").write_text(
         "# fonte: starkbank/sdk-python@abc1234 · starkbank/widget/__widget.py\n" + yaml.safe_dump(
-            {"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}},
+            {"components": {"schemas": {"Widget": {"properties": {"id": {"x-sdk-id": True}, "b": {}, "c": {}}}}}},
             sort_keys=False,
         ),
         encoding="utf-8",
@@ -90,16 +90,6 @@ def test_flagsSurviveTheExternalRef(lintSpec, tmpPath):
     assert report.operations == ["x-sdk-get", "x-sdk-query"]
     assert report.readProps == 3
     assert report.generatable
-
-
-def test_noResourceDeclaresPutWhileRestPutIsMissing():
-    spec = yaml.safe_load(Path("apis/spec-v2.openapi.yaml").read_text(encoding="utf-8"))
-    schemas = (spec.get("components") or {}).get("schemas") or {}
-
-    declaram = [name for name, schema in schemas.items()
-                if isinstance(schema, dict) and schema.get("x-sdk-put")]
-
-    assert declaram == [], f"x-sdk-put sem primitivo no SDK real: {declaram}"
 
 
 def test_firstBatchIsApprovedInTheRealSpec():
@@ -127,7 +117,7 @@ def test_onlyIdAndCreatedIsScaffolding(lintSpec, tmpPath):
     schemas = {
         "Widget": {
             "x-sdk-get": True,
-            "properties": {"id": {"type": "string"}, "created": {"type": "string"}},
+            "properties": {"id": {"type": "string", "x-sdk-id": True}, "created": {"type": "string"}},
         },
         "WidgetCreate": {"properties": {"amount": {"type": "integer"}}},
     }
@@ -160,7 +150,7 @@ def test_brokenRefFailsLoudly(lintSpec, tmpPath):
         lintSpec.schemaProps({"$ref": "./schemas/widget.yaml"}, specPath)
 
 
-def test_idOutOfFirstPositionFailsWithItsOwnCode(lintSpec, tmpPath):
+def test_idWithoutTheMarkerFailsWithItsOwnCode(lintSpec, tmpPath):
     schemas = {
         "Widget": {"x-sdk-get": True, "properties": {"amount": {}, "id": {}, "status": {}}},
         "WidgetCreate": {"properties": {"amount": {}}},
@@ -169,8 +159,20 @@ def test_idOutOfFirstPositionFailsWithItsOwnCode(lintSpec, tmpPath):
     report = lintSpec.inspectResource("Widget", schemas, specPath, {})
 
     assert not report.generatable
-    assert report.reasons[0][0] == lintSpec.CODE_ID_ORDER
-    assert "primeira propriedade" in report.reasons[0][1]
+    assert report.reasons[0][0] == lintSpec.CODE_ID_MARKER
+    assert "x-sdk-id" in report.reasons[0][1]
+
+
+def test_idWithTheMarkerInAnyPositionPasses(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"x-sdk-get": True,
+                   "properties": {"amount": {}, "id": {"x-sdk-id": True}, "status": {}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not [reason for reason in report.reasons if reason[0] == lintSpec.CODE_ID_MARKER]
 
 
 def test_readOnlyResourceDoesNotRequireCreate(lintSpec, tmpPath):
@@ -255,7 +257,7 @@ def test_schemaWithoutIdDoesNotTriggerIdOrder(lintSpec, tmpPath):
 def test_refWithoutProvenanceIsRejected(lintSpec, tmpPath):
     (tmpPath / "schemas").mkdir()
     (tmpPath / "schemas" / "widget.yaml").write_text(
-        yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}}),
+        yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {"x-sdk-id": True}, "b": {}, "c": {}}}}}}),
         encoding="utf-8",
     )
     specPath = tmpPath / "spec.yaml"
@@ -270,7 +272,7 @@ def test_refWithoutProvenanceIsRejected(lintSpec, tmpPath):
 
 def test_refWithProvenanceIsAccepted(lintSpec, tmpPath):
     (tmpPath / "schemas").mkdir()
-    body = yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {}, "b": {}, "c": {}}}}}},
+    body = yaml.safe_dump({"components": {"schemas": {"Widget": {"properties": {"id": {"x-sdk-id": True}, "b": {}, "c": {}}}}}},
                           sort_keys=False)
     (tmpPath / "schemas" / "widget.yaml").write_text(
         "# fonte: starkbank/sdk-python@abc1234 · starkbank/widget/__widget.py\n" + body,

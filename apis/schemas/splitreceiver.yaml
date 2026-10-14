@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a SplitReceiver, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when the splitReceiver is created. ex: \"5656565656565656\""
         name:
           type: string
           description: "receiver full name. ex: \"Anthony Edward Stark\""
@@ -31,6 +28,10 @@ components:
           items:
             type: string
           description: "list of strings for reference when searching for receivers. ex: [\"seller/123456\"]"
+        id:
+          type: string
+          description: "unique id returned when the splitReceiver is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         status:
           type: string
           description: "current splitReceiver status. ex: \"success\" or \"failed\""
@@ -43,13 +44,13 @@ components:
           format: date-time
           description: "latest update datetime for the splitReceiver. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - name
         - taxId
         - bankCode
         - branchCode
         - accountNumber
         - accountType
+        - id
         - status
         - created
         - updated

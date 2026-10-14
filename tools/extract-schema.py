@@ -136,7 +136,37 @@ def declaredOperations(root: Path, resource: str) -> dict:
     if not flags:
         flags = ["x-sdk-data-only"]
 
-    return {"flags": flags, "unsupported": unsupported, "missingInit": False}
+    return {"flags": flags, "unsupported": unsupported, "missingInit": False,
+            "logEntity": logEntity(root, resource)}
+
+
+def logEntity(root: Path, resource: str) -> str | None:
+    """Atributo do Log que guarda a entidade pai: o que o __init__ monta com o `_resource`
+    importado do módulo do recurso (`profile` em SplitProfile, `deposit` em Deposit)."""
+    logFile = Path(root) / "starkbank" / resource.lower() / "log" / "__log.py"
+    if not logFile.is_file():
+        return None
+
+    tree = ast.parse(logFile.read_text(encoding="utf-8"))
+    parentModule = f"__{resource.lower()}"
+    parentResources = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == parentModule
+        for alias in node.names
+    }
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target, call = node.targets[0], node.value
+        if not isinstance(target, ast.Attribute) or not isinstance(call, ast.Call):
+            continue
+        if not call.args or not isinstance(call.args[0], ast.Name):
+            continue
+        if call.args[0].id in parentResources:
+            return camelCase(target.attr)
+    return None
 
 
 def resourceClass(source: str, resource: str) -> ast.ClassDef:
@@ -327,12 +357,8 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
     return (" ".join(summary), fields)
 
 
-def orderFields(fields: list[dict]) -> list[dict]:
-    """`id` first — the ID_ORDER rule that lint-spec enforces."""
-    return sorted(fields, key=lambda field: field["name"] != "id")
-
-
-def renderSchema(name: str, summary: str, fields: list[dict], indent: int) -> list[str]:
+def renderSchema(name: str, summary: str, fields: list[dict], indent: int,
+                 markId: bool = False) -> list[str]:
     pad = " " * indent
     lines = [f"{pad}{name}:", f"{pad}  type: object"]
     if summary:
@@ -354,6 +380,8 @@ def renderSchema(name: str, summary: str, fields: list[dict], indent: int) -> li
             lines.append(f"{pad}      {key}: {value}")
         if field["description"]:
             lines.append(f"{pad}      description: {yamlScalar(field['description'])}")
+        if markId and field["pythonName"] == "id":
+            lines.append(f"{pad}      x-sdk-id: true")
 
     required = [f["name"] for f in fields if f["section"] != SECTION_OPTIONAL]
     if required:
@@ -378,12 +406,13 @@ def provenance(root: Path, source: Path) -> str:
 
 
 def buildDocument(resource: str, summary: str, fields: list[dict], header: str | None = None) -> str:
-    readFields = orderFields(fields)
+    """A ordem do docstring é a do construtor Java: parâmetros, depois `id` e os atributos."""
+    readFields = fields
     createFields = [f for f in fields if f["section"] != SECTION_READONLY]
 
     lines = [header] if header else []
     lines += ["components:", "  schemas:"]
-    lines.extend(renderSchema(resource, summary, readFields, 4))
+    lines.extend(renderSchema(resource, summary, readFields, 4, markId=True))
     lines.append("")
     lines.extend(renderSchema(f"{resource}Create", f"{resource} creation request", createFields, 4))
     return "\n".join(lines) + "\n"
@@ -431,6 +460,8 @@ def reportOperations(root: Path, resource: str) -> int:
 
     for flag in operations["flags"]:
         emit(f"{flag}: true")
+    if operations["logEntity"]:
+        emit(f"x-sdk-log-entity: {operations['logEntity']}")
     return 0
 
 

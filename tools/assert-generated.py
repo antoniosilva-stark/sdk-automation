@@ -5,6 +5,9 @@ import argparse
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
+from importlib.util import spec_from_file_location, module_from_spec
+
+TOOLS_DIR = Path(__file__).resolve().parent
 
 CONTRACT_DIR = "tests/contract"
 WAIVER_DIR = "tests/waivers"
@@ -104,6 +107,50 @@ def normalise(text: str) -> str:
     return " ".join(text.split())
 
 
+def loadTool(name: str):
+    spec = spec_from_file_location(name.replace("-", "_"), TOOLS_DIR / f"{name}.py")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def splitTopLevel(text: str) -> list[str]:
+    parts, depth, current = [], 0, ""
+    for char in text:
+        if char == "," and depth == 0:
+            parts.append(current)
+            current = ""
+            continue
+        depth += {"<": 1, ">": -1}.get(char, 0)
+        current += char
+    if current.strip():
+        parts.append(current)
+    return parts
+
+
+def withoutParameterNames(entry: str) -> str:
+    """Em Java o nome do parâmetro não afeta quem chama; tipo e ordem afetam."""
+    start, end = entry.find("("), entry.rfind(")")
+    if start < 0 or end < start:
+        return normalise(entry)
+
+    types = []
+    for parameter in splitTopLevel(entry[start + 1:end]):
+        words = normalise(parameter).rsplit(" ", 1)
+        isNamed = len(words) == 2 and re.fullmatch(r"[A-Za-z_]\w*", words[1])
+        types.append(words[0] if isNamed else normalise(parameter))
+    return normalise(f"{entry[:start]}({', '.join(types)}){entry[end + 1:]}")
+
+
+def javaShapes(source: str) -> dict[str, set[str]]:
+    """Assinaturas e construtores do fonte gerado, sem nome de parâmetro."""
+    shapes = {"signature": set(), "constructor": set()}
+    for kind, value in loadTool("derive-contract").extractJava(source):
+        if kind in shapes:
+            shapes[kind].add(withoutParameterNames(value))
+    return shapes
+
+
 def checkPlaceholders(source: str, filePath: str) -> list[Issue]:
     issues = []
     for number, line in enumerate(source.splitlines(), start=1):
@@ -174,15 +221,20 @@ def contractGap(kind: str, expected: str, source: str) -> str:
 
 
 def checkContract(source: str, contract: dict[str, list[str]], filePath: str,
-                  waivers: list[dict] | None = None) -> tuple[list[Issue], list[dict], list[dict]]:
+                  waivers: list[dict] | None = None,
+                  language: str | None = None) -> tuple[list[Issue], list[dict], list[dict]]:
     """Gaps bloqueantes, dispensas aplicadas e dispensas que não casaram com nada."""
     collapsed = normalise(source)
+    shapes = javaShapes(source) if language == "java" else {}
     pending = list(waivers or [])
     issues, applied = [], []
 
     for kind in CONTRACT_KINDS:
         for expected in contract[kind]:
             if normalise(expected) in collapsed:
+                continue
+
+            if kind in shapes and withoutParameterNames(expected) in shapes[kind]:
                 continue
 
             match = next(
@@ -335,7 +387,7 @@ def main() -> int:
         except ValueError as error:
             emit(f"[ERROR] contrato inválido: {error}")
             return 2
-        gaps, applied, unused = checkContract(source, contract, filePath, waivers)
+        gaps, applied, unused = checkContract(source, contract, filePath, waivers, language)
 
     emit(f"[INFO] {target} — linguagem {language}")
     emit(f"[INFO] verificações executadas: {', '.join(executed)}")

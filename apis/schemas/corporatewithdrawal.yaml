@@ -5,9 +5,6 @@ components:
       type: object
       description: "The CorporateWithdrawal objects created in your Workspace return cash from your Corporate balance to your Banking balance."
       properties:
-        id:
-          type: string
-          description: "unique id returned when CorporateWithdrawal is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -20,6 +17,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. ex: [\"tony\", \"stark\"]"
+        id:
+          type: string
+          description: "unique id returned when CorporateWithdrawal is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         transactionId:
           type: string
           description: "Stark Bank ledger transaction ids linked to this CorporateWithdrawal"
@@ -35,9 +36,9 @@ components:
           format: date-time
           description: "creation datetime for the CorporateWithdrawal. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - externalId
+        - id
         - transactionId
         - corporateTransactionId
         - updated

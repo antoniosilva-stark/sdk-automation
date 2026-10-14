@@ -5,12 +5,13 @@ components:
       type: object
       description: "The CorporateCard object displays the information of the cards created in your Workspace. Sensitive information will only be returned when the \"expand\" parameter is used, to avoid security concerns. When you initialize a CorporateCard, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the created object."
       properties:
-        id:
-          type: string
-          description: "unique id returned when CorporateCard is created. ex: \"5656565656565656\""
         holderId:
           type: string
           description: "card holder unique id. ex: \"5656565656565656\""
+        id:
+          type: string
+          description: "unique id returned when CorporateCard is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         holderName:
           type: string
           description: "card holder name. ex: \"Tony Stark\""
@@ -70,8 +71,8 @@ components:
           format: date-time
           description: "creation datetime for the CorporateCard. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - holderId
+        - id
         - holderName
         - displayName
         - rules

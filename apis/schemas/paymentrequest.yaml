@@ -5,9 +5,6 @@ components:
       type: object
       description: "A PaymentRequest is an indirect request to access a specific cash-out service (such as Transfers, BoletoPayments, etc.) which goes through the cost center approval flow on our website. To emit a PaymentRequest, you must direct it to a specific cost center by its ID, which can be retrieved on our website at the cost center page."
       properties:
-        id:
-          type: string
-          description: "unique id returned when a PaymentRequest is created. ex: \"5656565656565656\""
         centerId:
           type: string
           description: "target cost center ID. ex: \"5656565656565656\""
@@ -26,6 +23,10 @@ components:
           items:
             type: string
           description: "list of strings for tagging. All tags will be converted to lowercase."
+        id:
+          type: string
+          description: "unique id returned when a PaymentRequest is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         amount:
           type: integer
           format: int64
@@ -50,9 +51,9 @@ components:
           format: date-time
           description: "creation datetime for the PaymentRequest. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - centerId
         - payment
+        - id
         - amount
         - description
         - status

@@ -126,22 +126,21 @@ def test_stubBecomesRefWithSiblingFlags(tmpPath):
     assert schemas["WidgetCreate"]["$ref"].endswith("widget.yaml#/components/schemas/WidgetCreate")
 
 
-def test_putIsSuppressedWithReason(tmpPath):
+def test_putIsWrittenWhenTheTemplateHasItsSection(tmpPath):
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, page")
 
     assert code == 0, out
-    assert "x-sdk-put" not in spec.read_text(encoding="utf-8")
-    assert "put" in out and "suprimid" in out
+    assert "x-sdk-put: true" in spec.read_text(encoding="utf-8")
 
 
-def test_onlyFlagWithTemplateSectionIsWritten(tmpPath):
+def test_everyDerivedFlagWithATemplateSectionIsWritten(tmpPath):
     code, out, spec, _ = _apply(tmpPath, exports="put, get, query, delete, pdf")
 
     assert code == 0, out
     written = yaml.safe_load(spec.read_text(encoding="utf-8"))["components"]["schemas"]["Widget"]
     flags = {key for key in written if key.startswith("x-sdk-")}
 
-    assert flags == {"x-sdk-get", "x-sdk-query", "x-sdk-delete", "x-sdk-pdf"}
+    assert flags == {"x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-delete", "x-sdk-pdf"}
 
 
 def test_resourceMissingInPythonWritesNothing(tmpPath):
@@ -270,3 +269,32 @@ def test_specSurvivesAWriteThatDiesMidway(applySchema, tmpPath, monkeypatch):
         applySchema.writeAtomically(spec, "conteudo novo que nunca deveria chegar")
 
     assert spec.read_text(encoding="utf-8") == original, "spec ficou corrompida"
+
+
+LOG_MODULE = '''
+from starkcore.utils.api import from_api_json
+from starkcore.utils.resource import Resource
+from ..__widget import _resource as _holder_resource
+
+
+class Log(Resource):
+    def __init__(self, id, created, type, errors, holder):
+        Resource.__init__(self, id=id)
+        self.holder = from_api_json(_holder_resource, holder)
+'''
+
+
+def test_logEntityIsWrittenNextToTheFlags(tmpPath):
+    root = _sdk(tmpPath, "get, query")
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__log.py").write_text(LOG_MODULE, encoding="utf-8")
+    spec, schemas = _workspace(tmpPath)
+
+    code, out = runTool("apply-schema.py", "Widget", "--from", str(root),
+                        "--spec", str(spec), "--schemas", str(schemas))
+
+    assert code == 0, out
+    block = yaml.safe_load(spec.read_text(encoding="utf-8"))["components"]["schemas"]["Widget"]
+    assert block["x-sdk-log"] is True
+    assert block["x-sdk-log-entity"] == "holder"

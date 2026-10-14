@@ -7,6 +7,7 @@ components:
       properties:
         id:
           type: string
+          x-sdk-id: true
         ending:
           type: string
         fundingType:

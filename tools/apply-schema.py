@@ -19,11 +19,10 @@ CREATE_SUFFIX = "Create"
 SUPPORTED_FLAGS = frozenset({
     "x-sdk-create", "x-sdk-get", "x-sdk-query", "x-sdk-page", "x-sdk-log",
     "x-sdk-delete", "x-sdk-update", "x-sdk-pdf", "x-sdk-cancel", "x-sdk-data-only",
+    "x-sdk-put",
 })
 
-SUPPRESSED = {
-    "x-sdk-put": "Rest.put nao existe no sdk-java",
-}
+VALUED_FLAGS = frozenset({"x-sdk-log-entity"})
 
 
 def loadFast(text: str):
@@ -132,9 +131,10 @@ def pathsBlock(resource: str, flags: list[str]) -> list[str]:
     return [f"{line}\n" for line in lines]
 
 
-def refBlock(name: str, relativePath: str, flags: list[str]) -> list[str]:
+def refBlock(name: str, relativePath: str, flags: list[str], values: dict[str, str] | None = None) -> list[str]:
     lines = [f"    {name}:\n"]
     lines.extend(f"      {flag}: true\n" for flag in flags)
+    lines.extend(f"      {flag}: {value}\n" for flag, value in sorted((values or {}).items()))
     lines.append(f"      $ref: {relativePath}#/components/schemas/{name}\n")
     return lines
 
@@ -151,8 +151,9 @@ def insertUnder(lines: list[str], header: str, block: list[str]) -> list[str] | 
     return lines[:index] + [f"{header}\n"] + block + lines[index + 1 :]
 
 
-def insertSchemas(lines: list[str], resource: str, relativePath: str, flags: list[str]) -> list[str] | None:
-    block = refBlock(resource, relativePath, flags) + refBlock(f"{resource}{CREATE_SUFFIX}", relativePath, [])
+def insertSchemas(lines: list[str], resource: str, relativePath: str, flags: list[str],
+                  values: dict[str, str]) -> list[str] | None:
+    block = refBlock(resource, relativePath, flags, values) + refBlock(f"{resource}{CREATE_SUFFIX}", relativePath, [])
     return insertUnder(lines, "  schemas:", block)
 
 
@@ -160,22 +161,24 @@ def insertPaths(lines: list[str], resource: str, flags: list[str]) -> list[str] 
     return insertUnder(lines, "paths:", pathsBlock(resource, flags))
 
 
-def applyToSpec(specPath: Path, resource: str, relativePath: str, flags: list[str], declared: bool) -> str | None:
+def applyToSpec(specPath: Path, resource: str, relativePath: str, flags: list[str], declared: bool,
+                values: dict[str, str] | None = None) -> str | None:
+    values = values or {}
     lines = specPath.read_text(encoding="utf-8").splitlines(keepends=True)
 
     if not declared:
         updated = insertPaths(lines, resource, flags)
         if updated is None:
             return None
-        updated = insertSchemas(updated, resource, relativePath, flags)
+        updated = insertSchemas(updated, resource, relativePath, flags, values)
         return "".join(updated) if updated else None
 
-    for name, ownFlags in ((f"{resource}{CREATE_SUFFIX}", []), (resource, flags)):
+    for name, ownFlags, ownValues in ((f"{resource}{CREATE_SUFFIX}", [], {}), (resource, flags, values)):
         span = schemaBlock(lines, name)
         if span is None:
             return None
         start, end = span
-        lines[start:end] = refBlock(name, relativePath, ownFlags)
+        lines[start:end] = refBlock(name, relativePath, ownFlags, ownValues)
 
     return "".join(lines)
 
@@ -225,8 +228,9 @@ def main() -> int:
 
     derived = loadFast(rendered) or {}
     flags = sorted(flag for flag in derived if flag in SUPPORTED_FLAGS)
-    for flag in sorted(flag for flag in derived if flag not in SUPPORTED_FLAGS):
-        emit(f"[WARN] {flag} suprimido: {SUPPRESSED.get(flag, 'sem suporte no template')}")
+    values = {flag: str(derived[flag]) for flag in derived if flag in VALUED_FLAGS}
+    for flag in sorted(flag for flag in derived if flag not in SUPPORTED_FLAGS | VALUED_FLAGS):
+        emit(f"[WARN] {flag} suprimido: sem suporte no template")
 
     if not flags:
         emit(f"[ERROR] nenhuma operação suportada para {args.resource}, nada foi alterado")
@@ -234,7 +238,7 @@ def main() -> int:
 
     target = schemasDir / f"{args.resource.lower()}.yaml"
     relativePath = f"./{schemasDir.name}/{target.name}"
-    updated = applyToSpec(specPath, args.resource, relativePath, flags, declared)
+    updated = applyToSpec(specPath, args.resource, relativePath, flags, declared, values)
     if updated is None:
         emit(f"[ERROR] bloco de schema não localizado para {args.resource}, nada foi alterado")
         return 1

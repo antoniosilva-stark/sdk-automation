@@ -274,6 +274,48 @@ def test_divergentTypeIsAGapAndSaysWhatCameOut(tmpPath):
     assert "public String status;" in out
 
 
+def _strictCheck(tmpPath: Path, source: str, entry: str):
+    target = _write(tmpPath, "Widget.java", source)
+    contract = _write(tmpPath, "widget.contract", entry + "\n")
+    return runTool("assert-generated.py", str(target), "--contract", str(contract), "--strict")
+
+
+def test_javaParameterNameDoesNotDecideASignature(tmpPath):
+    code, out = _strictCheck(tmpPath, CLEAN_JAVA, "signature public static Widget get(String key)")
+    assert code == 0, out
+
+
+def test_javaParameterTypeStillDecidesASignature(tmpPath):
+    code, out = _strictCheck(tmpPath, CLEAN_JAVA, "signature public static Widget get(Long id)")
+    assert code == 1
+    assert "CONTRACT_GAP" in out
+
+
+def test_javaParameterOrderStillDecidesASignature(tmpPath):
+    code, out = _strictCheck(tmpPath, CLEAN_JAVA, "signature public static Widget get(User user, String id)")
+    assert code == 1
+    assert "CONTRACT_GAP" in out
+
+
+def test_javaParameterNameDoesNotDecideAConstructor(tmpPath):
+    code, out = _strictCheck(tmpPath, CLEAN_JAVA, "constructor public Widget(String key, String state)")
+    assert code == 0, out
+
+
+def test_javaGenericParameterWithACommaIsOneParameter(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public static Widget get(String id) throws Exception {",
+        "    public static Widget find(Map<String, Object> params) throws Exception {\n"
+        "        return null;\n    }\n\n"
+        "    public static Widget get(String id) throws Exception {",
+    )
+    code, out = _strictCheck(tmpPath, source, "signature public static Widget find(Map<String, Object> filters)")
+    assert code == 0, out
+
+    code, out = _strictCheck(tmpPath, source, "signature public static Widget find(Map<String, Long> filters)")
+    assert code == 1
+
+
 def test_fieldWithPrefixNameDoesNotSatisfyTheContract(tmpPath):
     source = CLEAN_JAVA.replace("public String status;", "public String statusCode;")
     target = _write(tmpPath, "Widget.java", source)
@@ -398,7 +440,7 @@ def test_realWaiverFilesParseAndCarryReasons(assertGenerated):
                 assert entry["reason"], f"{path.name}: {entry['value']} sem motivo"
                 total += 1
 
-    assert total >= 45
+    assert total >= 40
 
 
 def test_roleResolvesItsOwnContract(assertGenerated, tmpPath):

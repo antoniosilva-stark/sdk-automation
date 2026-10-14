@@ -5,9 +5,6 @@ components:
       type: object
       description: "When you initialize a Transfer, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
         amount:
           type: integer
           format: int64
@@ -53,6 +50,10 @@ components:
           items:
             type: object
           description: "list of Transfer.Rule objects for modifying transfer behavior. ex: [Transfer.Rule(key=\"resendingLimit\", value=5)]"
+        id:
+          type: string
+          description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         fee:
           type: integer
           description: "fee charged when the Transfer is processed. ex: 200 (= R$ 2.00)"
@@ -76,7 +77,6 @@ components:
           format: date-time
           description: "latest update datetime for the transfer. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - name
         - taxId
@@ -84,6 +84,7 @@ components:
         - branchCode
         - accountNumber
         - accountType
+        - id
         - fee
         - status
         - transactionIds

@@ -124,7 +124,7 @@ def main() -> int:
         return 2
 
     applySchema = loadTool("apply-schema")
-    report = buildReport(pythonRoot, templateFlags() - set(applySchema.SUPPRESSED))
+    report = buildReport(pythonRoot, templateFlags() & applySchema.SUPPORTED_FLAGS)
     if args.json:
         emit(json.dumps(report))
         return 0
