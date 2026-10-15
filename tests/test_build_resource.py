@@ -36,13 +36,13 @@ def test_generatorsContainJavaAndNode(buildResource):
     assert set(buildResource.GENERATORS) == {"java", "node"}
 
 
-def test_javaHasTwoRunsNodeHasThree(buildResource):
-    assert len(buildResource.GENERATORS["java"]) == 2
+def test_javaHasOneRunNodeHasThree(buildResource):
+    assert len(buildResource.GENERATORS["java"]) == 1
     assert len(buildResource.GENERATORS["node"]) == 3
 
 
 def test_javaRolesCoverResourceAndTest(buildResource):
-    assert [run["role"] for run in buildResource.GENERATORS["java"]] == ["main", "test"]
+    assert [run["role"] for run in buildResource.GENERATORS["java"]] == ["main"]
 
 
 def test_nodeRolesCoverImplBarrelTypes(buildResource):
@@ -229,36 +229,13 @@ def test_nodeBarrelExportsOnlyDeclaredOperations(builtOnce):
 
 
 @requiresGenerator
-def test_generatedTestAccompaniesTheResource(builtOnce):
+def test_noSdkTestIsGenerated(builtOnce):
+    # o teste gerado chamaria a sandbox; a validacao vive neste repo, nao no SDK alvo
     code, out, target = builtOnce("Invoice", "java", "--advisory")
 
     assert code == 0, out
-    generated = target / "src/test/java/TestInvoice.java"
-    assert generated.is_file()
-
-    source = generated.read_text(encoding="utf-8")
-    assert "public class TestInvoice {" in source
-    assert "Settings.user = utils.User.defaultProject();" in source
-    assert "@Test" in source
-    assert "{{" not in source
-
-
-@requiresGenerator
-def test_generatedTestExercisesOnlyDeclaredOperations(builtOnce):
-    code, out, target = builtOnce("DictKey", "java", "--advisory")
-    source = (target / "src/test/java/TestDictKey.java").read_text(encoding="utf-8")
-
-    assert "DictKey.query(" in source
-    assert "DictKey.page(" in source
-    assert "DictKey.create(" not in source
-
-
-@requiresGenerator
-def test_bothJavaArtifactsArePlaced(builtOnce):
-    code, out, target = builtOnce("Invoice", "java", "--advisory")
-
     assert (target / "src/main/java/com/starkbank/Invoice.java").is_file()
-    assert (target / "src/test/java/TestInvoice.java").is_file()
+    assert not (target / "src/test").exists()
 
 
 @requiresGenerator
@@ -454,14 +431,14 @@ def test_resourceWithoutPageDoesNotImportSubResource(builtOnce):
 
 
 def test_rolesAreMatchedByNameNotByPosition(buildResource):
-    pares = buildResource.plannedPairs("Invoice", "java")
+    pares = buildResource.plannedPairs("Transfer", "node")
 
-    assert set(pares) == {"main", "test"}
+    assert set(pares) == {"impl", "barrel", "types"}
     for papel, (origem, _) in pares.items():
         assert origem.startswith(f"{papel}/"), f"{papel} aponta para {origem}"
 
     invertidos = {papel: pares[papel] for papel in reversed(list(pares))}
-    assert invertidos["main"] == pares["main"], "a ordem do dicionario mudou o par do papel"
+    assert invertidos["impl"] == pares["impl"], "a ordem do dicionario mudou o par do papel"
 
 
 def test_layoutAndGeneratorsDeclareTheSameRoles(buildResource):

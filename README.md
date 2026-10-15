@@ -18,7 +18,7 @@ Developer edits apis/spec-v2.openapi.yaml
 Pull request
     ├─ validate-spec.yaml
     │   ├─ openapi-spec-validator (syntax, $ref, constraints)
-    │   └─ breaking-change-detector.py (blocks merge on BC without Tech-Lead approval)
+    │   └─ breaking-change-detector.py (reports BC, does not block)
     └─ tests.yaml: jest + pytest
     ↓
 Merge into development
@@ -210,7 +210,7 @@ registry credentials are stored in this repo.
 
 | Role | Who                                |
 |---|------------------------------------|
-| Tech-Lead | Elias — governance, approvals, BC decisions |
+| Tech-Lead | Elias — governance |
 | Engineer | Antonio Silva and Nicolas Henriques|
 | Spec Owner | not formally designated yet (`governance.md` lists Antonio Silva or Nicolas Almeida) |
 

@@ -4,9 +4,7 @@ from pathlib import Path
 from conftest import runTool
 
 JAVA_SOURCE = "main/src/main/java/com/starkbank/SplitProfile.java"
-JAVA_TEST_SOURCE = "test/src/main/java/com/starkbank/SplitProfile.java"
 JAVA_TARGET = "src/main/java/com/starkbank/SplitProfile.java"
-JAVA_TEST_TARGET = "src/test/java/TestSplitProfile.java"
 
 
 def _generated(tmpPath: Path, relative: str = JAVA_SOURCE, body: str = "class X {}\n") -> Path:
@@ -14,11 +12,6 @@ def _generated(tmpPath: Path, relative: str = JAVA_SOURCE, body: str = "class X 
     target = root / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(body, encoding="utf-8")
-
-    if relative == JAVA_SOURCE:
-        companion = root / JAVA_TEST_SOURCE
-        companion.parent.mkdir(parents=True, exist_ok=True)
-        companion.write_text("class TestSplitProfile {}\n", encoding="utf-8")
 
     return root
 
@@ -42,7 +35,7 @@ def test_placesTheJavaFile(tmpPath):
     assert placed.read_text(encoding="utf-8") == "class SplitProfile {}\n"
 
 
-def test_placesBothJavaArtifacts(tmpPath):
+def test_placesTheJavaArtifactOnly(tmpPath):
     generated = _generated(tmpPath, body="class SplitProfile {}\n")
     repo = _targetRepo(tmpPath)
 
@@ -51,14 +44,14 @@ def test_placesBothJavaArtifacts(tmpPath):
 
     assert code == 0, out
     assert (repo / JAVA_TARGET).is_file()
-    assert (repo / JAVA_TEST_TARGET).read_text(encoding="utf-8") == "class TestSplitProfile {}\n"
+    assert not (repo / "src/test").exists()
 
 
-def test_targetsDeclaresBothPaths():
+def test_targetsDeclaresTheMainPathOnly():
     code, out = runTool("place-generated.py", "SplitProfile", "--lang", "java", "--targets")
 
     assert code == 0
-    assert out.split() == [JAVA_TARGET, JAVA_TEST_TARGET]
+    assert out.split() == [JAVA_TARGET]
 
 
 def test_createsIntermediateDirectories(tmpPath):

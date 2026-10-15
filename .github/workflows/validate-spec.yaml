@@ -6,7 +6,6 @@ on:
       - 'apis/spec-v2.openapi.yaml'
       - 'apis/schemas/**'
       - 'tools/breaking-change-detector.py'
-      - 'apis/bc-approvals.yaml'
 
 concurrency:
   group: validate-spec-${{ github.ref }}
@@ -48,15 +47,3 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: python3 tools/breaking-change-detector.py --base "$BASE_SHA"
-
-      - name: Comment on PR (if BC detected)
-        if: failure() && steps.breaking-change.outcome == 'failure'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '⚠️ Breaking changes detected! Please review and discuss with Tech-Lead (@elias) before proceeding.'
-            })

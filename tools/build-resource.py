@@ -41,15 +41,6 @@ GENERATORS = {
                 "--type-mappings", "OffsetDateTime=String,Date=String,URI=String",
             ],
         },
-        {
-            "role": "test",
-            "generator": "java",
-            "templateDir": "templates/java-test",
-            "extra": [
-                "--model-package", "com.starkbank",
-                "--type-mappings", "OffsetDateTime=String,Date=String,URI=String",
-            ],
-        },
     ],
     "node": [
         {"role": "impl", "generator": "javascript", "templateDir": "templates/nodejs-impl", "extra": []},

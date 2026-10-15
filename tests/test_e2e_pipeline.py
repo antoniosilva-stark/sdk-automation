@@ -64,7 +64,6 @@ def test_commitCarriesResourceAndTestTogether(tmpPath):
     committed = _git(repo, "show", "--name-only", "--format=", "HEAD").split()
     assert committed == [
         "src/main/java/com/starkbank/SplitProfile.java",
-        "src/test/java/TestSplitProfile.java",
     ]
 
 

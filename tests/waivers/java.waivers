@@ -28,6 +28,3 @@ field public String[] transactionIds;  # array Java vs List do gerador; o genera
 field public long amount;  # primitivo nao-nulo; o gerador so emite tipo caixa (sai Long)
 field public String[] tags;  # array Java vs List do gerador; o generator java nao expoe a opcao
 constructor public Transaction(long amount, String description, String externalId, String receiverId, String senderId, String[] tags, int fee, String created, String source, Long balance, String id)  # construtor posicional depende de ordem de campo que o gerador nao garante
-
-[transaction/test]
-signature public void testCreate() throws Exception  # exigiria montar payload de exemplo; nao geravel genericamente

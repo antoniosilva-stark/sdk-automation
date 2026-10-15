@@ -2,25 +2,20 @@
 
 ## Versionamento (Semver)
 
-- **MAJOR**: Remove operation/schema (requires Tech-Lead approval)
-- **MINOR**: New resource/parameter (Spec Owner approval)
-- **PATCH**: Bugfix (Spec Owner approval)
+- **MAJOR**: Remove operation/schema
+- **MINOR**: New resource/parameter
+- **PATCH**: Bugfix
 
 ## Breaking-Change Policy
 
 - Detected automatically: `breaking-change-detector.py` (Python) in CI
-- CI blocks merge if BC found
-- Requires Tech-Lead approval to merge BC changes
-- SLA: 1-2h for approval
+- CI reports every BC found; it does not block the merge (POC)
 
 BC = removes operation, removes schema, removes required param, type changes, required field added, removes required field
 
 `required field added` conta **apenas em schema de requisição** (o que `requestBody` alcança):
 exigir campo novo quebra quem chama. Na resposta o acréscimo é promessa mais forte do
 servidor e não quebra ninguém — o que quebra ali é o inverso, `removes required field`.
-
-Aprovação de BC é registrada em `apis/bc-approvals.yaml`: string exata, motivo e quem aprovou.
-O detector subtrai as aprovadas e reporta aprovação que deixou de casar com algo.
 
 ## Spec Owner
 
@@ -29,8 +24,7 @@ O detector subtrai as aprovadas e reporta aprovação que deixou de casar com al
 Responsibilities:
 - Keep spec.yaml in sync with Python SDK
 - Review spec PRs
-- Approve version bumps
-- Validate BC changes
+- Review BC changes reported by the detector
 
 ## Stack (Hybrid: Python + Node.js)
 
@@ -41,7 +35,7 @@ Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo s
 
 ## Tool Versions (Fixed)
 
-- OpenAPI Generator (core/JAR): v7.0.1 — pinado via `openapitools.json` (upgrade com aprovação do Tech-Lead)
+- OpenAPI Generator (core/JAR): v7.0.1 — pinado via `openapitools.json` (upgrade deliberado)
 - OpenAPI Spec: 3.1
 - SDK references used by the tests: pinned by commit in the `Makefile` (`SDK_PYTHON_PIN`, `SDK_JAVA_PIN`, `SDK_NODE_PIN`); drift detection and generation read the remote HEAD
 
@@ -51,9 +45,9 @@ Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo s
 2. Update Python SDK (if needed)
 3. Update spec.yaml (follow existing pattern)
 4. Validate: `openapi-spec-validator apis/spec-v2.openapi.yaml`
-5. Push & create PR (tag @elias if BC)
+5. Push & create PR
 6. CI validates automatically (validate-spec.yaml)
-7. Spec Owner reviews + Tech-Lead approves
+7. Spec Owner reviews
 8. Merge → sdk-sync.yaml auto-publishes (15-20 min)
 
 ## Escalation

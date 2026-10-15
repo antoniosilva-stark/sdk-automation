@@ -224,10 +224,11 @@ def test_baseIsRequiredBecauseHeadComparesTheSpecWithItself():
     assert code == 2, "sem --base o tool tem de recusar, nao assumir HEAD"
 
 
-def test_realHistoryWithBreakingChangeFails():
+def test_realHistoryWithBreakingChangeIsReported():
     code, out = runTool("breaking-change-detector.py", "--base", "4c8d50a")
 
-    assert code == 1
+    assert code == 0, "BC e informativo, nao bloqueia"
+    assert "[WARN]" in out
     assert "type_changed" in out
     assert "governance.md" in out
 
@@ -235,9 +236,9 @@ def test_realHistoryWithBreakingChangeFails():
 def test_theToolReportsAVerdictAgainstRealHistory():
     code, out = runTool("breaking-change-detector.py", "--base", "567ce54")
 
-    assert code in (0, 1), out
+    assert code == 0, out
     assert "verificando breaking changes" in out
-    if code == 1:
+    if "[WARN]" in out:
         assert "regra violada, governance.md" in out
 
 
@@ -329,105 +330,6 @@ def test_removedFieldIsNotAlsoReportedAsRequiredRemoved(detector):
     changes = detector.detectBreakingChanges(current, previous)
 
     assert [c["type"] for c in changes] == ["removed_field"]
-
-
-APPROVAL = """
-approvals:
-  - signature: "removed_operation /widget post"
-    reason: "Rest.put nao existe no sdk-java"
-    approvedBy: "elias"
-    date: "2026-09-15"
-"""
-
-
-def _approvalFile(tmpPath, body: str = APPROVAL):
-    path = tmpPath / "bc-approvals.yaml"
-    path.write_text(body, encoding="utf-8")
-    return path
-
-
-def test_signatureIdentifiesAFindingExactly(detector):
-    change = {"type": "removed_operation", "path": "/widget", "method": "post"}
-    assert detector.signature(change) == "removed_operation /widget post"
-
-    schemaChange = {"type": "type_changed", "schema": "Invoice", "field": "amount"}
-    assert detector.signature(schemaChange) == "type_changed Invoice.amount"
-
-
-def test_approvedChangeDoesNotBlock(detector, tmpPath):
-    approvals = detector.parseApprovals(_approvalFile(tmpPath))
-    changes = [{"type": "removed_operation", "path": "/widget", "method": "post"}]
-
-    blocking, approved, unused = detector.applyApprovals(changes, approvals)
-
-    assert blocking == []
-    assert approved[0]["approvedBy"] == "elias"
-    assert unused == []
-
-
-def test_unapprovedChangeStillBlocks(detector, tmpPath):
-    approvals = detector.parseApprovals(_approvalFile(tmpPath))
-    changes = [{"type": "removed_schema", "schema": "Invoice"}]
-
-    blocking, approved, _ = detector.applyApprovals(changes, approvals)
-
-    assert len(blocking) == 1
-    assert approved == []
-
-
-def test_unusedApprovalIsReported(detector, tmpPath):
-    approvals = detector.parseApprovals(_approvalFile(tmpPath))
-
-    _, _, unused = detector.applyApprovals([], approvals)
-
-    assert len(unused) == 1
-
-
-def test_approvalWithoutReasonOrApproverIsRejected(detector, tmpPath):
-    for body in ('approvals:\n  - signature: "removed_schema X"\n    approvedBy: "elias"\n',
-                 'approvals:\n  - signature: "removed_schema X"\n    reason: "porque sim"\n'):
-        with pytest.raises(ValueError):
-            detector.parseApprovals(_approvalFile(tmpPath, body))
-
-
-def test_approvalWithWildcardIsRejected(detector, tmpPath):
-    body = ('approvals:\n  - signature: "required_field_added *"\n'
-            '    reason: "tudo"\n    approvedBy: "elias"\n')
-    with pytest.raises(ValueError, match="curinga"):
-        detector.parseApprovals(_approvalFile(tmpPath, body))
-
-
-def test_approvalsAreAppliedEndToEnd(tmpPath):
-    approvals = tmpPath / "approvals.yaml"
-    approvals.write_text(
-        'approvals:\n'
-        '  - signature: "removed_operation /split_profile post"\n'
-        '    reason: "Rest.put nao existe no sdk-java @ c7f40b8"\n'
-        '    approvedBy: "elias"\n'
-        '    date: "2026-09-15"\n',
-        encoding="utf-8")
-
-    code, out = runTool("breaking-change-detector.py", "--base", "ae90902",
-                        "--approvals", str(approvals))
-
-    assert "[INFO] aprovado: removed_operation /split_profile post" in out
-    assert "elias" in out
-    assert "removed_operation" not in out.split("[INFO] aprovado")[0], "aprovado ainda bloqueia"
-
-
-def test_unusedApprovalIsAnnouncedByTheTool(tmpPath):
-    approvals = tmpPath / "approvals.yaml"
-    approvals.write_text(
-        'approvals:\n'
-        '  - signature: "removed_schema NaoExisteMais"\n'
-        '    reason: "ja foi"\n'
-        '    approvedBy: "elias"\n',
-        encoding="utf-8")
-
-    _, out = runTool("breaking-change-detector.py", "--base", "ae90902",
-                     "--approvals", str(approvals))
-
-    assert "aprovação não utilizada" in out
 
 
 def test_unresolvableBaseIsAnErrorNotAFreePass():

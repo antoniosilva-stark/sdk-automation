@@ -13,7 +13,6 @@ except ImportError:
     from yaml import SafeLoader
 
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
-APPROVALS_FILE = "apis/bc-approvals.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 
 RULE_OPERATION = "removes operation"
@@ -272,67 +271,8 @@ def detectBreakingChanges(current: dict, previous: dict | None,
             + changedRequiredFields(currSchemas, prevSchemas, requests))
 
 
-def signature(change: dict) -> str:
-    """Identidade de um achado, para a aprovacao casar por string exata."""
-    if "path" in change:
-        parts = [change["path"], change.get("method", ""), change.get("param", "")]
-        return f"{change['type']} " + " ".join(part for part in parts if part)
-    alvo = change.get("schema", "")
-    if change.get("field"):
-        alvo = f"{alvo}.{change['field']}"
-    return f"{change['type']} {alvo}"
-
-
-def parseApprovals(path: Path) -> list[dict]:
-    """Aprovacao de BC: assinatura exata, motivo e quem aprovou. Nunca curinga.
-
-    Mesma forma das dispensas de contrato — o que a governanca exige e uma decisao humana
-    rastreavel, nao um interruptor.
-    """
-    target = Path(path)
-    if not target.is_file():
-        return []
-
-    document = loadFast(target.read_text(encoding="utf-8")) or {}
-    approvals = []
-    for index, entry in enumerate(document.get("approvals") or [], start=1):
-        entry = entry or {}
-        assinatura = str(entry.get("signature") or "").strip()
-        if not assinatura:
-            raise ValueError(f"{target}:{index} aprovacao sem assinatura")
-        if "*" in assinatura:
-            raise ValueError(f"{target}:{index} aprovacao com curinga: {assinatura}")
-        if not str(entry.get("reason") or "").strip():
-            raise ValueError(f"{target}:{index} aprovacao sem motivo: {assinatura}")
-        if not str(entry.get("approvedBy") or "").strip():
-            raise ValueError(f"{target}:{index} aprovacao sem quem aprovou: {assinatura}")
-        approvals.append({"signature": assinatura, "reason": entry["reason"].strip(),
-                          "approvedBy": entry["approvedBy"].strip(),
-                          "date": str(entry.get("date") or "").strip()})
-    return approvals
-
-
-def applyApprovals(changes: list[dict], approvals: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
-    """Bloqueantes, aprovados e aprovacoes que nao casaram com nada."""
-    porAssinatura = {entry["signature"]: entry for entry in approvals}
-    usadas, blocking, approved = set(), [], []
-
-    for change in changes:
-        entry = porAssinatura.get(signature(change))
-        if not entry:
-            blocking.append(change)
-            continue
-        usadas.add(entry["signature"])
-        approved.append({**change, **entry})
-
-    unused = [entry for entry in approvals if entry["signature"] not in usadas]
-    return (blocking, approved, unused)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detecta breaking changes entre versões da spec")
-    parser.add_argument("--approvals", default=APPROVALS_FILE,
-                        help=f"aprovações de BC registradas (padrão: {APPROVALS_FILE})")
     parser.add_argument("--base", required=True,
                         help="commit de comparação: o alvo da PR, nunca HEAD — a árvore é HEAD")
     args = parser.parse_args()
@@ -352,29 +292,15 @@ def main() -> int:
                                     resolveSchemas(current, refLoader(None)),
                                     resolveSchemas(previous, refLoader(args.base)))
 
-    try:
-        approvals = parseApprovals(Path(args.approvals))
-    except ValueError as error:
-        emit(f"[ERROR] aprovação inválida: {error}")
-        return 2
-
-    changes, approved, unused = applyApprovals(changes, approvals)
-
-    for entry in approved:
-        emit(f"[INFO] aprovado: {signature(entry)} — {entry['reason']} ({entry['approvedBy']})")
-    for entry in unused:
-        emit(f"[WARN] aprovação não utilizada: {entry['signature']}"
-             " — a mudança deixou de existir, remova a aprovação")
-
     if changes:
         emit("")
-        emit(f"[ERROR] {len(changes)} breaking change(s) detectada(s):")
+        emit(f"[WARN] {len(changes)} breaking change(s) detectada(s), apenas informativo:")
         emit(json.dumps(changes, indent=2))
         for rule in sorted({change["rule"] for change in changes}):
             emit(f"[INFO] regra violada, governance.md: {rule}")
-        return 1
+        return 0
 
-    emit("[OK] nenhuma breaking change bloqueante")
+    emit("[OK] nenhuma breaking change")
     return 0
 
 

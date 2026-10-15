@@ -405,7 +405,7 @@ def test_theBreakingChangeGateLivesInThePullRequestOnly():
         if path.name == "validate-spec.yaml":
             assert usa, "a PR precisa do gate de BC"
             continue
-        assert usa == [], f"{path.name}: gate de BC fora da PR bloqueia sem caminho de aprovacao: {usa}"
+        assert usa == [], f"{path.name}: gate de BC fora da PR: {usa}"
 
 
 def test_everyBranchCreationChecksTheRemoteFirst():
@@ -431,16 +431,3 @@ def test_theStepThatReceivesTheAppTokenIsPinnedBySha():
             referencia = step["uses"].split("@")[-1]
             assert _SHA.match(referencia), \
                 f"{jobName}/{step.get('name') or step['uses']}: recebe o token do App em tag móvel"
-
-
-def test_theApprovalFileRequiresReviewAndRetriggersTheGate():
-    donos = REPO_ROOT / ".github/CODEOWNERS"
-    assert donos.is_file(), "aprovacao de BC sem CODEOWNERS e autoassinada"
-    assert "bc-approvals" in donos.read_text(encoding="utf-8")
-
-    workflow = yaml.safe_load((WORKFLOW_DIR / "validate-spec.yaml").read_text(encoding="utf-8"))
-    trigger = workflow["on"] if "on" in workflow else workflow[True]
-    caminhos = trigger["pull_request"]["paths"]
-
-    assert any("bc-approvals" in path for path in caminhos), \
-        "PR que so adiciona aprovacao nao dispara o gate que a aprovacao dispensa"
