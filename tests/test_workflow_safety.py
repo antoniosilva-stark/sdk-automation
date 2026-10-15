@@ -417,7 +417,7 @@ def test_everyBranchCreationChecksTheRemoteFirst():
         if empurra is None:
             continue
 
-        protegido = any("ls-remote" in script or "--force-with-lease" in script
+        protegido = any("ls-remote" in script or "--force-with-lease" in script or "prepare-branch.py" in script
                         for script in scripts[:empurra + 1])
         assert protegido, f"{jobName}: push de branch sem checar o remoto antes"
 
@@ -444,3 +444,15 @@ def test_everyRemoteBranchProbeSeparatesAbsentFromUnreachable():
                     continue
                 assert "FOUND=$?" in script, \
                     f"{path.name}/{jobName}: falha de rede ou de acesso lida como branch ausente"
+
+
+def test_aRegeneratedBranchIsOverwrittenOnlyAgainstTheShaThatWasRead():
+    for path in workflowFiles():
+        text = path.read_text(encoding="utf-8")
+
+        assert "--force " not in text and "push -f" not in text, f"{path.name}: force push sem lease"
+        for line in text.splitlines():
+            if "--force-with-lease" in line:
+                assert "--force-with-lease=" in line and "$PREVIOUS" in line, \
+                    f"{path.name}: lease sem o SHA esperado: {line.strip()}"
+

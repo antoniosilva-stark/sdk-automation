@@ -270,6 +270,7 @@ jobs:
         working-directory: target
         env:
           SLUG: ${{ steps.resource.outputs.slug }}
+          BASE: ${{ steps.base.outputs.base }}
         run: |
           BRANCH="sdk-automation/$SLUG"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
@@ -277,23 +278,8 @@ jobs:
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
 
-          # exit 2 e "branch ausente"; qualquer outro codigo diferente de 0 e falha de acesso
-          git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1 && FOUND=0 || FOUND=$?
-          if [ "$FOUND" -ne 0 ] && [ "$FOUND" -ne 2 ]; then
-            echo "nao foi possivel consultar o remoto (codigo $FOUND)."
-            exit 1
-          fi
-          if [ "$FOUND" -eq 0 ]; then
-            git fetch --depth 1 origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Branch $BRANCH ja existe — comparando contra o que ja foi entregue."
-          else
-            git checkout -b "$BRANCH"
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Branch $BRANCH e nova."
-          fi
-
+          # a branch existente so e reaproveitada se contem a base atual; senao e regerada sobre ela
+          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" >> "$GITHUB_OUTPUT"
 
       - name: Copy verified artifacts into the target
         run: cp -R staging/. target/
@@ -331,9 +317,17 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ steps.branch.outputs.branch }}
+          PREVIOUS: ${{ steps.branch.outputs.old }}
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
-        run: git push "https://x-access-token:$GH_TOKEN@github.com/$OWNER/$TARGET_REPO" "HEAD:refs/heads/$BRANCH"
+        run: |
+          REMOTE="https://x-access-token:$GH_TOKEN@github.com/$OWNER/$TARGET_REPO"
+          if [ -n "$PREVIOUS" ]; then
+            # branch regerada sobre a base nova: so sobrescreve se ninguem mexeu nela desde a leitura
+            git push --force-with-lease="refs/heads/$BRANCH:$PREVIOUS" "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          else
+            git push "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          fi
 
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
