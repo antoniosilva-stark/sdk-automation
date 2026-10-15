@@ -1,6 +1,6 @@
 .PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
-BC_BASE ?= origin/development
+BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
 SDK_PYTHON ?=
 SDK_JAVA ?=
 SDK_REMOTE ?= https://github.com/starkbank

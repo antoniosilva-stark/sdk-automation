@@ -278,3 +278,12 @@ def test_pinnedReferenceLeavesAnOverrideUntouched(tmpPath):
     assert result.returncode == 0, result.stdout + result.stderr
     assert (personal / "marker.txt").read_text(encoding="utf-8") == "my local work"
     assert not (personal / ".git").exists()
+
+
+def test_breakingChangeBaseFollowsTheRemoteDefaultBranch():
+    result = subprocess.run(["make", "-n", "check-bc"], cwd=REPO_ROOT, capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert '--base "origin/' in result.stdout
+    assert "symbolic-ref" not in result.stdout, "a base tem de ser resolvida, nao repassada como comando"
+

@@ -5,6 +5,7 @@ import sys
 import yaml
 import argparse
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -74,18 +75,19 @@ def warn(text: str) -> None:
     sys.stderr.write(f"{text}\n")
 
 
-def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
+@lru_cache(maxsize=None)
+def loadConventions(conventions: Path) -> dict:
     if not Path(conventions).is_file():
-        return None
-    table = loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
-    return (table.get("integerFormats") or {}).get(field)
+        return {}
+    return loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
+
+
+def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
+    return (loadConventions(Path(conventions)).get("integerFormats") or {}).get(field)
 
 
 def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
-    if not Path(conventions).is_file():
-        return None
-    table = loadFast(Path(conventions).read_text(encoding="utf-8")) or {}
-    return (table.get("stringFormats") or {}).get(field)
+    return (loadConventions(Path(conventions)).get("stringFormats") or {}).get(field)
 
 
 def declaredOptions(description: str) -> list[str]:

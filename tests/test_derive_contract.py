@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 
 import re
+import importlib.util
 
 from conftest import JAVA_SDK, NODE_SDK, REPO_ROOT, requiresJavaSdk, requiresNodeSdk, runTool
 
@@ -87,7 +88,7 @@ def test_javaExtractorCoversEveryKind(tmpPath):
     lines = _derive("Widget", "java", "main", root)
 
     assert "declaration public final class Widget extends Resource" in lines
-    assert 'field       static ClassData data = new ClassData(Widget.class, "Widget");' in lines
+    assert 'field static ClassData data = new ClassData(Widget.class, "Widget");' in lines
     assert "field public long amount;" in lines
     assert "field public String[] tags;" in lines
     assert "constructor public Widget()" in lines
@@ -200,3 +201,35 @@ def test_derivedRulerCarriesTheReferenceSha():
     assert header, "regua sem SHA de origem"
     assert "starkbank/sdk-java@" in header[0]
     assert "@desconhecido" not in header[0]
+
+
+def test_unpairedParenthesisInJavadocDoesNotSwallowTheMembers(tmpPath):
+    body = FORGED_JAVA.replace("    public long amount;",
+                               "    /** returns the id (see 1\n     * and \"quote\n     */\n    public long amount;")
+    root = _forge(tmpPath, "src/main/java/com/starkbank/Widget.java", body)
+    lines = _derive("Widget", "java", "main", root)
+
+    assert "field public long amount;" in lines
+    assert "signature public static Widget get(String id)" in lines
+
+
+def test_parenthesisInsideAStringOrALineCommentIsNotCounted(tmpPath):
+    body = FORGED_JAVA.replace("    public long amount;",
+                               '    // note: ( still open\n    static String tip = "a(b";\n    public long amount;')
+    root = _forge(tmpPath, "src/main/java/com/starkbank/Widget.java", body)
+    lines = _derive("Widget", "java", "main", root)
+
+    assert "field public long amount;" in lines
+    assert "constructor public Widget()" in lines
+
+
+def test_unclosedParenthesisAtTheEndOfTheFileIsWarnedNotDropped(capfd):
+    spec = importlib.util.spec_from_file_location("derive_contract", REPO_ROOT / "tools/derive-contract.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    joined = module.joinContinuations("public class X {\n    public void run(int a,\n")
+
+    assert any(line.startswith("public void run(int a") for line in joined)
+    assert "sem par" in capfd.readouterr().err
+

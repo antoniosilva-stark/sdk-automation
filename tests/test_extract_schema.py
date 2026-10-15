@@ -629,3 +629,18 @@ def test_logEntityIsEmittedAsAValuedFlag(tmpPath):
     assert code == 0, out
     assert "x-sdk-log: true" in out
     assert "x-sdk-log-entity: holder" in out
+
+
+def test_conventionsAreParsedOncePerFile(extractSchema, tmpPath):
+    conventions = tmpPath / "conventions.yaml"
+    conventions.write_text("integerFormats:\n  amount: int64\nstringFormats:\n  due: date\n", encoding="utf-8")
+    extractSchema.loadConventions.cache_clear()
+
+    for _ in range(5):
+        assert extractSchema.integerFormat("amount", conventions) == "int64"
+        assert extractSchema.stringFormat("due", conventions) == "date"
+
+    info = extractSchema.loadConventions.cache_info()
+    assert info.misses == 1
+    assert info.hits == 9
+

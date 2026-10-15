@@ -331,14 +331,15 @@ def test_syncIsSkippedOnlyForTheDriftedResource():
     assert "blocked" in condition
 
 
-def test_driftJobRefreshesTheReferenceBeforeComparing():
+def test_driftJobResolvesTheCurrentReferenceBeforeComparing():
     scripts = [step.get("run") or "" for step in (driftJob().get("steps") or [])]
-    refresh = next((i for i, script in enumerate(scripts) if "refresh-sdk-ref" in script), None)
+    resolve = next((i for i, script in enumerate(scripts) if "make clone-sdk-ref" in script), None)
     compare = next((i for i, script in enumerate(scripts) if "detect-drift.py" in script), None)
 
-    assert refresh is not None, "job de defasagem compara sem atualizar a referencia"
+    assert resolve is not None, "job de defasagem compara sem resolver a referencia"
+    assert "pinned" not in scripts[resolve], "drift le o HEAD de proposito, nao o pin"
     assert compare is not None
-    assert refresh < compare
+    assert resolve < compare
 
 
 def test_specPrIsNeverAutoMerged():

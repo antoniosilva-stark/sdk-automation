@@ -480,3 +480,9 @@ def test_dateFieldsAreStringsLikeDatetimes(builtOnce):
     assert "public String scheduled;" in source
     assert "public LocalDate" not in source
 
+
+def test_javaImportsNeverAskForTheRemovedSettingsFlag(buildResource):
+    properties = buildResource.javaImports({"x-sdk-query", "x-sdk-page", "x-sdk-log"})
+
+    assert "usesSettings=true" not in properties
+

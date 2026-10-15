@@ -52,7 +52,6 @@ GENERATORS = {
 
 GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
 LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
-SETTINGS_USERS = ("x-sdk-query", "x-sdk-page", "x-sdk-log")
 SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log")
 REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
               "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
@@ -89,8 +88,6 @@ def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
         properties.append("usesObjectList=true")
     if flags & set(LIST_USERS):
         properties.append("usesList=true")
-    if flags & set(SETTINGS_USERS):
-        properties.append("usesSettings=true")
     if flags & set(SUBRESOURCE_USERS):
         properties.append("usesSubResource=true")
     if flags & set(REST_USERS):

@@ -67,19 +67,58 @@ def sourcePath(repo: Path, resource: str, language: str, role: str) -> Path | No
     return None
 
 
+def withoutNoise(source: str) -> list[str]:
+    """Cada linha sem comentário e sem conteúdo de string, só para contar parênteses."""
+    cleaned, current = [], []
+    state, quote, index = "code", "", 0
+    while index < len(source):
+        char, following = source[index], source[index + 1:index + 2]
+        index += 1
+        if char == "\n":
+            cleaned.append("".join(current))
+            current = []
+            state = "code" if state == "line" else state
+            continue
+        if state == "line":
+            continue
+        if state == "block":
+            if char == "*" and following == "/":
+                state, index = "code", index + 1
+            continue
+        if state == "string":
+            if char == "\\":
+                index += 1
+            elif char == quote:
+                state = "code"
+            continue
+        if char == "/" and following == "/":
+            state, index = "line", index + 1
+        elif char == "/" and following == "*":
+            state, index = "block", index + 1
+        elif char in "\"'`":
+            state, quote = "string", char
+        else:
+            current.append(char)
+    cleaned.append("".join(current))
+    return cleaned
+
+
 def joinContinuations(source: str) -> list[str]:
     """Junta assinatura quebrada em várias linhas até fechar o parêntese."""
     joined, buffer, depth = [], "", 0
-    for raw in source.splitlines():
+    for raw, clean in zip(source.splitlines(), withoutNoise(source)):
         line = raw.strip()
         if depth:
             buffer += " " + line
         else:
             buffer = line
-        depth += line.count("(") - line.count(")")
+        depth += clean.count("(") - clean.count(")")
         if depth <= 0:
             joined.append(re.sub(r"\s+([),])", r"\1", " ".join(buffer.split())))
             depth = 0
+    if depth > 0:
+        sys.stderr.write("[WARN] parêntese sem par até o fim do arquivo: o contrato pode estar incompleto\n")
+        joined.append(re.sub(r"\s+([),])", r"\1", " ".join(buffer.split())))
     return joined
 
 
@@ -145,8 +184,7 @@ def render(resource: str, language: str, role: str, relative: str,
     lines = [f"# source:    {relative}", f"# sha:       starkbank/sdk-{language}@{sha}",
              f"# derived:   {resource} ({language}, papel {role})", ""]
     for kind, value in entries:
-        padding = " " * max(1, 12 - len(kind))
-        lines.append(f"{kind}{padding}{value}" if kind == "field" and value.startswith("static") else f"{kind} {value}")
+        lines.append(f"{kind} {value}")
     return "\n".join(lines) + "\n"
 
 

@@ -2,7 +2,7 @@ import yaml
 import pytest
 from pathlib import Path
 
-from conftest import PYTHON_SDK, REPO_ROOT, requiresPythonSdk, runTool
+from conftest import PYTHON_SDK, REPO_ROOT, _loadTool, requiresPythonSdk, runTool
 
 
 def _schemaDir(tmpPath: Path, resource: str, document: dict) -> Path:
@@ -18,6 +18,11 @@ def _appliedResources() -> list[str]:
         schemas = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"]
         names.append(next(name for name in schemas if name.lower() == path.stem))
     return names
+
+
+def _realSpecEntry(resource: str) -> dict:
+    spec = yaml.safe_load((REPO_ROOT / "apis/spec-v2.openapi.yaml").read_text(encoding="utf-8"))
+    return spec["components"]["schemas"][resource]
 
 
 def _applied(resource: str) -> dict:
@@ -111,3 +116,59 @@ def test_thePilotResourceHasAVersionedSchema():
 
     assert code == 0, out
     assert "em sincronia" in out
+
+
+def _specWith(tmpPath: Path, resource: str, entry: dict) -> Path:
+    path = tmpPath / "spec.yaml"
+    path.write_text(yaml.safe_dump({"components": {"schemas": {resource: entry}}}), encoding="utf-8")
+    return path
+
+
+def test_operationExportedByThePythonButNotDeclaredIsDrift(tmpPath):
+    drift = _loadTool("detect-drift.py")
+
+    differences = drift.compareOperations(
+        "Widget",
+        {"x-sdk-get": True, "x-sdk-query": True, "x-sdk-update": True},
+        {"$ref": "./schemas/widget.yaml", "x-sdk-get": True, "x-sdk-query": True},
+    )
+
+    assert differences == ["Widget.x-sdk-update: o sdk-python exporta, a spec nao declara"]
+
+
+def test_operationRemovedFromThePythonIsDrift():
+    drift = _loadTool("detect-drift.py")
+
+    differences = drift.compareOperations("Widget", {"x-sdk-get": True}, {"x-sdk-get": True, "x-sdk-delete": True})
+
+    assert differences == ["Widget.x-sdk-delete: a spec declara, o sdk-python nao exporta mais"]
+
+
+def test_logEntityChangeIsDrift():
+    drift = _loadTool("detect-drift.py")
+
+    differences = drift.compareOperations(
+        "Widget",
+        {"x-sdk-log": True, "x-sdk-log-entity": "profile"},
+        {"x-sdk-log": True, "x-sdk-log-entity": "widget"},
+    )
+
+    assert differences == ["Widget.x-sdk-log-entity: widget → profile"]
+
+
+def test_flagsTheTemplateIgnoresAreNotDrift():
+    drift = _loadTool("detect-drift.py")
+
+    assert drift.compareOperations("Widget", {"x-sdk-get": True, "x-sdk-parse": True}, {"x-sdk-get": True}) == []
+
+
+@requiresPythonSdk
+def test_missingOperationFlagInTheSpecIsDetectedEndToEnd(tmpPath):
+    entry = {key: value for key, value in _realSpecEntry("DictKey").items() if key != "x-sdk-get"}
+    specPath = _specWith(tmpPath, "DictKey", entry)
+
+    code, out = runTool("detect-drift.py", "DictKey", "--from", str(PYTHON_SDK), "--spec", str(specPath))
+
+    assert code == 1
+    assert "DictKey.x-sdk-get" in out
+

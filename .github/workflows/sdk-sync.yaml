@@ -71,9 +71,6 @@ jobs:
       - name: Resolve the reference SDKs
         run: make clone-sdk-ref
 
-      - name: Refresh the reference SDKs
-        run: make refresh-sdk-ref
-
       - name: Compare the versioned schema with the current sdk-python
         id: compare
         env:

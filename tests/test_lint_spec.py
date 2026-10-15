@@ -324,3 +324,20 @@ def test_propertyNamedDataCollidesWithTheEmittedClassData(lintSpec, tmpPath):
 
     assert not report.generatable
     assert lintSpec.CODE_RESERVED_NAME in [code for code, _ in report.reasons]
+
+
+def test_logWithoutAnEntityIsNotGeneratable(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"x-sdk-get": True, "x-sdk-log": True,
+                   "properties": {"amount": {}, "status": {}, "id": {"x-sdk-id": True}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not report.generatable
+    assert lintSpec.CODE_LOG_ENTITY in [code for code, _ in report.reasons]
+
+    schemas["Widget"]["x-sdk-log-entity"] = "widget"
+    assert lintSpec.inspectResource("Widget", schemas, specPath, {}).generatable
+
