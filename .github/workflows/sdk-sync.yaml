@@ -277,7 +277,13 @@ jobs:
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
 
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+          # exit 2 e "branch ausente"; qualquer outro codigo diferente de 0 e falha de acesso
+          git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1 && FOUND=0 || FOUND=$?
+          if [ "$FOUND" -ne 0 ] && [ "$FOUND" -ne 2 ]; then
+            echo "nao foi possivel consultar o remoto (codigo $FOUND)."
+            exit 1
+          fi
+          if [ "$FOUND" -eq 0 ]; then
             git fetch --depth 1 origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
             echo "exists=true" >> "$GITHUB_OUTPUT"

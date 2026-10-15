@@ -1,6 +1,7 @@
 import re
 import sys
 import shutil
+import tempfile
 import argparse
 import subprocess
 from pathlib import Path
@@ -280,11 +281,15 @@ def javacSyntax(target: Path) -> tuple[bool, list[Issue]]:
     if not javacWorks():
         return (False, [])
 
-    result = subprocess.run(
-        ["javac", "-d", "/tmp/assert-generated", str(target)],
-        capture_output=True,
-        text=True,
-    )
+    output = tempfile.mkdtemp(prefix="assert-generated-")
+    try:
+        result = subprocess.run(
+            ["javac", "-d", output, str(target)],
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        shutil.rmtree(output, ignore_errors=True)
     issues = []
     for line in result.stderr.splitlines():
         if not _JAVAC_SYNTAX.search(line):

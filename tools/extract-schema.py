@@ -1,6 +1,7 @@
 import re
 import os
 import ast
+import json
 import sys
 import yaml
 import argparse
@@ -393,9 +394,7 @@ def renderSchema(name: str, summary: str, fields: list[dict], indent: int,
 
 
 def yamlScalar(text: str) -> str:
-    collapsed = " ".join(text.split())
-    escaped = collapsed.replace('"', '\\"')
-    return f'"{escaped}"'
+    return json.dumps(" ".join(text.split()), ensure_ascii=False)
 
 
 def provenance(root: Path, source: Path) -> str:

@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import yaml
@@ -38,7 +39,7 @@ GENERATORS = {
             "templateDir": "templates/java",
             "extra": [
                 "--model-package", "com.starkbank",
-                "--type-mappings", "OffsetDateTime=String,Date=String,LocalDate=String,URI=String",
+                "--type-mappings", "OffsetDateTime=String,Date=String,LocalDate=String,URI=String,BigDecimal=Number",
             ],
         },
     ],
@@ -261,7 +262,8 @@ def main() -> int:
         emit(f"[INFO] configuradas: {', '.join(sorted(GENERATORS))}")
         return 2
 
-    targetDir = Path(args.into)
+    targetDir = Path(args.into).resolve()
+    os.chdir(REPO_ROOT)  # os subprocessos rodam na raiz do repo; o caminho relativo do chamador ja foi resolvido
     if not targetDir.is_dir():
         emit(f"[ERROR] destino não é um diretório: {targetDir}")
         return 2
@@ -316,6 +318,7 @@ def main() -> int:
         return 1
 
     emit(f"[OK] {args.resource} construído e verificado em {targetDir}")
+    shutil.rmtree(generatedDir, ignore_errors=True)
     return 0
 
 

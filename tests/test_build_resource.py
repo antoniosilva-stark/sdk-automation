@@ -486,3 +486,19 @@ def test_javaImportsNeverAskForTheRemovedSettingsFlag(buildResource):
 
     assert "usesSettings=true" not in properties
 
+
+@requiresGenerator
+def test_relativeTargetIsResolvedAgainstTheCallersDirectory(tmpPath):
+    import subprocess, sys
+    target = tmpPath / "sdk-java"
+    (target / "src/main/java/com/starkbank").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=target, check=True)
+
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "tools/build-resource.py"), "SplitProfile", "--lang", "java",
+         "--into", "sdk-java", "--advisory"],
+        cwd=tmpPath, capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (target / "src/main/java/com/starkbank/SplitProfile.java").is_file()

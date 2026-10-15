@@ -233,3 +233,12 @@ def test_unclosedParenthesisAtTheEndOfTheFileIsWarnedNotDropped(capfd):
     assert any(line.startswith("public void run(int a") for line in joined)
     assert "sem par" in capfd.readouterr().err
 
+
+def test_unusualLineBreaksInACommentDoNotMisalignTheParenthesisCount(tmpPath):
+    body = FORGED_JAVA.replace("    public long amount;",
+                               "    /** form\x0cfeed and\u2028separator (still open */\n    public long amount;")
+    root = _forge(tmpPath, "src/main/java/com/starkbank/Widget.java", body)
+    lines = _derive("Widget", "java", "main", root)
+
+    assert "field public long amount;" in lines
+    assert "signature public static Widget get(String id)" in lines

@@ -287,3 +287,24 @@ def test_breakingChangeBaseFollowsTheRemoteDefaultBranch():
     assert '--base "origin/' in result.stdout
     assert "symbolic-ref" not in result.stdout, "a base tem de ser resolvida, nao repassada como comando"
 
+
+def test_npmScriptsThatRunTheDetectorGiveItABase():
+    import json
+    scripts = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))["scripts"]
+
+    for name, command in scripts.items():
+        if "breaking-change-detector" in command:
+            assert "--base" in command, f"npm run {name}: o detector exige --base"
+
+
+def test_javaConfigMapsTheSameTypesAsTheBuild():
+    import yaml
+    import importlib.util
+    config = yaml.safe_load((REPO_ROOT / "tools/generator-java-config.yaml").read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location("build_resource", REPO_ROOT / "tools/build-resource.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    extra = module.GENERATORS["java"][0]["extra"]
+    pipeline = dict(pair.split("=") for pair in extra[extra.index("--type-mappings") + 1].split(","))
+
+    assert config["typeMappings"] == pipeline, "make generate-all emitiria Java diferente do pipeline"

@@ -9,7 +9,9 @@ packageVersion: 0.3.0
 typeMappings:
   OffsetDateTime: String
   Date: String
+  LocalDate: String
   URI: String
+  BigDecimal: Number
 additionalProperties:
   groupId: "com.starkbank"
   artifactId: "sdk-java"

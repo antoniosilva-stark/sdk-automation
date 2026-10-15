@@ -533,3 +533,16 @@ def test_validNodeSourcePassesTheSyntaxCheck(tmpPath):
 
     assert code == 0, out
     assert "sintaxe (node)" in out
+
+
+@requiresJavac
+def test_javacNeverWritesToASharedFixedDirectory(assertGenerated, tmpPath):
+    import tempfile
+    source = tmpPath / "Widget.java"
+    source.write_text("package com.starkbank;\npublic class Widget {}\n", encoding="utf-8")
+    before = set(Path(tempfile.gettempdir()).glob("assert-generated*"))
+
+    ok, issues = assertGenerated.javacSyntax(source)
+
+    assert ok and issues == []
+    assert set(Path(tempfile.gettempdir()).glob("assert-generated*")) == before, "javac deixou saida para tras"

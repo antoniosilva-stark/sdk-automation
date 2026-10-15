@@ -432,3 +432,15 @@ def test_theStepThatReceivesTheAppTokenIsPinnedBySha():
             referencia = step["uses"].split("@")[-1]
             assert _SHA.match(referencia), \
                 f"{jobName}/{step.get('name') or step['uses']}: recebe o token do App em tag móvel"
+
+
+def test_everyRemoteBranchProbeSeparatesAbsentFromUnreachable():
+    for path in workflowFiles():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for jobName, job in (workflow.get("jobs") or {}).items():
+            for step in (job.get("steps") or []):
+                script = step.get("run") or ""
+                if "ls-remote --exit-code --heads" not in script:
+                    continue
+                assert "FOUND=$?" in script, \
+                    f"{path.name}/{jobName}: falha de rede ou de acesso lida como branch ausente"

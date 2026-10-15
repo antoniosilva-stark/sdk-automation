@@ -644,3 +644,8 @@ def test_conventionsAreParsedOncePerFile(extractSchema, tmpPath):
     assert info.misses == 1
     assert info.hits == 9
 
+
+def test_backslashInADescriptionSurvivesTheYamlRoundTrip(extractSchema):
+    rendered = extractSchema.yamlScalar('regex \\d+ and a tab \\t, with "quotes"')
+
+    assert yaml.safe_load(f"description: {rendered}")["description"] == 'regex \\d+ and a tab \\t, with "quotes"'
