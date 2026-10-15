@@ -511,7 +511,7 @@ def main() -> int:
     defaults = initDefaults(node)
     unknown = [f["pythonName"] for f in fields if f["pythonName"] not in defaults]
     if unknown:
-        emit(f"[WARN] documentados mas ausentes no __init__: {', '.join(unknown)}")
+        warn(f"[WARN] documentados mas ausentes no __init__: {', '.join(unknown)}")
 
     for field in reconcileRequired(fields, defaults):
         warn(f"[WARN] {args.resource}.{field}: documentado como opcional, posicional no __init__")

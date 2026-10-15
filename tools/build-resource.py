@@ -38,7 +38,7 @@ GENERATORS = {
             "templateDir": "templates/java",
             "extra": [
                 "--model-package", "com.starkbank",
-                "--type-mappings", "OffsetDateTime=String,Date=String,URI=String",
+                "--type-mappings", "OffsetDateTime=String,Date=String,LocalDate=String,URI=String",
             ],
         },
     ],
@@ -64,7 +64,19 @@ def declaredFlags(resource: str) -> set[str]:
     return {key for key in schema if key.startswith("x-sdk-")}
 
 
-def javaImports(flags: set[str]) -> list[str]:
+def hasObjectArray(resource: str) -> bool:
+    """Array de objeto sai como List<Object> no template; array de string sai como String[]."""
+    lint = loadTool("lint-spec")
+    specPath = REPO_ROOT / SPEC_FILE
+    schemas = (loadFast(specPath.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
+    props = lint.schemaProps(schemas.get(resource), specPath)
+    return any(
+        prop.get("type") == "array" and (prop.get("items") or {}).get("type") != "string"
+        for prop in props.values()
+    )
+
+
+def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
     Só o que vale entra: additional-property chega como string, e "false" é
@@ -73,6 +85,8 @@ def javaImports(flags: set[str]) -> list[str]:
     properties = []
     if flags & set(GENERATOR_USERS):
         properties.append("usesGenerator=true")
+    if objectArray:
+        properties.append("usesObjectList=true")
     if flags & set(LIST_USERS):
         properties.append("usesList=true")
     if flags & set(SETTINGS_USERS):
@@ -140,7 +154,7 @@ def plannedPairs(resource: str, language: str) -> dict[str, tuple[str, str]]:
 
 def generate(resource: str, run: dict, outputDir: Path) -> int:
     extra = list(run["extra"])
-    properties = javaImports(declaredFlags(resource)) if run["generator"] == "java" else []
+    properties = javaImports(declaredFlags(resource), hasObjectArray(resource)) if run["generator"] == "java" else []
     if properties:
         extra.extend(["--additional-properties", ",".join(properties)])
 

@@ -41,7 +41,7 @@ def test_javaHasOneRunNodeHasThree(buildResource):
     assert len(buildResource.GENERATORS["node"]) == 3
 
 
-def test_javaRolesCoverResourceAndTest(buildResource):
+def test_javaHasOnlyTheResourceRole(buildResource):
     assert [run["role"] for run in buildResource.GENERATORS["java"]] == ["main"]
 
 
@@ -446,3 +446,37 @@ def test_layoutAndGeneratorsDeclareTheSameRoles(buildResource):
     for language, runs in buildResource.GENERATORS.items():
         layoutRoles = [role for role, _, _ in placeGenerated.LAYOUTS[language]]
         assert [run["role"] for run in runs] == layoutRoles, language
+
+
+def test_objectArrayRequestsTheListImportAlone(buildResource):
+    properties = buildResource.javaImports({"x-sdk-get"}, objectArray=True)
+
+    assert "usesObjectList=true" in properties
+    assert "usesList=true" not in properties, "ArrayList so entra com operacao que monta lista"
+    assert "usesObjectList=true" not in buildResource.javaImports({"x-sdk-get"})
+
+
+def test_onlyObjectArraysCountAsList(buildResource):
+    assert buildResource.hasObjectArray("CorporateRule") is True
+    assert buildResource.hasObjectArray("Balance") is False
+
+
+@requiresGenerator
+def test_objectArrayResourceImportsList(builtOnce):
+    code, out, target = builtOnce("CorporateRule", "java", "--advisory")
+
+    assert code == 0, out
+    source = (target / "src/main/java/com/starkbank/CorporateRule.java").read_text(encoding="utf-8")
+    assert "import java.util.List;" in source
+    assert "import java.util.ArrayList;" not in source
+
+
+@requiresGenerator
+def test_dateFieldsAreStringsLikeDatetimes(builtOnce):
+    code, out, target = builtOnce("UtilityPayment", "java", "--advisory")
+
+    assert code == 0, out
+    source = (target / "src/main/java/com/starkbank/UtilityPayment.java").read_text(encoding="utf-8")
+    assert "public String scheduled;" in source
+    assert "public LocalDate" not in source
+

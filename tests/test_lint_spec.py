@@ -311,3 +311,16 @@ def test_theFourSubResourcesAreBlockedInTheRealSpec():
         code, out = runTool("lint-spec.py", "--quiet", "--require", resource)
         assert code == 1, f"{resource} passou no lint sem ter id"
         assert "NO_ID" in out
+
+
+def test_propertyNamedDataCollidesWithTheEmittedClassData(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"x-sdk-get": True,
+                   "properties": {"amount": {}, "data": {}, "id": {"x-sdk-id": True}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert not report.generatable
+    assert lintSpec.CODE_RESERVED_NAME in [code for code, _ in report.reasons]

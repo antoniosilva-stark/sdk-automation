@@ -441,7 +441,8 @@ def test_warnsAboutDocumentedFieldMissingFromInit(tmpPath):
     code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
 
     assert code == 0
-    assert "[WARN]" in out
+    assert out.startswith("# fonte:"), "aviso no stdout corrompe o documento do schema"
+    assert "[WARN]" not in out
     assert "tags" in out
 
 

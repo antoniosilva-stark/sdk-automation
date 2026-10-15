@@ -19,6 +19,7 @@ CODE_ID_MARKER = "ID_MARKER"
 CODE_NO_OPERATION = "NO_OPERATION"
 CODE_NO_PROVENANCE = "NO_PROVENANCE"
 CODE_NO_ID = "NO_ID"
+CODE_RESERVED_NAME = "RESERVED_NAME"
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
@@ -166,6 +167,9 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
                         " SubResource, que ainda nao tem template"))
     if "id" in names and not (readProps["id"] or {}).get("x-sdk-id"):
         reasons.append((CODE_ID_MARKER, "'id' sem x-sdk-id: o construtor emitido não saberia onde ele cai"))
+    if "data" in names:
+        reasons.append((CODE_RESERVED_NAME,
+                        "propriedade 'data' colide com o ClassData estático que o template emite"))
     if len(readProps) < MIN_READ_PROPS:
         reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
     if writes and len(createProps) < MIN_CREATE_PROPS:

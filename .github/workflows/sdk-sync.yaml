@@ -105,6 +105,12 @@ jobs:
             exit 1
           fi
 
+      - name: Reapply the schema from the current sdk-python
+        if: steps.compare.outputs.blocked == 'true'
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: python3 tools/apply-schema.py "$RESOURCE"
+
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         if: steps.compare.outputs.blocked == 'true'
@@ -116,12 +122,6 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Reapply the schema from the current sdk-python
-        if: steps.compare.outputs.blocked == 'true'
-        env:
-          RESOURCE: ${{ inputs.resource }}
-        run: python3 tools/apply-schema.py "$RESOURCE"
-
       - name: Open the spec update pull request
         if: steps.compare.outputs.blocked == 'true'
         env:
@@ -132,11 +132,18 @@ jobs:
           BRANCH="spec/refresh-$(python3 tools/place-generated.py "$RESOURCE" --slug)"
           git config user.name "sdk-automation[bot]"
           git config user.email "sdk-automation[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            git fetch --depth 1 origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-          else
-            git checkout -b "$BRANCH"
+          REMOTE="https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY"
+          # exit 2 e "branch ausente"; qualquer outro codigo diferente de 0 e falha de acesso
+          git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1 && FOUND=0 || FOUND=$?
+          if [ "$FOUND" -ne 0 ] && [ "$FOUND" -ne 2 ]; then
+            echo "nao foi possivel consultar o remoto (codigo $FOUND)."
+            exit 1
+          fi
+          git checkout -B "$BRANCH"
+          if [ "$FOUND" -eq 0 ]; then
+            # a arvore ja tem o schema reaplicado: so o ponteiro vai para a ponta da branch aberta
+            git fetch --depth 1 "$REMOTE" "${BRANCH}:refs/remotes/origin/${BRANCH}"
+            git reset -q "origin/$BRANCH"
           fi
           git add apis/spec-v2.openapi.yaml apis/schemas
           if git diff --cached --quiet; then
@@ -237,6 +244,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
           token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
           path: target
 
       - name: Resolve base branch
@@ -275,9 +283,11 @@ jobs:
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             git fetch --depth 1 origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Branch $BRANCH ja existe — comparando contra o que ja foi entregue."
           else
             git checkout -b "$BRANCH"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Branch $BRANCH e nova."
           fi
 
@@ -316,11 +326,14 @@ jobs:
         if: steps.commit.outputs.changed == 'true'
         working-directory: target
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ steps.branch.outputs.branch }}
-        run: git push -u origin "$BRANCH"
+          OWNER: ${{ github.repository_owner }}
+          TARGET_REPO: ${{ steps.target.outputs.repo }}
+        run: git push "https://x-access-token:$GH_TOKEN@github.com/$OWNER/$TARGET_REPO" "HEAD:refs/heads/$BRANCH"
 
       - name: Open pull request
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
         working-directory: target
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -334,6 +347,13 @@ jobs:
           OPEN=$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')
           if [ "$OPEN" -gt 0 ]; then
             echo "PR ja aberta para $BRANCH — o push atualizou."
+            exit 0
+          fi
+
+          # push que passou e PR que falhou deixa a branch a frente da base: a proxima execucao a abre
+          AHEAD=$(gh api "repos/$TARGET/compare/$BASE...$BRANCH" --jq .ahead_by)
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "$BRANCH nao tem nada a frente de $BASE — nenhuma PR a abrir."
             exit 0
           fi
 

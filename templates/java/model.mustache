@@ -11,7 +11,8 @@ package {{package}};
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
 {{/usesList}}import java.util.HashMap;
 {{#usesList}}import java.util.List;
-{{/usesList}}import java.util.Map;
+{{/usesList}}{{^usesList}}{{#usesObjectList}}import java.util.List;
+{{/usesObjectList}}{{/usesList}}import java.util.Map;
 
 /**
  * {{classname}} object

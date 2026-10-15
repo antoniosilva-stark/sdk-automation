@@ -55,7 +55,7 @@ def test_fullChainLeavesNoUndeclaredArtifact(tmpPath):
 
 
 @requiresGenerator
-def test_commitCarriesResourceAndTestTogether(tmpPath):
+def test_commitCarriesOnlyTheResourceFile(tmpPath):
     repo = _repo(tmpPath)
     runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
 

@@ -154,7 +154,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Deriva o contrato a partir do SDK real")
     parser.add_argument("resource", help="nome do recurso, ex: Invoice")
     parser.add_argument("--lang", required=True, help=f"linguagem ({', '.join(sorted(EXTRACTORS))})")
-    parser.add_argument("--role", default="main", help="papel do artefato, ex: main, test, impl, barrel, types")
+    parser.add_argument("--role", default="main", help="papel do artefato, ex: main, impl, barrel, types")
     parser.add_argument("--from", dest="repo", default=None, help="raiz do SDK de referência")
     parser.add_argument("--out", help="arquivo de saída (padrão: stdout)")
     args = parser.parse_args()
