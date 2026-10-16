@@ -30,7 +30,7 @@ describe('OpenAPI Specification Tests', () => {
       const seen = new Set();
 
       for (const route in spec.paths) {
-        for (const [verb, operation] of Object.entries(spec.paths[route])) {
+        for (const operation of Object.values(spec.paths[route])) {
           expect(operation.operationId).toBeDefined();
           expect(seen.has(operation.operationId)).toBe(false);
           seen.add(operation.operationId);

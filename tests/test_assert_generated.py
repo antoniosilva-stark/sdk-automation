@@ -546,3 +546,90 @@ def test_javacNeverWritesToASharedFixedDirectory(assertGenerated, tmpPath):
 
     assert ok and issues == []
     assert set(Path(tempfile.gettempdir()).glob("assert-generated*")) == before, "javac deixou saida para tras"
+
+
+def test_signatureOnlyInALineCommentIsAGap(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public static Widget get(String id) throws Exception {",
+        "    // public static Widget find(String id)\n    public static Widget get(String id) throws Exception {",
+    )
+    code, out = _strictCheck(tmpPath, source, "signature public static Widget find(String id)")
+    assert code == 1, out
+    assert "signature ausente" in out
+
+
+def test_fieldOnlyInAJavadocIsAGap(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public String status;",
+        "    /**\n     * public long amount;\n     */\n    public String status;",
+    )
+    code, out = _strictCheck(tmpPath, source, "field public long amount;")
+    assert code == 1, out
+    assert "field ausente" in out
+
+
+def test_entryOnlyInsideABlockCommentIsAGap(tmpPath):
+    source = CLEAN_JAVA.replace("    public String status;", "    /* public long amount; */\n    public String status;")
+    code, out = _strictCheck(tmpPath, source, "field public long amount;")
+    assert code == 1, out
+
+
+def test_commentMarkerInsideAStringDoesNotHideCode(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public String status;",
+        '    public static final String url = "http://x";\n    public String status;',
+    )
+    code, out = _strictCheck(tmpPath, source, "field public String status;")
+    assert code == 0, out
+
+
+def test_entryInCodeStillPassesWhenAlsoCommented(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public String status;",
+        "    // public String status;\n    public String status;",
+    )
+    code, out = _strictCheck(tmpPath, source, "field public String status;")
+    assert code == 0, out
+
+
+def test_nodeRequireOnlyInACommentIsAGap(tmpPath):
+    target = _write(tmpPath, "widget.js", "// const rest = require('../utils/rest.js')\nconst a = 1;\n")
+    contract = _write(tmpPath, "widget.contract", "require const rest = require('../utils/rest.js')\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--contract", str(contract), "--strict")
+    assert code == 1, out
+    assert "require ausente" in out
+
+
+def test_javaSignatureOnlyInABlockCommentIsAGap(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public static Widget get(String id) throws Exception {",
+        "    /*\n    public static Widget find(String id) throws Exception {\n    */\n    public static Widget get(String id) throws Exception {",
+    )
+    code, out = _strictCheck(tmpPath, source, "signature public static Widget find(String id)")
+    assert code == 1, out
+
+
+def test_javaConstructorOnlyInABlockCommentIsAGap(tmpPath):
+    source = CLEAN_JAVA.replace(
+        "    public Widget(String id, String status) {",
+        "    /*\n    public Widget(String id, String status, long amount) {\n    */\n    public Widget(String id, String status) {",
+    )
+    code, out = _strictCheck(tmpPath, source, "constructor public Widget(String id, String status, long amount)")
+    assert code == 1, out
+
+
+def test_gapForACommentedFieldDoesNotClaimItWasGenerated(tmpPath):
+    source = CLEAN_JAVA.replace("    public String status;", "    // public long amount;\n    public String status;")
+    code, out = _strictCheck(tmpPath, source, "field public long amount;")
+    assert code == 1
+    assert "field ausente" in out
+    assert "divergente" not in out
+
+
+def test_unclosedQuoteInARegexDoesNotSwallowTheRestOfTheFile(tmpPath):
+    target = _write(tmpPath, "widget.js", "const r = /[\"']/;\n// const rest = require('x')\n")
+    contract = _write(tmpPath, "widget.contract", "require const rest = require('x')\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node",
+                        "--contract", str(contract), "--strict")
+    assert code == 1, out

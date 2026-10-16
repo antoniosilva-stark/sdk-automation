@@ -16,11 +16,13 @@ on:
 run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
 concurrency:
-  group: sdk-sync-${{ inputs.language }}-${{ inputs.resource }}
+  group: sdk-sync-${{ github.ref }}-${{ inputs.language }}-${{ inputs.resource }}
   cancel-in-progress: false
 
 jobs:
   validate:
+    # o workflow da ref escolhida e o que roda; so a default passou por revisao
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,6 +54,7 @@ jobs:
 
   drift:
     needs: validate
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -160,7 +163,7 @@ jobs:
 
   sync:
     needs: [validate, drift]
-    if: needs.drift.outputs.blocked != 'true'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.drift.outputs.blocked != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

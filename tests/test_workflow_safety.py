@@ -456,3 +456,18 @@ def test_aRegeneratedBranchIsOverwrittenOnlyAgainstTheShaThatWasRead():
                 assert "--force-with-lease=" in line and "$PREVIOUS" in line, \
                     f"{path.name}: lease sem o SHA esperado: {line.strip()}"
 
+
+
+DEFAULT_BRANCH_GUARD = "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+
+
+def test_everyJobRunsOnlyFromTheDefaultBranch():
+    # o guard impede o disparo acidental; quem tem push ainda pode apagar o `if` na copia dele,
+    # entao o limite real e o secret restrito por ambiente a default (config da org)
+    jobs = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"]
+
+    for name, job in jobs.items():
+        condition = job.get("if") or ""
+        startsWithGuard = condition == DEFAULT_BRANCH_GUARD or condition.startswith(DEFAULT_BRANCH_GUARD + " && ")
+        assert startsWithGuard, f"job {name}: o guard de ref precisa ser a primeira condicao, ligada por &&"
+        assert "||" not in condition, f"job {name}: um OR deixaria outra condicao liberar a ref"

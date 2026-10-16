@@ -158,6 +158,7 @@ def test_pilotProducesAVerifiedArtifact(builtOnce):
     assert source.count("public static SplitProfile.Log get(") == 2
     assert source.count("public static Generator<SplitProfile.Log> query(") == 4
     assert source.count("public static SplitProfile.Log.Page page(") == 4
+    assert source.startswith("package com.starkbank;")
     assert "{{" not in source
 
 

@@ -67,8 +67,8 @@ def sourcePath(repo: Path, resource: str, language: str, role: str) -> Path | No
     return None
 
 
-def withoutNoise(source: str) -> list[str]:
-    """Cada linha sem comentário e sem conteúdo de string, só para contar parênteses."""
+def withoutNoise(source: str, keepStrings: bool = False) -> list[str]:
+    """Cada linha sem comentário e, salvo `keepStrings`, sem conteúdo de string."""
     cleaned, current = [], []
     state, quote, index = "code", "", 0
     while index < len(source):
@@ -77,7 +77,7 @@ def withoutNoise(source: str) -> list[str]:
         if char == "\n":
             cleaned.append("".join(current))
             current = []
-            state = "code" if state == "line" else state
+            state = "code" if state == "line" or (state == "string" and quote != "`") else state
             continue
         if state == "line":
             continue
@@ -86,7 +86,11 @@ def withoutNoise(source: str) -> list[str]:
                 state, index = "code", index + 1
             continue
         if state == "string":
+            if keepStrings:
+                current.append(char)
             if char == "\\":
+                if keepStrings:
+                    current.append(source[index:index + 1])
                 index += 1
             elif char == quote:
                 state = "code"
@@ -97,6 +101,8 @@ def withoutNoise(source: str) -> list[str]:
             state, index = "block", index + 1
         elif char in "\"'`":
             state, quote = "string", char
+            if keepStrings:
+                current.append(char)
         else:
             current.append(char)
     cleaned.append("".join(current))

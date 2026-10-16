@@ -23,7 +23,7 @@ Pull request
     ↓
 Merge into development
     ↓
-SDK Sync (sdk-sync.yaml) — manual dispatch, two inputs: resource + language (java only; Node is paused, see Languages)
+SDK Sync (sdk-sync.yaml) — manual dispatch from the default branch only, two inputs: resource + language (java only; Node is paused, see Languages)
     ├─ drift: refresh the Python SDK, compare the versioned schema for this resource
     │     └─ drifted? open a spec-update PR here and skip the sync for this resource only
     ├─ validate resource name at the edge (place-generated.py --slug)

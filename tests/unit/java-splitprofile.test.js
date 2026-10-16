@@ -40,43 +40,6 @@ describe('Java SplitProfile Pilot', () => {
     });
   });
 
-  describe('Generated SplitProfile.java', () => {
-    const javaFile = path.join(
-      __dirname,
-      '../../generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java'
-    );
-    const generated = fs.existsSync(javaFile);
-    const maybeTest = generated ? test : test.skip;
-    const content = generated ? fs.readFileSync(javaFile, 'utf8') : '';
-
-    maybeTest('should declare the real com.starkbank package', () => {
-      expect(content).toMatch(/^package com\.starkbank;/m);
-    });
-
-    maybeTest('should extend Resource and declare ClassData', () => {
-      expect(content).toMatch(/class SplitProfile extends Resource/);
-      expect(content).toMatch(/ClassData data = new ClassData\(SplitProfile\.class, "SplitProfile"\)/);
-    });
-
-    maybeTest('should have the real fields from the spec', () => {
-      for (const field of ['interval', 'delay', 'tags', 'status', 'created', 'updated']) {
-        expect(content).toMatch(new RegExp(`public \\S+ ${field};`));
-      }
-    });
-
-    maybeTest('should have put/get/query with a single canonical signature each', () => {
-      expect(content.match(/static List<SplitProfile> put\(/g)).toHaveLength(1);
-      expect(content.match(/static SplitProfile get\(/g)).toHaveLength(1);
-      expect(content.match(/static Generator<SplitProfile> query\(/g)).toHaveLength(1);
-      expect(content).toMatch(/put\(List<\?> profiles, User user\)/);
-    });
-
-    maybeTest('should not include convenience overloads or the Log sub-resource (reduced scope)', () => {
-      expect(content).not.toMatch(/class Log extends Resource/);
-      expect(content.match(/static \w+(<[^>]+>)? (put|get|query)\(/g)).toHaveLength(3);
-    });
-  });
-
   describe('sdk-sync.yaml workflow', () => {
     const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
     const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));

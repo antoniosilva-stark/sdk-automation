@@ -108,6 +108,11 @@ def normalise(text: str) -> str:
     return " ".join(text.split())
 
 
+def withoutComments(source: str) -> str:
+    """Fonte sem comentários, com as strings intactas: uma assinatura citada em Javadoc não é código."""
+    return "\n".join(loadTool("derive-contract").withoutNoise(source, keepStrings=True))
+
+
 def loadTool(name: str):
     spec = spec_from_file_location(name.replace("-", "_"), TOOLS_DIR / f"{name}.py")
     module = module_from_spec(spec)
@@ -225,8 +230,9 @@ def checkContract(source: str, contract: dict[str, list[str]], filePath: str,
                   waivers: list[dict] | None = None,
                   language: str | None = None) -> tuple[list[Issue], list[dict], list[dict]]:
     """Gaps bloqueantes, dispensas aplicadas e dispensas que não casaram com nada."""
-    collapsed = normalise(source)
-    shapes = javaShapes(source) if language == "java" else {}
+    code = withoutComments(source)
+    collapsed = normalise(code)
+    shapes = javaShapes(code) if language == "java" else {}
     pending = list(waivers or [])
     issues, applied = [], []
 
@@ -249,7 +255,7 @@ def checkContract(source: str, contract: dict[str, list[str]], filePath: str,
                 continue
 
             issues.append(
-                Issue(filePath, 0, 0, CODE_CONTRACT_GAP, contractGap(kind, expected, source))
+                Issue(filePath, 0, 0, CODE_CONTRACT_GAP, contractGap(kind, expected, code))
             )
 
     return (issues, applied, pending)
