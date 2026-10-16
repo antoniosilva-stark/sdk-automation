@@ -1,9 +1,13 @@
 import sys
 import argparse
 import subprocess
+from pathlib import Path
 
 EXIT_OK = 0
 EXIT_UNREACHABLE = 2
+EXIT_FOREIGN_COMMITS = 3
+
+BOT_EMAIL = "sdk-automation@starkbank.com"
 
 HISTORY_DEPTH = "100"
 
@@ -24,7 +28,7 @@ def remoteHasBranch(remote: str, branch: str) -> bool | None:
     """True se a branch existe, False se o remoto responde que nao, None se nao foi possivel perguntar.
 
     `ls-remote --exit-code` devolve 2 so para "ausente"; qualquer outro codigo e falha de acesso."""
-    result = git("ls-remote", "--exit-code", "--heads", remote, branch)
+    result = git("ls-remote", "--exit-code", "--heads", remote, f"refs/heads/{branch}")
     if result.returncode == 0:
         return True
     if result.returncode == 2:
@@ -37,11 +41,61 @@ def fetchTip(remote: str, branch: str) -> bool:
     return git("fetch", "--depth", HISTORY_DEPTH, remote, refspec).returncode == 0
 
 
-def revision(ref: str) -> str:
-    return git("rev-parse", ref).stdout.strip()
+def revision(ref: str) -> str | None:
+    result = git("rev-parse", ref)
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
-def prepare(remote: str, branch: str, base: str) -> int:
+def checkout(branch: str, ref: str) -> bool:
+    result = git("checkout", "-B", branch, ref)
+    if result.returncode != 0:
+        log(f"git checkout -B {branch} {ref} falhou: {result.stderr.strip()}")
+    return result.returncode == 0
+
+
+def deepen(remote: str, base: str, branch: str) -> bool:
+    """Completa o historico dos dois ramos; False quando o clone ja era completo."""
+    if git("rev-parse", "--is-shallow-repository").stdout.strip() != "true":
+        return False
+    git("fetch", "--unshallow", "--quiet", remote,
+        f"refs/heads/{base}:refs/remotes/{remote}/{base}",
+        f"refs/heads/{branch}:refs/remotes/{remote}/{branch}")
+    return True
+
+
+def forkPointKnown(remote: str, base: str, branch: str) -> bool:
+    """O clone e raso: sem o ponto de partida, `base..branch` lista commits da propria base como se fossem da branch."""
+    baseRef, branchRef = f"{remote}/{base}", f"{remote}/{branch}"
+    if git("merge-base", baseRef, branchRef).returncode == 0:
+        return True
+    if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+        # refspec explicito: o clone raso e de uma branch so e `--unshallow` sem ele nao traz mais nada
+        git("fetch", "--unshallow", "--quiet", remote,
+            f"refs/heads/{base}:refs/remotes/{remote}/{base}",
+            f"refs/heads/{branch}:refs/remotes/{remote}/{branch}")
+    return git("merge-base", baseRef, branchRef).returncode == 0
+
+
+def strayPaths(baseRef: str, branchRef: str, allowedPaths: set[str] | None) -> list[str]:
+    """Arquivos que a branch muda alem dos que esta execucao gera: sem isso a PR do bot carregaria commit alheio."""
+    if allowedPaths is None:
+        return []
+    # --no-renames: com deteccao de rename, o arquivo apagado pelo rename some da lista
+    result = git("diff", "--no-renames", "--name-only", "-z", f"{baseRef}...{branchRef}")
+    if result.returncode != 0:
+        return [f"(git diff falhou: {result.stderr.strip()})"]
+    return sorted({name for name in result.stdout.split("\0") if name} - allowedPaths)
+
+
+def foreignAuthors(baseRef: str, branchRef: str, botEmail: str) -> list[str]:
+    """Autores, que nao o bot, dos commits da branch que a regeneracao descartaria."""
+    result = git("log", "--format=%ae", f"{baseRef}..{branchRef}")
+    if result.returncode != 0:
+        return [f"(git log falhou: {result.stderr.strip()})"]
+    return sorted({email for email in result.stdout.split() if email != botEmail})
+
+
+def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: set[str] | None = None) -> int:
     present = remoteHasBranch(remote, branch)
     if present is None:
         log(f"nao foi possivel consultar o remoto {remote}.")
@@ -53,7 +107,8 @@ def prepare(remote: str, branch: str, base: str) -> int:
     baseRef = f"{remote}/{base}"
 
     if not present:
-        git("checkout", "-B", branch, baseRef)
+        if not checkout(branch, baseRef):
+            return EXIT_UNREACHABLE
         log(f"Branch {branch} e nova, a partir de {baseRef}.")
         emit("exists=false")
         emit("old=")
@@ -64,16 +119,42 @@ def prepare(remote: str, branch: str, base: str) -> int:
         return EXIT_UNREACHABLE
     branchRef = f"{remote}/{branch}"
 
-    if git("merge-base", "--is-ancestor", baseRef, branchRef).returncode == 0:
-        git("checkout", "-B", branch, branchRef)
+    contains = git("merge-base", "--is-ancestor", baseRef, branchRef).returncode
+    if contains == 1 and deepen(remote, base, branch):
+        # historico raso pode esconder a base num ramo longo: so vale "atras" com o historico completo
+        contains = git("merge-base", "--is-ancestor", baseRef, branchRef).returncode
+    if contains not in (0, 1):
+        log(f"nao foi possivel comparar {branchRef} com {baseRef}.")
+        return EXIT_UNREACHABLE
+
+    if contains == 0:
+        stray = strayPaths(baseRef, branchRef, allowedPaths)
+        if stray:
+            log(f"{branch} muda arquivos fora dos declarados: {', '.join(stray)}. Integre ou remova a branch.")
+            return EXIT_FOREIGN_COMMITS
+        if not checkout(branch, branchRef):
+            return EXIT_UNREACHABLE
         log(f"Branch {branch} ja existe e contem {baseRef} — comparando contra o que ja foi entregue.")
         emit("exists=true")
         emit("old=")
         return EXIT_OK
 
-    # a base andou: o gerado e deterministico, entao regerar sobre ela vale mais que mesclar
+    # a base andou: o gerado e deterministico, entao regerar sobre ela vale mais que mesclar,
+    # mas so quando nada de quem revisa seria descartado
+    if not forkPointKnown(remote, base, branch):
+        log(f"nao foi possivel achar o ponto em que {branch} saiu de {baseRef}, mesmo com o historico completo.")
+        return EXIT_UNREACHABLE
+    foreign = foreignAuthors(baseRef, branchRef, botEmail)
+    if foreign:
+        log(f"{branch} tem commits de {', '.join(foreign)}; regerar os descartaria. Integre ou remova a branch.")
+        return EXIT_FOREIGN_COMMITS
+
     previous = revision(branchRef)
-    git("checkout", "-B", branch, baseRef)
+    if previous is None:
+        log(f"nao foi possivel resolver {branchRef}.")
+        return EXIT_UNREACHABLE
+    if not checkout(branch, baseRef):
+        return EXIT_UNREACHABLE
     log(f"Branch {branch} esta atras de {baseRef} — sera regerada sobre a base atual.")
     emit("exists=false")
     emit(f"old={previous}")
@@ -85,8 +166,15 @@ def main() -> int:
     parser.add_argument("branch", help="branch de trabalho, ex: sdk-automation/split-profile")
     parser.add_argument("base", help="branch default do alvo, ex: master")
     parser.add_argument("--remote", default="origin")
+    parser.add_argument("--allowed-paths-file", default=None,
+                        help="um caminho por linha; a branch reaproveitada so pode mudar estes")
+    parser.add_argument("--bot-email", default=BOT_EMAIL, help="autor dos commits que podem ser regerados")
     args = parser.parse_args()
-    return prepare(args.remote, args.branch, args.base)
+    allowed = None
+    if args.allowed_paths_file:
+        lines = Path(args.allowed_paths_file).read_text(encoding="utf-8").splitlines()
+        allowed = {line.strip() for line in lines if line.strip()}
+    return prepare(args.remote, args.branch, args.base, args.bot_email, allowed)
 
 
 if __name__ == "__main__":

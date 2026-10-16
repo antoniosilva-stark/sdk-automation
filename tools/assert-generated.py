@@ -30,7 +30,10 @@ _PLACEHOLDER = re.compile(r"\{\{.*?\}\}")
 _EMPTY_ARG = re.compile(r"\(\s*,|,\s*\)|,\s*,")
 _EMPTY_SLOT = re.compile(r"\(\s+(?:instanceof|:|\))")
 _DROPPED_NAME = re.compile(r"\w {2,}[:,)]")
-_JAVAC_SYNTAX = re.compile(r"error: (?:.*expected|illegal start|bad initializer|reached end of file)")
+_JAVAC_DIAGNOSTIC = re.compile(r"^.*:(\d+): error: (.*)$")
+# opcoes ocultas do javac: para depois do parse, entao todo erro reportado e de sintaxe e
+# simbolo nao resolvido (o SDK real nao esta no classpath) nunca aparece
+_JAVAC_PARSE_ONLY = ("-XDshould-stop.ifNoError=PARSE", "-XDshould-stop.ifError=PARSE")
 _IMPORT = re.compile(r"^import (?:static )?([\w.]+);", re.M)
 _FIELD_NAME = re.compile(r"(\w+)\s*;\s*$")
 
@@ -290,19 +293,24 @@ def javacSyntax(target: Path) -> tuple[bool, list[Issue]]:
     output = tempfile.mkdtemp(prefix="assert-generated-")
     try:
         result = subprocess.run(
-            ["javac", "-d", output, str(target)],
+            ["javac", "-J-Duser.language=en", "-encoding", "UTF-8", *_JAVAC_PARSE_ONLY, "-d", output, str(target)],
             capture_output=True,
             text=True,
         )
     finally:
         shutil.rmtree(output, ignore_errors=True)
+    if result.returncode == 0:
+        return (True, [])
+
     issues = []
     for line in result.stderr.splitlines():
-        if not _JAVAC_SYNTAX.search(line):
-            continue
-        parts = line.split(":", 2)
-        number = int(parts[1]) if len(parts) > 2 and parts[1].isdigit() else 0
-        issues.append(Issue(str(target), number, 0, CODE_SYNTAX, parts[-1].strip()))
+        match = _JAVAC_DIAGNOSTIC.match(line)
+        if match:
+            issues.append(Issue(str(target), int(match.group(1)), 0, CODE_SYNTAX, match.group(2).strip()))
+    if not issues:
+        lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
+        detail = next((line for line in lines if "error" in line), " ".join(lines) or "sem diagnóstico")
+        issues.append(Issue(str(target), 0, 0, CODE_SYNTAX, f"javac falhou sem apontar o erro: {detail}"))
     return (True, issues)
 
 

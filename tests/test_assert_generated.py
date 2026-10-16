@@ -633,3 +633,65 @@ def test_unclosedQuoteInARegexDoesNotSwallowTheRestOfTheFile(tmpPath):
     code, out = runTool("assert-generated.py", str(target), "--lang", "node",
                         "--contract", str(contract), "--strict")
     assert code == 1, out
+
+
+@requiresJavac
+def test_unclosedStringLiteralIsASyntaxError(tmpPath):
+    source = CLEAN_JAVA.replace("public String status;", 'public String status = "abc;')
+    target = _write(tmpPath, "Widget.java", source)
+    code, out = runTool("assert-generated.py", str(target))
+    assert code == 1, out
+    assert "SYNTAX" in out
+
+
+@requiresJavac
+@pytest.mark.parametrize("broken", ["int x = ;", "else { }", "char c = 'ab';", "/* aberto"])
+def test_anyParseErrorIsASyntaxError(tmpPath, broken):
+    source = CLEAN_JAVA.replace("public String status;", broken)
+    target = _write(tmpPath, "Widget.java", source)
+    code, out = runTool("assert-generated.py", str(target))
+    assert code == 1, out
+    assert "SYNTAX" in out
+
+
+@requiresJavac
+def test_unresolvedSymbolsAreNotSyntaxErrors(tmpPath):
+    source = CLEAN_JAVA.replace("public String status;", "public Desconhecido status;")
+    target = _write(tmpPath, "Widget.java", source)
+    code, out = runTool("assert-generated.py", str(target))
+    assert code == 0, out
+
+
+def test_javacFailingWithoutDiagnosticBlocks(tmpPath):
+    fakeBin = tmpPath / "bin"
+    fakeBin.mkdir()
+    fake = fakeBin / "javac"
+    fake.write_text('#!/bin/sh\n[ "$1" = "-version" ] && exit 0\nexit 1\n', encoding="utf-8")
+    fake.chmod(0o755)
+
+    target = _write(tmpPath, "Widget.java", CLEAN_JAVA)
+    code, out = runTool("assert-generated.py", str(target), env={"PATH": str(fakeBin)})
+    assert code == 1, out
+    assert "SYNTAX" in out
+
+
+@requiresJavac
+def test_modernSyntaxWithUnresolvedTypesPasses(tmpPath):
+    source = """package com.starkbank;
+
+import com.starkbank.utils.Missing;
+
+public record Widget(String id) {
+    static final String TEXT = \"\"\"
+        bloco // com barras
+        \"\"\";
+
+    static Object pick(Object value) {
+        Runnable task = () -> Missing.run();
+        return value instanceof String text ? text : task;
+    }
+}
+"""
+    target = _write(tmpPath, "Widget.java", source)
+    code, out = runTool("assert-generated.py", str(target))
+    assert code == 0, out

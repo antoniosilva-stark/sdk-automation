@@ -135,7 +135,7 @@ def test_slugDoesNotRequireLang():
 
 
 def test_slugRejectsShellMetacharacters():
-    for hostile in ("X$(id)", "X`id`", "X;id", "X|id", "X&id", "X\nbranch=evil"):
+    for hostile in ("X$(id)", "X`id`", "X;id", "X|id", "X&id", "X\nbranch=evil", "Invoice\n"):
         code, out = runTool("place-generated.py", hostile, "--slug")
         assert code == 2, f"{hostile!r} passou"
         assert "nome de recurso inválido" in out

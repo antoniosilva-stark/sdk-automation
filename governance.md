@@ -30,7 +30,7 @@ Responsibilities:
 
 Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo seu ponto forte:
 
-- **Python 3.9+** — validação de spec (`openapi-spec-validator`, validador oficial OpenAPI) e detecção de breaking changes (`breaking-change-detector.py`)
+- **Python 3.10+** — validação de spec (`openapi-spec-validator`, validador oficial OpenAPI) e detecção de breaking changes (`breaking-change-detector.py`)
 - **Node.js 18+** — geração de SDKs (OpenAPI Generator CLI, templates Mustache) e testes (Jest)
 
 ## Tool Versions (Fixed)
@@ -48,7 +48,7 @@ Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo s
 5. Push & create PR
 6. CI validates automatically (validate-spec.yaml)
 7. Spec Owner reviews
-8. Merge → sdk-sync.yaml auto-publishes (15-20 min)
+8. Merge → run `SDK Sync` (manual dispatch from the default branch): it opens a PR in the target SDK repo, a human reviews it, and that repo's own pipeline publishes
 
 ## Escalation
 

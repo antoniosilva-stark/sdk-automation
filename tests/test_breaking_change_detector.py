@@ -1,5 +1,8 @@
+import os
+import sys
 import yaml
 import pytest
+import subprocess
 
 from conftest import REPO_ROOT, runTool
 
@@ -224,8 +227,41 @@ def test_baseIsRequiredBecauseHeadComparesTheSpecWithItself():
     assert code == 2, "sem --base o tool tem de recusar, nao assumir HEAD"
 
 
-def test_realHistoryWithBreakingChangeIsReported():
-    code, out = runTool("breaking-change-detector.py", "--base", "4c8d50a")
+def _historyWithABreakingChange(tmpPath) -> str:
+    """Repositorio descartavel com duas versoes da spec; devolve o commit anterior."""
+    # sem GIT_DIR/GIT_INDEX_FILE herdados (pytest chamado por hook) e sem assinatura/hooks da maquina
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update({"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@local",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@local"})
+
+    def git(*args: str) -> str:
+        result = subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+                                cwd=tmpPath, capture_output=True, text=True, env=environment)
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
+
+    git("init", "-q")
+    specFile = tmpPath / "apis/spec-v2.openapi.yaml"
+    specFile.parent.mkdir()
+    specFile.write_text(yaml.safe_dump(_spec(_widget({"amount": {"type": "integer"}}))), encoding="utf-8")
+    git("add", ".")
+    git("commit", "-q", "-m", "before")
+    previous = git("rev-parse", "HEAD")
+    specFile.write_text(yaml.safe_dump(_spec(_widget({"amount": {"type": "string"}}))), encoding="utf-8")
+    git("commit", "-q", "-am", "after")
+    return previous
+
+
+def _detectIn(directory, base: str) -> tuple[int, str]:
+    result = subprocess.run([sys.executable, str(REPO_ROOT / "tools/breaking-change-detector.py"), "--base", base],
+                            cwd=directory, capture_output=True, text=True)
+    return result.returncode, result.stdout
+
+
+def test_realHistoryWithBreakingChangeIsReported(tmpPath):
+    previous = _historyWithABreakingChange(tmpPath)
+
+    code, out = _detectIn(tmpPath, previous)
 
     assert code == 0, "BC e informativo, nao bloqueia"
     assert "[WARN]" in out
@@ -233,13 +269,23 @@ def test_realHistoryWithBreakingChangeIsReported():
     assert "governance.md" in out
 
 
-def test_theToolReportsAVerdictAgainstRealHistory():
-    code, out = runTool("breaking-change-detector.py", "--base", "567ce54")
+def test_theToolReportsAVerdictAgainstRealHistory(tmpPath):
+    previous = _historyWithABreakingChange(tmpPath)
+
+    code, out = _detectIn(tmpPath, previous)
 
     assert code == 0, out
     assert "verificando breaking changes" in out
-    if "[WARN]" in out:
-        assert "regra violada, governance.md" in out
+    assert "regra violada, governance.md" in out
+
+
+def test_historyWithoutBreakingChangeReportsNone(tmpPath):
+    previous = _historyWithABreakingChange(tmpPath)
+
+    code, out = _detectIn(tmpPath, "HEAD")
+
+    assert code == 0, out
+    assert "[WARN]" not in out
 
 
 def test_removedEnumValueIsDetected(detector):

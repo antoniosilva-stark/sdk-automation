@@ -24,25 +24,26 @@ Pull request
 Merge into development
     ↓
 SDK Sync (sdk-sync.yaml) — manual dispatch from the default branch only, two inputs: resource + language (java only; Node is paused, see Languages)
-    ├─ drift: refresh the Python SDK, compare the versioned schema for this resource
-    │     └─ drifted? open a spec-update PR here and skip the sync for this resource only
-    ├─ validate resource name at the edge (place-generated.py --slug)
-    ├─ resolve target repo from the language (place-generated.py --repo)
-    ├─ derive the ruler from the real target SDK, then generate into staging/ and gate
-    │     against it  ← both run BEFORE the token exists
-    ├─ mint a short-lived GitHub App token
-    ├─ copy staging/ over the target checkout, stage only declared paths (--targets)
-    └─ open a PR in starkbank/sdk-<lang>
+    ├─ drift (no secrets): refresh the Python SDK, compare the versioned schema for this resource
+    │     └─ drifted? drift-pr (holds the App token, runs no pip) opens a spec-update PR here
+    │        and the sync is skipped for this resource only
+    ├─ build (no secrets): validate the name, derive the ruler from the real target SDK, generate
+    │     into staging/ and gate it against that ruler, then upload staging/ as an artifact
+    ├─ compile (no secrets): check out the public target SDK, put the generated file in, run
+    │     mvn test-compile — the only place the target repo's own code runs
+    └─ deliver (holds the App token, runs only this repo's stdlib tools): recompute the target repo,
+          copy ONLY the declared paths from the artifact (symlink-safe, apply-artifacts.py), commit,
+          push with --force-with-lease and open a PR in starkbank/sdk-<lang>
     ↓
 Human reviews and merges → that repo's existing publishing pipeline takes over
 ```
 
-The generator runs before the App token is minted, so third-party template/generator code
-never executes with a credential on disk.
+Third-party code (generator, pip, npm, the target repo's Maven) never runs in a job that can see
+the App secret: the jobs that hold the token only run this repo's tools and pinned actions.
 
 ## Tech stack — hybrid Python + Node.js
 
-**Python 3.9+** — spec validation and all generation tooling
+**Python 3.10+** — spec validation and all generation tooling
 - `openapi-spec-validator` — the official OpenAPI validator, Python-only; this is why the
   stack is hybrid
 - `tools/lint-spec.py` — classifies each spec resource as generatable or scaffolding
@@ -65,7 +66,7 @@ never executes with a credential on disk.
 
 ## Prerequisites
 
-- **Python 3.9+**
+- **Python 3.10+**
 - **Node.js 18+** (CI runs 22)
 - **Java 11+ JRE** — required by OpenAPI Generator CLI. `make generate` aborts without it.
   On macOS: `brew install openjdk@17`, then put it on `PATH` (the formula is keg-only).
@@ -102,7 +103,7 @@ make validate         # validate the OpenAPI spec (Python)          — alias: m
 make check-bc         # detect breaking changes (Python)
 make test             # jest + pytest
 make check            # validate + check-bc + test                  — alias: make check-all
-make generate         # generate the Node SDK (needs Java 11+ JRE)  — alias: make gen
+make generate         # generate with the paused Node config (needs Java 11+ JRE) — alias: make gen
 make generate-all     # generate all 7 configured languages, sequentially
 make status           # prerequisites, spec presence, generated count
 make clean            # remove generated output and caches
@@ -120,19 +121,24 @@ python3 tools/build-resource.py SplitProfile --lang java --into /path/to/sdk-jav
 
 
 `test_workflow_safety.py` parses the workflow YAML and asserts invariants on it — no workflow
-input may reach a `run:` block through `${{ }}`, every job declares `permissions`, both
-workflows agree on the Node major, and any action receiving a private key is pinned by SHA.
+input may reach a `run:` block through `${{ }}`, every job declares `permissions`, the three
+workflows agree on the Node major, every job of `sdk-sync.yaml` runs only from the default branch,
+the jobs that run third-party code carry no secret, and the jobs that hold the token only run
+this repo's tools and SHA-pinned actions.
+
+In CI, `REQUIRE_TEST_DEPENDENCIES=1` turns a missing JDK, generator or SDK reference into a failure
+instead of a silent skip.
 
 ## Generation gates
 
 Generating from an under-specified schema **does not fail** — it emits a plausible, compiling
-class with correct CRUD methods and a single field. Three gates exist because of that:
+class with correct CRUD methods and a single field. Four gates exist because of that:
 
 1. **`lint-spec.py`** — splits the spec into generatable resources and scaffolding; `--require`
    fails when a named resource is not generatable
 2. **`assert-generated.py`** — checks the generated artifact against the ruler, which
    `derive-contract.py` extracts from the real SDK file **on every run**. Rulers are per role
-   (`main`/`test` in Java, `impl`/`barrel`/`types` in Node); an unknown kind fails the parse
+   (`main` in Java, `impl`/`barrel`/`types` in Node); an unknown kind fails the parse
    rather than being skipped. A resource with no ruler **fails** — only
    `--allow-missing-contract` lets a genuinely new resource through
 3. **`--strict`** — ruler gaps become failures. `build-resource.py` passes it on every run
@@ -146,9 +152,9 @@ mandatory reason, no wildcards. A waiver that stops matching is reported so it c
 silently. Waivers apply when **filling a gap**; when the file already exists in the target SDK,
 `--substitution` disables them all — losing an item there is a regression, not a pending item.
 
-Measured on 2026-09-15 with the derived ruler: of 40 resources, 1 passes (`SplitProfile`, the
-only one absent from `sdk-java`) and 39 fail, 765 gaps in total. That is the parity debt the
-gate now makes visible.
+Measured on 2026-10-15 with the derived ruler: of 42 resources, 1 passes (`SplitProfile`, the
+only one absent from `sdk-java`) and 41 fail (35 on parity with 630 gaps in total, 5 without an
+`id`, 1 with a reserved property name). That is the parity debt the gate makes visible.
 
 ## Spec status — read this before trusting resource counts
 
@@ -181,12 +187,11 @@ The other five configs generate default-shaped output and have neither templates
 
 ```
 apis/spec-v2.openapi.yaml          single source of truth (Stark Bank only)
-apis/schemas/                      transaction.yaml, invoice.yaml, transfer.yaml
+apis/schemas/                      one file per resource (42), with a provenance comment
 tools/                             Python tooling + 7 generator configs
 templates/nodejs-{axios,impl,barrel,types}/, templates/java/
 tests/                             pytest suites, unit/ for jest, contract/ for manifests
 .github/workflows/                 validate-spec.yaml, tests.yaml, sdk-sync.yaml
-docs/NODE_GENERATION_GUIDE.md      how Node generation is wired
 generated/                         local output (gitignored)
 _references/                       real SDK clones used as reference (gitignored, read-only)
 governance.md                      versioning, BC policy, ownership
@@ -203,7 +208,7 @@ someone leaves:
 | `SDK_APP_ID` | GitHub App that opens PRs in the SDK repos |
 | `SDK_APP_PRIVATE_KEY` | its private key; the workflow mints a token scoped per run |
 
-The App needs Contents and Pull requests at read/write on `sdk-java` and `sdk-node`. No
+The App needs Contents and Pull requests at read/write on `sdk-java` (and `sdk-node` once Node is reactivated). No
 registry credentials are stored in this repo.
 
 ## Ownership
@@ -219,4 +224,4 @@ See `governance.md` for the versioning rules, breaking-change policy and escalat
 ---
 **Status**: POC — pilot (`SplitProfile` / Java) generated, verified and proven end to end;
 waiting on review to reach `development`
-**Last updated**: 2026-09-11
+**Last updated**: 2026-10-16

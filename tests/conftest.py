@@ -78,6 +78,21 @@ requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não res
 requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
 
 
+def missingDependencies() -> list[str]:
+    reasons = [GENERATOR_SKIP, JAVAC_SKIP]
+    reasons += [reason for reason, resolved in (
+        ("sdk-python não resolvido", PYTHON_SDK),
+        ("sdk-java não resolvido", JAVA_SDK),
+        ("sdk-node não resolvido", NODE_SDK),
+    ) if resolved is None]
+    return [reason for reason in reasons if reason]
+
+
+# No CI um pre-requisito ausente pulava ~60 testes e a suite seguia verde: la ele reprova.
+if os.environ.get("REQUIRE_TEST_DEPENDENCIES") == "1" and missingDependencies():
+    raise pytest.UsageError("dependência de teste ausente: " + "; ".join(missingDependencies()))
+
+
 @pytest.fixture
 def conftest():
     import conftest as module

@@ -87,7 +87,7 @@ def test_ownerComesFromTheRunningRepository():
 
 def test_baseIsNotHardcodedInTheWorkflow():
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    steps = workflow["jobs"]["sync"]["steps"]
+    steps = workflow["jobs"]["deliver"]["steps"]
 
     pr = next(s for s in steps if "gh pr create" in (s.get("run") or ""))
     assert pr["env"]["BASE"] == "${{ steps.base.outputs.base }}"
@@ -503,3 +503,58 @@ def test_relativeTargetIsResolvedAgainstTheCallersDirectory(tmpPath):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (target / "src/main/java/com/starkbank/SplitProfile.java").is_file()
+
+
+def _forgedJavaSdk(tmpPath: Path, generated: str, extra: str = "") -> Path:
+    """SDK Java descartavel onde SplitProfile ja existe: o recurso vira substituicao, com regua derivada."""
+    sdk = tmpPath / "forged-sdk-java"
+    directory = sdk / "src/main/java/com/starkbank"
+    directory.mkdir(parents=True)
+    source = generated if not extra else generated.rstrip().rstrip("}") + extra + "\n}\n"
+    (directory / "SplitProfile.java").write_text(source, encoding="utf-8")
+    return sdk
+
+
+@requiresGenerator
+def test_strictSubstitutionAgainstADerivedRulerFailsWhenTheGeneratedLosesAnItem(builtOnce, tmpPath):
+    code, out, built = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    generated = (built / "src/main/java/com/starkbank/SplitProfile.java").read_text(encoding="utf-8")
+    sdk = _forgedJavaSdk(tmpPath, generated, extra="\n    public static String onlyInProduction() { return null; }\n")
+    target = tmpPath / "into"
+    target.mkdir()
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        env={"SDK_JAVA": str(sdk)})
+
+    assert code == 1, out
+    assert "CONTRACT_GAP" in out
+    assert "onlyInProduction" in out
+    assert list(target.rglob("*.java")) == [], "o que reprovou no gate nao pode ter sido colocado"
+
+
+@requiresGenerator
+def test_strictSubstitutionPassesWhenTheGeneratedKeepsEveryItem(builtOnce, tmpPath):
+    code, out, built = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    generated = (built / "src/main/java/com/starkbank/SplitProfile.java").read_text(encoding="utf-8")
+    sdk = _forgedJavaSdk(tmpPath, generated)
+    target = tmpPath / "into"
+    target.mkdir()
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        env={"SDK_JAVA": str(sdk)})
+
+    assert code == 0, out
+    assert "SUBSTITUI" in out
+    assert (target / "src/main/java/com/starkbank/SplitProfile.java").is_file()
+
+
+@requiresGenerator
+def test_logJavadocParamNamesTheConstructorParameter(builtOnce):
+    code, out, target = builtOnce("SplitProfile", "java")
+    source = (target / "src/main/java/com/starkbank/SplitProfile.java").read_text(encoding="utf-8")
+
+    assert "public Log(String created, String type, List<ErrorElement> errors, SplitProfile profile, String id)" in source
+    assert "@param profile [SplitProfile]" in source
+    assert "@param splitProfile [SplitProfile]" not in source

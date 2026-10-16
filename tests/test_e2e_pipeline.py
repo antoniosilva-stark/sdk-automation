@@ -1,3 +1,5 @@
+import os
+import sys
 import shutil
 import pytest
 import subprocess
@@ -80,26 +82,50 @@ def test_secondRunCreatesNoCommit(tmpPath):
     assert _git(repo, "rev-parse", "HEAD").strip() == first
 
 
+def _isolatedCopyOfTheTooling(tmpPath):
+    """Copia descartavel da ferramenta: corromper o template aqui nao toca no do repositorio."""
+    root = tmpPath / "isolated"
+    root.mkdir()
+    for name in ("tools", "templates", "apis", "tests/contract", "tests/waivers"):
+        shutil.copytree(REPO_ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__"))
+    for name in ("openapitools.json", "package.json"):
+        shutil.copy(REPO_ROOT / name, root / name)
+    for name in ("node_modules", "_references"):
+        if (REPO_ROOT / name).exists():
+            (root / name).symlink_to(REPO_ROOT / name)
+    return root
+
+
+@requiresGenerator
+def test_isolatedCopyOfTheToolingBuildsWhenTheTemplateIsIntact(tmpPath):
+    repo = _repo(tmpPath)
+    isolated = _isolatedCopyOfTheTooling(tmpPath)
+
+    result = subprocess.run([sys.executable, str(isolated / "tools/build-resource.py"), RESOURCE,
+                             "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (repo / "src/main/java/com/starkbank/SplitProfile.java").is_file()
+
+
 @requiresGenerator
 def test_corruptTemplateAbortsBeforePlacing(tmpPath):
     repo = _repo(tmpPath)
-    template = REPO_ROOT / "templates/java/model.mustache"
-    backup = tmpPath / "model.mustache.bak"
-    shutil.copy(template, backup)
+    isolated = _isolatedCopyOfTheTooling(tmpPath)
+    template = isolated / "templates/java/model.mustache"
 
-    try:
-        original = template.read_text(encoding="utf-8")
-        corrompido = original.replace(
-            "extends Resource {",
-            "extends Resource {\n    public String ;",
-            1,
-        )
-        assert corrompido != original, "a corrupcao nao pegou: o teste passaria sem testar nada"
-        template.write_text(corrompido, encoding="utf-8")
-        code, out = runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
-    finally:
-        shutil.copy(backup, template)
+    original = template.read_text(encoding="utf-8")
+    corrompido = original.replace("extends Resource {", "extends Resource {\n    public String ;", 1)
+    assert corrompido != original, "a corrupcao nao pegou: o teste passaria sem testar nada"
+    template.write_text(corrompido, encoding="utf-8")
+    scratch = tmpPath / "scratch"
+    scratch.mkdir()
+    result = subprocess.run([sys.executable, str(isolated / "tools/build-resource.py"), RESOURCE,
+                             "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True,
+                            env={**os.environ, "TMPDIR": str(scratch)})
+    code, out = result.returncode, result.stdout
 
     assert code == 1, out
+    assert list(scratch.iterdir()) == [], "o diretorio temporario do build vazou no caminho de falha"
     assert list((repo / "src").rglob("*.java")) == []
     assert _git(repo, "status", "--porcelain", "-uall").strip() == ""

@@ -1,4 +1,6 @@
 import ast
+import sys
+import yaml
 import shutil
 import subprocess
 from pathlib import Path
@@ -308,3 +310,24 @@ def test_javaConfigMapsTheSameTypesAsTheBuild():
     pipeline = dict(pair.split("=") for pair in extra[extra.index("--type-mappings") + 1].split(","))
 
     assert config["typeMappings"] == pipeline, "make generate-all emitiria Java diferente do pipeline"
+
+
+def test_missingTestDependencyFailsInsteadOfSkippingWhenTheCiAsksForIt(tmpPath):
+    emptyPath = tmpPath / "empty"
+    emptyPath.mkdir()
+    environment = {"PATH": str(emptyPath), "REQUIRE_TEST_DEPENDENCIES": "1", "HOME": str(tmpPath)}
+
+    result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "tests/test_place_generated.py"],
+                            cwd=REPO_ROOT, capture_output=True, text=True, env=environment)
+
+    assert result.returncode != 0
+    assert "dependência de teste ausente" in result.stdout + result.stderr
+
+
+def test_theCiWorkflowRequiresTheTestDependenciesAndInstallsJava():
+    workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/tests.yaml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["test"]["steps"]
+
+    assert any("setup-java" in (step.get("uses") or "") for step in steps)
+    runTests = next(step for step in steps if "make test" in (step.get("run") or ""))
+    assert runTests["env"]["REQUIRE_TEST_DEPENDENCIES"] == "1"

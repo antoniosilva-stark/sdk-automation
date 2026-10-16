@@ -154,5 +154,14 @@ def main() -> int:
     return EXIT_DRIFTED
 
 
+def guarded() -> int:
+    """Exit 1 significa defasagem para o workflow; falha inesperada nao pode ser lida assim."""
+    try:
+        return main()
+    except Exception as error:
+        emit(f"[ERROR] comparação falhou: {type(error).__name__}: {error}")
+        return EXIT_ERROR
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(guarded())

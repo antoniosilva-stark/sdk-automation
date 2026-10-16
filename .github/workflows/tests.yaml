@@ -26,6 +26,11 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - run: pip install -r requirements.txt
       - run: npm ci
 
@@ -33,4 +38,7 @@ jobs:
         run: make clone-sdk-ref-pinned
 
       - name: Run tests
+        env:
+          # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o CI fica verde
+          REQUIRE_TEST_DEPENDENCIES: '1'
         run: make test

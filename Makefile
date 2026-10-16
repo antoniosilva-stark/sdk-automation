@@ -3,6 +3,7 @@
 BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
 SDK_PYTHON ?=
 SDK_JAVA ?=
+SDK_NODE ?=
 SDK_REMOTE ?= https://github.com/starkbank
 
 # Commits que os testes comparam com os schemas versionados. Subir um pin e reextrair os
@@ -22,7 +23,7 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Requirements:"
-	@echo "  Python 3.9+             # For openapi-spec-validator & breaking-change-detector"
+	@echo "  Python 3.10+            # For openapi-spec-validator & breaking-change-detector"
 	@echo "  Node.js 18+             # For OpenAPI Generator CLI & tests (npm)"
 	@echo "  Java 11+ JRE            # For SDK generation (OpenAPI Generator CLI runtime)"
 	@echo ""

@@ -172,3 +172,15 @@ def test_missingOperationFlagInTheSpecIsDetectedEndToEnd(tmpPath):
     assert code == 1
     assert "DictKey.x-sdk-get" in out
 
+
+
+@requiresPythonSdk
+def test_unexpectedFailureIsAnErrorNotDrift(tmpPath):
+    directory = tmpPath / "schemas"
+    directory.mkdir()
+    (directory / "dictkey.yaml").write_text("components: [", encoding="utf-8")
+
+    code, out = runTool("detect-drift.py", "DictKey", "--from", str(PYTHON_SDK), "--schemas", str(directory))
+
+    assert code == 2, out
+    assert "[ERROR]" in out

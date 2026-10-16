@@ -286,40 +286,42 @@ def main() -> int:
         return 1
 
     generatedDir = Path(tempfile.mkdtemp(prefix="build-resource-"))
-    emit(f"[INFO] régua derivada de sdk-{args.lang} @ {referenceSha(args.lang)}")
+    try:
+        emit(f"[INFO] régua derivada de sdk-{args.lang} @ {referenceSha(args.lang)}")
 
-    for run in runs:
-        if generate(args.resource, run, generatedDir / run["role"]) != 0:
+        for run in runs:
+            if generate(args.resource, run, generatedDir / run["role"]) != 0:
+                return 1
+
+        rulers, absent = {}, 0
+        for run in runs:
+            ruler, code = deriveRuler(args.resource, args.lang, run["role"], generatedDir)
+            if code == EXIT_ABSENT_UPSTREAM:
+                absent += 1
+            elif code != 0:
+                emit(f"[ERROR] régua de {run['role']} não derivada — sem régua não se gera")
+                return 1
+            rulers[run["role"]] = ruler
+
+        announceIntent(args.resource, args.lang, absent, len(runs))
+
+        for run in runs:
+            source, _ = pairs[run["role"]]
+            artifact = generatedDir / source
+            if not artifact.is_file():
+                emit(f"[ERROR] gerador {run['role']} retornou 0 mas não produziu o artefato: {source}")
+                return 1
+            if assertGenerated(artifact, args.lang, run["role"], rulers[run["role"]],
+                               not args.advisory, absent < len(runs)) != 0:
+                return 1
+
+        if place(args.resource, args.lang, generatedDir, targetDir) != 0:
             return 1
 
-    rulers, absent = {}, 0
-    for run in runs:
-        ruler, code = deriveRuler(args.resource, args.lang, run["role"], generatedDir)
-        if code == EXIT_ABSENT_UPSTREAM:
-            absent += 1
-        elif code != 0:
-            emit(f"[ERROR] régua de {run['role']} não derivada — sem régua não se gera")
-            return 1
-        rulers[run["role"]] = ruler
-
-    announceIntent(args.resource, args.lang, absent, len(runs))
-
-    for run in runs:
-        source, _ = pairs[run["role"]]
-        artifact = generatedDir / source
-        if not artifact.is_file():
-            emit(f"[ERROR] gerador {run['role']} retornou 0 mas não produziu o artefato: {source}")
-            return 1
-        if assertGenerated(artifact, args.lang, run["role"], rulers[run["role"]],
-                           not args.advisory, absent < len(runs)) != 0:
-            return 1
-
-    if place(args.resource, args.lang, generatedDir, targetDir) != 0:
-        return 1
-
-    emit(f"[OK] {args.resource} construído e verificado em {targetDir}")
-    shutil.rmtree(generatedDir, ignore_errors=True)
-    return 0
+        emit(f"[OK] {args.resource} construído e verificado em {targetDir}")
+        return 0
+    finally:
+        shutil.rmtree(generatedDir, ignore_errors=True)
 
 
 if __name__ == "__main__":

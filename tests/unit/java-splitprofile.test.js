@@ -44,8 +44,8 @@ describe('Java SplitProfile Pilot', () => {
     const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
     const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));
 
-    test('should exist with the 3 expected jobs', () => {
-      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'drift', 'sync']);
+    test('should exist with the 7 expected jobs', () => {
+      expect(Object.keys(workflow.jobs)).toEqual(['wrong-ref', 'validate', 'drift', 'drift-pr', 'build', 'compile', 'deliver']);
     });
 
     test('should trigger manually, not on push', () => {

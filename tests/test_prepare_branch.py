@@ -20,10 +20,10 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _commit(repo: Path, name: str) -> str:
+def _commit(repo: Path, name: str, author: str = "t@local") -> str:
     (repo / name).write_text(name, encoding="utf-8")
     _git(repo, "add", name)
-    _git(repo, "commit", "-q", "-m", name)
+    _git(repo, "-c", f"user.email={author}", "commit", "-q", "--author", f"x <{author}>", "-m", name)
     return _git(repo, "rev-parse", "HEAD")
 
 
@@ -45,8 +45,8 @@ def _checkout(remote: dict) -> Path:
     return target
 
 
-def _run(target: Path):
-    result = subprocess.run([sys.executable, str(TOOL), BRANCH, "master"], cwd=target,
+def _run(target: Path, *extra: str):
+    result = subprocess.run([sys.executable, str(TOOL), BRANCH, "master", "--bot-email", "t@local", *extra], cwd=target,
                             capture_output=True, text=True, env={**os.environ, **IDENTITY})
     outputs = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
     return result.returncode, outputs, result.stderr
@@ -123,3 +123,140 @@ def test_unreachableRemoteFailsInsteadOfReadingAsAbsent(remote):
     assert code == 2
     assert outputs == {}
     assert "nao foi possivel" in log
+
+
+def test_branchBehindTheBaseWithAForeignCommitFailsInsteadOfDiscardingIt(remote):
+    seed = remote["seed"]
+    _pushBranch(remote)
+    _commit(seed, "reviewer-fix", author="reviewer@company.com")
+    _git(seed, "push", "-q", "origin", BRANCH)
+    _advanceBase(remote)
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target)
+
+    assert code == 3
+    assert outputs == {}
+    assert "reviewer@company.com" in log
+
+
+def test_foreignCommitOnABranchThatContainsTheBaseIsKept(remote):
+    seed = remote["seed"]
+    _pushBranch(remote)
+    tip = _commit(seed, "reviewer-fix", author="reviewer@company.com")
+    _git(seed, "push", "-q", "origin", BRANCH)
+    target = _checkout(remote)
+
+    code, outputs, _ = _run(target)
+
+    assert code == 0
+    assert outputs == {"exists": "true", "old": ""}
+    assert _git(target, "rev-parse", "HEAD") == tip
+
+
+def test_decoyRefWithTheSameSuffixIsNotTheBranch(remote):
+    seed = remote["seed"]
+    _git(seed, "checkout", "-q", "-B", f"x/{BRANCH}", "master")
+    _commit(seed, "decoy")
+    _git(seed, "push", "-q", "origin", f"x/{BRANCH}")
+    target = _checkout(remote)
+
+    code, outputs, _ = _run(target)
+
+    assert code == 0
+    assert outputs == {"exists": "false", "old": ""}
+
+
+def test_failedCheckoutFailsInsteadOfReportingSuccess(remote):
+    target = _checkout(remote)
+    (remote["seed"] / "base-1").write_text("changed upstream", encoding="utf-8")
+    _git(remote["seed"], "commit", "-q", "-am", "touch base-1")
+    _git(remote["seed"], "push", "-q", "origin", "master")
+    (target / "base-1").write_text("local edit", encoding="utf-8")
+
+    code, outputs, log = _run(target)
+
+    assert code == 2
+    assert outputs == {}
+    assert "checkout" in log
+
+
+def test_shallowCloneFarBehindTheBaseDoesNotBlameTheBaseAuthors(remote):
+    seed = remote["seed"]
+    _pushBranch(remote)
+    _git(seed, "checkout", "-q", "master")
+    for number in range(120):
+        _commit(seed, f"upstream-{number}", author="human@company.com")
+    _git(seed, "push", "-q", "origin", "master")
+    target = remote["root"] / "shallow"
+    _git(remote["root"], "clone", "-q", "--depth", "1", remote["url"], str(target))
+
+    code, outputs, log = _run(target)
+
+    assert code == 0, log
+    assert outputs["exists"] == "false"
+    assert outputs["old"] != ""
+
+
+def _allowed(remote: dict, *paths: str) -> str:
+    listing = remote["root"] / "allowed.txt"
+    listing.write_text("\n".join(paths) + "\n", encoding="utf-8")
+    return str(listing)
+
+
+def test_reusedBranchThatTouchesOnlyDeclaredPathsIsKept(remote):
+    _pushBranch(remote)
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "generated"))
+
+    assert code == 0, log
+    assert outputs == {"exists": "true", "old": ""}
+
+
+def test_reusedBranchWithAFileOutsideTheDeclaredPathsIsRefused(remote):
+    seed = remote["seed"]
+    _pushBranch(remote)
+    _commit(seed, "pom.xml", author="attacker@company.com")
+    _git(seed, "push", "-q", "origin", BRANCH)
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "generated"))
+
+    assert code == 3
+    assert outputs == {}
+    assert "pom.xml" in log
+
+
+def test_renameOntoADeclaredPathIsStillAStrayFile(remote):
+    seed = remote["seed"]
+    _git(seed, "checkout", "-q", "master")
+    (seed / "Checks.java").write_text("class Checks { /* conteudo longo o bastante para o rename */ }" * 5, encoding="utf-8")
+    _git(seed, "add", "Checks.java")
+    _git(seed, "commit", "-q", "-m", "checks")
+    _git(seed, "push", "-q", "origin", "master")
+    _git(seed, "checkout", "-q", "-B", BRANCH, "master")
+    _git(seed, "mv", "Checks.java", "Widget.java")
+    _git(seed, "commit", "-q", "-m", "rename")
+    _git(seed, "push", "-q", "origin", BRANCH)
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "Widget.java"))
+
+    assert code == 3, log
+    assert "Checks.java" in log
+
+
+def test_upToDateBranchLongerThanTheFetchDepthIsReusedNotRegenerated(remote):
+    seed = remote["seed"]
+    _git(seed, "checkout", "-q", "-B", BRANCH, "master")
+    for number in range(120):
+        _commit(seed, f"generated-{number}")
+    _git(seed, "push", "-q", "origin", BRANCH)
+    target = remote["root"] / "shallow"
+    _git(remote["root"], "clone", "-q", "--depth", "1", remote["url"], str(target))
+
+    code, outputs, log = _run(target)
+
+    assert code == 0, log
+    assert outputs == {"exists": "true", "old": ""}
