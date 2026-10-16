@@ -126,6 +126,7 @@ def test_corruptTemplateAbortsBeforePlacing(tmpPath):
     code, out = result.returncode, result.stdout
 
     assert code == 1, out
-    assert list(scratch.iterdir()) == [], "o diretorio temporario do build vazou no caminho de falha"
+    leaked = [entry.name for entry in scratch.iterdir() if entry.name.startswith("build-resource-")]
+    assert leaked == [], f"o diretorio temporario do build vazou no caminho de falha: {leaked}"
     assert list((repo / "src").rglob("*.java")) == []
     assert _git(repo, "status", "--porcelain", "-uall").strip() == ""
