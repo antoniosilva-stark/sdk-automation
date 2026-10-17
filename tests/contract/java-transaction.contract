@@ -1,0 +1,38 @@
+# source:    _references/sdk-java/src/main/java/com/starkbank/Transaction.java (401 linhas)
+# extracted: 2026-09-11
+
+declaration public class Transaction extends Resource
+field       static ClassData data = new ClassData(Transaction.class, "Transaction");
+
+constructor public Transaction(Map<String, Object> data) throws Exception
+constructor public Transaction()
+
+signature public static List<Transaction> create(List<?> transactions)
+signature public static List<Transaction> create(List<?> transactions, User user)
+signature public static Transaction get(String id)
+signature public static Transaction get(String id, User user)
+signature public static Generator<Transaction> query()
+signature public static Generator<Transaction> query(Map<String, Object> params)
+signature public static Generator<Transaction> query(User user)
+signature public static Generator<Transaction> query(Map<String, Object> params, User user)
+signature public static Page page()
+signature public static Page page(Map<String, Object> params)
+signature public static Page page(User user)
+signature public static Page page(Map<String, Object> params, User user)
+
+inner public final static class Page
+
+field public String description;
+field public String externalId;
+field public String senderId;
+field public String receiverId;
+field public Integer fee;
+field public String source;
+field public String created;
+
+field public Long balance;
+
+field public long amount;
+field public String[] tags;
+
+constructor public Transaction(long amount, String description, String externalId, String receiverId, String senderId, String[] tags, int fee, String created, String source, Long balance, String id)

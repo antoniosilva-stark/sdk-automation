@@ -1,0 +1,39 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/webhook/__webhook.py
+components:
+  schemas:
+    Webhook:
+      type: object
+      description: "A Webhook is used to subscribe to notification events on a user-selected endpoint. Currently, available services for subscription are transfer, boleto, boleto-holmes, boleto-payment, brcode-payment, utility-payment, deposit, darf-payment, payment-request and invoice. Events are delivered with a digital signature (the 'Digital-Signature' response header), verifiable with starkbank.event.parse(). If your endpoint does not return HTTP 200, delivery is retried up to three times, at 5, 30 and 120 minute intervals, after which the event is no longer resent -- use starkbank.event.query(is_delivered=False) daily to catch anything missed. A Webhook only receives events from the API version it was registered under."
+      properties:
+        url:
+          type: string
+          description: "Url that will be notified when an event occurs."
+        subscriptions:
+          type: array
+          items:
+            type: string
+          description: "list of any non-empty combination of the available services. ex: [\"transfer\", \"invoice\", \"deposit\"]"
+        id:
+          type: string
+          description: "unique id returned when the webhook is created. ex: \"5656565656565656\""
+          x-sdk-id: true
+      required:
+        - url
+        - subscriptions
+        - id
+
+    WebhookCreate:
+      type: object
+      description: "Webhook creation request"
+      properties:
+        url:
+          type: string
+          description: "Url that will be notified when an event occurs."
+        subscriptions:
+          type: array
+          items:
+            type: string
+          description: "list of any non-empty combination of the available services. ex: [\"transfer\", \"invoice\", \"deposit\"]"
+      required:
+        - url
+        - subscriptions

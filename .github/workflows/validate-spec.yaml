@@ -7,16 +7,20 @@ on:
       - 'apis/schemas/**'
       - 'tools/breaking-change-detector.py'
 
+concurrency:
+  group: validate-spec-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -39,16 +43,6 @@ jobs:
 
       - name: Detect breaking changes
         id: breaking-change
-        run: python3 tools/breaking-change-detector.py
-
-      - name: Comment on PR (if BC detected)
-        if: failure() && steps.breaking-change.outcome == 'failure'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '⚠️ Breaking changes detected! Please review and discuss with Tech-Lead (@elias) before proceeding.'
-            })
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 tools/breaking-change-detector.py --base "$BASE_SHA"

@@ -1,14 +1,13 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/transfer/__transfer.py
 components:
   schemas:
     Transfer:
       type: object
       description: "When you initialize a Transfer, the entity will not be automatically created in the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects."
       properties:
-        id:
-          type: string
-          description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string
@@ -27,14 +26,14 @@ components:
           description: "receiver bank account number. Use '-' before the verifier digit. ex: \"876543-2\""
         accountType:
           type: string
-          description: "Receiver bank account type. This parameter only has effect on Pix Transfers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
+          description: "Receiver bank account type. Only has effect on Pix Transfers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
         externalId:
           type: string
           description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
         scheduled:
           type: string
-          format: date
-          description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+          format: date-time
+          description: "date or datetime when the transfer will be processed. Ted transfers scheduled for today are accepted until 16:00 (BRT) and pushed to the next business day afterwards; Pix transfers are available 24/7 and may be scheduled for any date and time."
         description:
           type: string
           description: "optional description to override default description to be shown in the bank statement. ex: \"Payment for service #1234\""
@@ -45,12 +44,16 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for reference when searching for transfers. ex: [\"employees\", \"monthly\"]"
+          description: "list of strings for reference when searching for transfers. All tags will be converted to lowercase. ex: [\"employees\", \"monthly\"]"
         rules:
           type: array
           items:
             type: object
           description: "list of Transfer.Rule objects for modifying transfer behavior. ex: [Transfer.Rule(key=\"resendingLimit\", value=5)]"
+        id:
+          type: string
+          description: "unique id returned when the transfer is created. ex: \"5656565656565656\""
+          x-sdk-id: true
         fee:
           type: integer
           description: "fee charged when the Transfer is processed. ex: 200 (= R$ 2.00)"
@@ -74,7 +77,6 @@ components:
           format: date-time
           description: "latest update datetime for the transfer. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
       required:
-        - id
         - amount
         - name
         - taxId
@@ -82,6 +84,7 @@ components:
         - branchCode
         - accountNumber
         - accountType
+        - id
         - fee
         - status
         - transactionIds
@@ -95,6 +98,7 @@ components:
       properties:
         amount:
           type: integer
+          format: int64
           description: "amount in cents to be transferred. ex: 1234 (= R$ 12.34)"
         name:
           type: string
@@ -113,14 +117,14 @@ components:
           description: "receiver bank account number. Use '-' before the verifier digit. ex: \"876543-2\""
         accountType:
           type: string
-          description: "Receiver bank account type. This parameter only has effect on Pix Transfers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
+          description: "Receiver bank account type. Only has effect on Pix Transfers. ex: \"checking\", \"savings\", \"salary\" or \"payment\""
         externalId:
           type: string
           description: "url safe string that must be unique among all your transfers. Duplicated external_ids will cause failures. By default, this parameter will block any transfer that repeats amount and receiver information on the same date. ex: \"my-internal-id-123456\""
         scheduled:
           type: string
-          format: date
-          description: "date or datetime when the transfer will be processed. May be pushed to next business day if necessary. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+          format: date-time
+          description: "date or datetime when the transfer will be processed. Ted transfers scheduled for today are accepted until 16:00 (BRT) and pushed to the next business day afterwards; Pix transfers are available 24/7 and may be scheduled for any date and time."
         description:
           type: string
           description: "optional description to override default description to be shown in the bank statement. ex: \"Payment for service #1234\""
@@ -131,7 +135,7 @@ components:
           type: array
           items:
             type: string
-          description: "list of strings for reference when searching for transfers. ex: [\"employees\", \"monthly\"]"
+          description: "list of strings for reference when searching for transfers. All tags will be converted to lowercase. ex: [\"employees\", \"monthly\"]"
         rules:
           type: array
           items:

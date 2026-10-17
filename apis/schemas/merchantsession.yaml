@@ -1,0 +1,105 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantsession/__merchantsession.py
+components:
+  schemas:
+    MerchantSession:
+      type: object
+      description: "When you initialize a MerchantSession, the entity will not be automatically to the Stark Bank API and returns the created object."
+      properties:
+        allowedFundingTypes:
+          type: array
+          items:
+            type: string
+          description: "funding types allowed for the purchase. Options: \"credit\", \"debit\""
+        allowedInstallments:
+          type: array
+          items:
+            type: object
+          description: "amount/installment-count combinations allowed for the purchase"
+        expiration:
+          type: integer
+          description: "time in seconds from creation until the session expires; after expiration, no purchase can be created with it"
+        allowedIps:
+          type: array
+          items:
+            type: string
+          description: "IP addresses allowed to create a purchase with this session"
+        challengeMode:
+          type: string
+          enum: ['enabled', 'disabled']
+          description: "whether 3DS holder verification is used. Options: \"enabled\", \"disabled\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. All tags will be converted to lowercase."
+        id:
+          type: string
+          description: "unique id returned when MerchantSession is created. ex: \"5656565656565656\""
+          x-sdk-id: true
+        uuid:
+          type: string
+          description: "unique uuid returned when MerchantSession is created, used to create a MerchantSession Purchase. ex: \"901e71f2447c43c886f58366a5432c4b\""
+        holderId:
+          type: string
+          description: "unique id of the card holder associated with this session, when applicable."
+        softDescriptor:
+          type: string
+          description: "text that will be shown in the holder's bank statement, when applicable."
+        status:
+          type: string
+          description: "current MerchantSession status. ex: \"created\", \"expired\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the MerchantSession. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the MerchantSession. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - allowedFundingTypes
+        - allowedInstallments
+        - expiration
+        - id
+        - uuid
+        - holderId
+        - softDescriptor
+        - status
+        - created
+        - updated
+
+    MerchantSessionCreate:
+      type: object
+      description: "MerchantSession creation request"
+      properties:
+        allowedFundingTypes:
+          type: array
+          items:
+            type: string
+          description: "funding types allowed for the purchase. Options: \"credit\", \"debit\""
+        allowedInstallments:
+          type: array
+          items:
+            type: object
+          description: "amount/installment-count combinations allowed for the purchase"
+        expiration:
+          type: integer
+          description: "time in seconds from creation until the session expires; after expiration, no purchase can be created with it"
+        allowedIps:
+          type: array
+          items:
+            type: string
+          description: "IP addresses allowed to create a purchase with this session"
+        challengeMode:
+          type: string
+          enum: ['enabled', 'disabled']
+          description: "whether 3DS holder verification is used. Options: \"enabled\", \"disabled\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. All tags will be converted to lowercase."
+      required:
+        - allowedFundingTypes
+        - allowedInstallments
+        - expiration

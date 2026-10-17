@@ -1,0 +1,199 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantpurchase/__merchantpurchase.py
+components:
+  schemas:
+    MerchantPurchase:
+      type: object
+      description: "When you initialize a MerchantPurchase, the entity will not be automatically to the Stark Bank API and returns the created object."
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "MerchantPurchase value in cents. ex: 1234 (= R$ 12.34)"
+        cardId:
+          type: string
+          description: "unique id of the MerchantCard or MerchantSession Purchase used. ex: \"5656565656565656\""
+        fundingType:
+          type: string
+          description: "type of funding used. ex: \"credit\", \"debit\""
+        installmentCount:
+          type: integer
+          description: "number of installments the purchase is split into. ex: 1"
+        cardExpiration:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        cardNumber:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        cardSecurityCode:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderName:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderEmail:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderPhone:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderId:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        billingCountryCode:
+          type: string
+          description: "billing address data."
+        billingCity:
+          type: string
+          description: "billing address data."
+        billingStateCode:
+          type: string
+          description: "billing address data."
+        billingStreetLine1:
+          type: string
+          description: "billing address data."
+        billingStreetLine2:
+          type: string
+          description: "billing address data."
+        billingZipCode:
+          type: string
+          description: "billing address data."
+        metadata:
+          type: object
+          description: "additional 3DS metadata sent by the merchant's browser/app."
+        softDescriptor:
+          type: string
+          description: "text that will be shown in the holder's bank statement. ex: \"my-store\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        id:
+          type: string
+          description: "unique id returned when MerchantPurchase is created. ex: \"5656565656565656\""
+          x-sdk-id: true
+        cardEnding:
+          type: string
+          description: "last 4 digits of the card used. ex: \"1234\""
+        challengeMode:
+          type: string
+          description: "whether 3DS holder verification was used. ex: \"enabled\", \"disabled\""
+        challengeUrl:
+          type: string
+          description: "URL to the 3DS challenge, when applicable."
+        currencyCode:
+          type: string
+          description: "currency of the purchase. ex: \"BRL\""
+        endToEndId:
+          type: string
+          description: "unique transaction id for the acquirer network."
+        fee:
+          type: integer
+          description: "fee charged when the MerchantPurchase is processed. ex: 200 (= R$ 2.00)"
+        network:
+          type: string
+          description: "card network flag. ex: \"visa\", \"mastercard\""
+        source:
+          type: string
+          description: "locator of the entity that generated the purchase. ex: \"merchant-session/{sessionId}\""
+        status:
+          type: string
+          description: "current MerchantPurchase status. ex: \"approved\", \"confirmed\", \"canceled\", \"voided\""
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the MerchantPurchase. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the MerchantPurchase. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - amount
+        - cardId
+        - fundingType
+        - installmentCount
+        - id
+        - cardEnding
+        - challengeMode
+        - challengeUrl
+        - currencyCode
+        - endToEndId
+        - fee
+        - network
+        - source
+        - status
+        - created
+        - updated
+
+    MerchantPurchaseCreate:
+      type: object
+      description: "MerchantPurchase creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "MerchantPurchase value in cents. ex: 1234 (= R$ 12.34)"
+        cardId:
+          type: string
+          description: "unique id of the MerchantCard or MerchantSession Purchase used. ex: \"5656565656565656\""
+        fundingType:
+          type: string
+          description: "type of funding used. ex: \"credit\", \"debit\""
+        installmentCount:
+          type: integer
+          description: "number of installments the purchase is split into. ex: 1"
+        cardExpiration:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        cardNumber:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        cardSecurityCode:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderName:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderEmail:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderPhone:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        holderId:
+          type: string
+          description: "card and holder data, required only when not created through a MerchantSession."
+        billingCountryCode:
+          type: string
+          description: "billing address data."
+        billingCity:
+          type: string
+          description: "billing address data."
+        billingStateCode:
+          type: string
+          description: "billing address data."
+        billingStreetLine1:
+          type: string
+          description: "billing address data."
+        billingStreetLine2:
+          type: string
+          description: "billing address data."
+        billingZipCode:
+          type: string
+          description: "billing address data."
+        metadata:
+          type: object
+          description: "additional 3DS metadata sent by the merchant's browser/app."
+        softDescriptor:
+          type: string
+          description: "text that will be shown in the holder's bank statement. ex: \"my-store\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+      required:
+        - amount
+        - cardId
+        - fundingType
+        - installmentCount

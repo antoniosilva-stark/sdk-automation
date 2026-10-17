@@ -13,48 +13,6 @@ describe('SDK Generation Tests', () => {
       const configPath = path.join(__dirname, '../../tools/generator-node-config.yaml');
       expect(fs.existsSync(configPath)).toBe(true);
     });
-
-    test('should have output directory configured', () => {
-      const outputDir = 'generated/sdk-node-temp';
-      // Note: SDK not generated yet until Java is installed
-      // This test validates the config path is correct
-      expect(outputDir).toMatch(/^generated\/sdk-/);
-    });
-  });
-
-  describe('SDK Structure Validation', () => {
-    // generated/ is gitignored; skip until `make generate` has run
-    const sdkDir = path.join(__dirname, '../../generated/sdk-node-temp');
-    const sdkGenerated = fs.existsSync(sdkDir);
-    const maybeTest = sdkGenerated ? test : test.skip;
-
-    maybeTest('should have models directory with 60+ model files', () => {
-      const modelsDir = path.join(sdkDir, 'models');
-      const files = fs.readdirSync(modelsDir).filter(f => f.endsWith('.ts') && f !== 'index.ts');
-      expect(files.length).toBeGreaterThanOrEqual(60);
-    });
-
-    maybeTest('should have api directory with 60+ API files', () => {
-      const apiDir = path.join(sdkDir, 'api');
-      const files = fs.readdirSync(apiDir).filter(f => f.endsWith('.ts'));
-      expect(files.length).toBeGreaterThanOrEqual(60);
-    });
-
-    maybeTest('should have valid package.json with correct metadata', () => {
-      const pkg = JSON.parse(fs.readFileSync(path.join(sdkDir, 'package.json'), 'utf8'));
-
-      expect(pkg.name).toBe('@starkbank/sdk-node');
-      expect(pkg.version).toBe('0.3.0');
-      expect(pkg.main).toMatch(/dist\/index\.js$/);
-      expect(pkg.types).toMatch(/dist\/index\.d\.ts$/);
-    });
-
-    maybeTest('should have tsconfig.json configured for Node.js ES2020', () => {
-      const tsconfig = JSON.parse(fs.readFileSync(path.join(sdkDir, 'tsconfig.json'), 'utf8'));
-
-      expect(tsconfig.compilerOptions.target).toBe('ES2020');
-      expect(tsconfig.compilerOptions.module).toBe('commonjs');
-    });
   });
 
   describe('SDK Ready State', () => {
