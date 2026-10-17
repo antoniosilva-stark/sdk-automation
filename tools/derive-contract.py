@@ -112,7 +112,8 @@ def withoutNoise(source: str, keepStrings: bool = False) -> list[str]:
 def joinContinuations(source: str) -> list[str]:
     """Junta assinatura quebrada em várias linhas até fechar o parêntese."""
     joined, buffer, depth = [], "", 0
-    for raw, clean in zip(source.split("\n"), withoutNoise(source)):
+    # o buffer sai do fonte sem comentário: nota solta no meio da assinatura não pode entrar no contrato
+    for raw, clean in zip(withoutNoise(source, keepStrings=True), withoutNoise(source)):
         line = raw.strip()
         if depth:
             buffer += " " + line

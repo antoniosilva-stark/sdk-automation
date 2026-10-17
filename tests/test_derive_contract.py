@@ -242,3 +242,18 @@ def test_unusualLineBreaksInACommentDoNotMisalignTheParenthesisCount(tmpPath):
 
     assert "field public long amount;" in lines
     assert "signature public static Widget get(String id)" in lines
+
+
+@pytest.mark.parametrize("source,expected", [
+    ("public void run(int a, // trailing note\n        int b) {", "public void run(int a, int b) {"),
+    ("public void run(int a, /* inline */ int b) {", "public void run(int a, int b) {"),
+    ("public void run(\n        /** doc, with (parens */\n        int a,\n        int b) {", "public void run( int a, int b) {"),
+])
+def test_aCommentInsideAMultilineSignatureDoesNotEnterTheContract(source, expected):
+    spec = importlib.util.spec_from_file_location("derive_contract", REPO_ROOT / "tools/derive-contract.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    joined = module.joinContinuations(source)
+
+    assert [line for line in joined if "run(" in line] == [expected]
