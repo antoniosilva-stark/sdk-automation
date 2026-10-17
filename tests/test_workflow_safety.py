@@ -667,3 +667,102 @@ def test_theDriftComparisonOnlyProceedsWhenTheSchemaWasActuallyCompared(tmpPath,
     written = output.read_text(encoding="utf-8") if output.exists() else ""
     assert ("blocked=false" in written) == (code == "0"), "so 'em sincronia' libera a geracao"
     assert ("blocked=true" in written) == (code == "1")
+
+
+def test_theValidateGateFailsInsteadOfSkippingWhenADependencyIsMissing():
+    steps = jobSteps("validate")
+    testIndex = stepIndex(steps, "make test", "run")
+    assert testIndex >= 0, "o validate precisa rodar a suite"
+    runTests = steps[testIndex]
+    javaSteps = [step for step in steps if str(step.get("uses", "")).startswith("actions/setup-java@")]
+
+    assert javaSteps, "sem JDK os testes de compilacao viram skip e o validate fica verde"
+    assert (runTests.get("env") or {}).get("REQUIRE_TEST_DEPENDENCIES") == "1"
+
+
+@pytest.mark.parametrize("mode,expectedFailure,message", [
+    ("declared", False, ""),
+    ("foreign", True, "muda arquivos fora dos declarados"),
+    ("brokenGit", True, "fatal: bad revision"),
+])
+def test_theStrayFileGuardFailsClosedWhenTheComparisonItselfFails(tmpPath, mode, expectedFailure, message):
+    steps = driftPrJob()["steps"]
+    script = steps[stepIndex(steps, "gh pr create", "run")]["run"]
+    (tmpPath / "paths.txt").write_text("apis/spec-v2.openapi.yaml\n", encoding="utf-8")
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    (binario / "git").write_text(
+        '#!/bin/sh\n'
+        'case "$1" in\n'
+        '  diff) case "$*" in *--no-renames*) case "$MODE" in\n'
+        '      declared) echo apis/spec-v2.openapi.yaml;;\n'
+        '      foreign) echo apis/spec-v2.openapi.yaml; echo docs/other.md;;\n'
+        '      brokenGit) echo "fatal: bad revision" >&2; exit 128;;\n'
+        '    esac; exit 0;; *) exit 1;; esac;;\n'
+        '  *) exit 0;;\n'
+        'esac\n',
+        encoding="utf-8")
+    (binario / "gh").write_text('#!/bin/sh\ncase "$1" in api) echo 1;; esac\n', encoding="utf-8")
+    (binario / "python3").write_text("#!/bin/sh\necho split-profile\n", encoding="utf-8")
+    for nome in ("git", "gh", "python3"):
+        (binario / nome).chmod(0o755)
+
+    resultado = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", script], capture_output=True, text=True,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "RESOURCE": "SplitProfile", "MODE": mode,
+                                    "GH_TOKEN": "x", "BASE_BRANCH": "development",
+                                    "GITHUB_REPOSITORY": "dono/repo", "RUNNER_TEMP": str(tmpPath)})
+
+    assert (resultado.returncode != 0) == expectedFailure, resultado.stdout + resultado.stderr
+    assert message in resultado.stdout + resultado.stderr
+
+
+def _runNameTheChange(tmpPath, existing, revParse="0"):
+    steps = jobSteps("deliver")
+    script = steps[stepIndex(steps, "cat-file", "run")]["run"]
+    (tmpPath / "paths.txt").write_text("src/main/A.java\nsrc/test/ATest.java\n", encoding="utf-8")
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    (binario / "git").write_text(
+        '#!/bin/sh\n'
+        'if [ "$1" = rev-parse ]; then exit "${REVPARSE:-0}"; fi\n'
+        '# cat-file -e origin/BASE:path\n'
+        'for existing in $EXISTING; do case "$*" in *":$existing") exit 0;; esac; done\n'
+        'exit 1\n',
+        encoding="utf-8")
+    (binario / "git").chmod(0o755)
+    output = tmpPath / "output.txt"
+    resultado = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", script], capture_output=True, text=True,
+                               cwd=tmpPath, env={"PATH": f"{binario}:/usr/bin:/bin", "BASE": "master",
+                                                 "EXISTING": existing, "REVPARSE": revParse, "RUNNER_TEMP": str(tmpPath),
+                                                 "GITHUB_OUTPUT": str(output)})
+    return resultado, output.read_text(encoding="utf-8") if output.exists() else ""
+
+
+@pytest.mark.parametrize("existing,verb", [
+    ("", "Add"),
+    ("src/main/A.java", "Update"),
+    ("src/test/ATest.java", "Update"),
+    ("src/main/A.java src/test/ATest.java", "Update"),
+])
+def test_theChangeIsNamedUpdateWhenTheTargetAlreadyHasTheResource(tmpPath, existing, verb):
+    resultado, written = _runNameTheChange(tmpPath, existing)
+
+    assert resultado.returncode == 0, resultado.stderr
+    assert f"verb={verb}" in written
+
+
+def test_theChangeNameFailsClosedWhenTheBaseRefIsMissing(tmpPath):
+    resultado, written = _runNameTheChange(tmpPath, "src/main/A.java", revParse="1")
+
+    assert resultado.returncode != 0
+    assert "verb=" not in written
+
+
+def test_theCommitAndThePullRequestShareTheChangeVerb():
+    steps = jobSteps("deliver")
+    for needle in ("git -c core.hooksPath=/dev/null commit", "gh pr create"):
+        step = steps[stepIndex(steps, needle, "run")]
+
+        assert "${{ steps.verb.outputs.verb }}" in str(step["env"].get("VERB")), needle
+        assert '"$VERB $RESOURCE resource"' in step["run"], needle
+        assert "Add $RESOURCE" not in step["run"], needle

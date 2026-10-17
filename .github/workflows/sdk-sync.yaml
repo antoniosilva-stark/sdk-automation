@@ -50,6 +50,11 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - run: pip install -r requirements.txt
       - run: npm ci
 
@@ -60,6 +65,9 @@ jobs:
         run: make clone-sdk-ref-pinned
 
       - name: Run tests
+        env:
+          # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o gate fica verde
+          REQUIRE_TEST_DEPENDENCIES: '1'
         run: make test
 
   drift:
@@ -193,7 +201,14 @@ jobs:
           if [ "$FOUND" -eq 0 ]; then
             git fetch --depth 200 "$REMOTE" "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
             # a branch de refresh so pode ter mudado os arquivos desta execucao: commit alheio nela viraria PR do bot
-            STRAY=$(git diff --no-renames --name-only "origin/$BASE_BRANCH...origin/$BRANCH" | grep -vxFf "$RUNNER_TEMP/paths.txt" || true)
+            # o diff roda sozinho: falha dele aborta o passo em vez de virar "nada estranho"
+            CHANGED=$(git diff --no-renames --name-only "origin/$BASE_BRANCH...origin/$BRANCH")
+            # grep -v sai 1 quando nao sobra linha; so 2 ou mais e erro
+            STRAY=$(printf '%s\n' "$CHANGED" | grep -vxFf "$RUNNER_TEMP/paths.txt") && STRAYCODE=0 || STRAYCODE=$?
+            if [ "$STRAYCODE" -gt 1 ]; then
+              echo "nao foi possivel comparar os arquivos de $BRANCH (codigo $STRAYCODE)."
+              exit 1
+            fi
             if [ -n "$STRAY" ]; then
               echo "$BRANCH muda arquivos fora dos declarados: $STRAY"
               exit 1
@@ -492,11 +507,29 @@ jobs:
       - name: Copy only the declared paths into the target
         run: python3 tools/apply-artifacts.py --staging staging --target target --paths-file "$RUNNER_TEMP/paths.txt"
 
+      - name: Name the change
+        id: verb
+        working-directory: target
+        env:
+          BASE: ${{ steps.base.outputs.base }}
+        run: |
+          # sem a ref, o cat-file falharia para todo caminho e o titulo viraria "Add" em silencio
+          git rev-parse --verify --quiet "origin/$BASE^{commit}" >/dev/null || { echo "origin/$BASE ausente."; exit 1; }
+          # decide pela arvore da base e nao pelo commit: a reexecucao sobre a mesma branch tem de dar o mesmo titulo
+          VERB=Add
+          while IFS= read -r declared; do
+            if git cat-file -e "origin/$BASE:$declared" 2>/dev/null; then
+              VERB=Update
+            fi
+          done < "$RUNNER_TEMP/paths.txt"
+          echo "verb=$VERB" >> "$GITHUB_OUTPUT"
+
       - name: Commit when the generated output differs
         id: commit
         working-directory: target
         env:
           RESOURCE: ${{ inputs.resource }}
+          VERB: ${{ steps.verb.outputs.verb }}
         run: |
           test -s "$RUNNER_TEMP/paths.txt" || { echo "lista de caminhos ausente ou vazia."; exit 1; }
           while IFS= read -r declared; do
@@ -510,7 +543,7 @@ jobs:
           fi
 
           git diff --cached --name-only
-          git -c core.hooksPath=/dev/null commit -m "Add $RESOURCE resource"
+          git -c core.hooksPath=/dev/null commit -m "$VERB $RESOURCE resource"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push branch
@@ -537,6 +570,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RESOURCE: ${{ inputs.resource }}
+          VERB: ${{ steps.verb.outputs.verb }}
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
           BRANCH: ${{ steps.branch.outputs.branch }}
@@ -559,7 +593,7 @@ jobs:
 
           gh pr create \
             --repo "$TARGET" \
-            --title "Add $RESOURCE resource" \
+            --title "$VERB $RESOURCE resource" \
             --body "$RESOURCE gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
             --base "$BASE" \
             --head "$BRANCH"
