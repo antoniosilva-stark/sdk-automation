@@ -1,0 +1,132 @@
+{{#models}}{{#model}}const rest = require('../utils/rest.js');
+const check = require('starkcore').check;
+const Resource = require('starkcore').Resource;
+
+
+class {{classname}} extends Resource {
+    /**
+     *
+     * {{classname}} object
+     *
+     * @description {{{description}}}
+     *
+     * Parameters:
+{{#vars}}     * @param {{name}} [{{dataType}}{{^required}}, optional{{/required}}]: {{{description}}}
+{{/vars}}     *
+     */
+    constructor({ {{#vars}}{{name}}{{^-last}}, {{/-last}}{{/vars}} }) {
+        super(id);
+{{#vars}}{{^-first}}        this.{{name}} = {{#isDateTime}}check.datetime({{name}}){{/isDateTime}}{{^isDateTime}}{{name}}{{/isDateTime}};
+{{/-first}}{{/vars}}    }
+}
+
+exports.{{classname}} = {{classname}};
+let resource = {'class': exports.{{classname}}, 'name': '{{classname}}'};
+{{#vendorExtensions.x-sdk-create}}
+
+exports.create = async function ({{classVarName}}s, {user} = {}) {
+    /**
+     *
+     * Create {{classname}}s
+     *
+     * @description Send a list of {{classname}} objects for creation in the Stark Bank API
+     *
+     * Parameters (required):
+     * @param {{classVarName}}s [list of {{classname}} objects]: list of {{classname}} objects to be created in the API
+     *
+     * Parameters (optional):
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.user was set before function call
+     *
+     * Return:
+     * @returns list of {{classname}} objects with updated attributes
+     *
+     */
+    return rest.post(resource, {{classVarName}}s, user);
+};
+{{/vendorExtensions.x-sdk-create}}
+{{#vendorExtensions.x-sdk-put}}
+
+exports.put = async function ({{classVarName}}s, {user} = {}) {
+    /**
+     *
+     * Create or update {{classname}}s
+     *
+     * @description Send a list of {{classname}} objects for creation or update in the Stark Bank API
+     *
+     * Parameters (required):
+     * @param {{classVarName}}s [list of {{classname}} objects]: list of {{classname}} objects to be created or updated in the API
+     *
+     * Parameters (optional):
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.user was set before function call
+     *
+     * Return:
+     * @returns list of {{classname}} objects with updated attributes
+     *
+     */
+    return rest.put(resource, {{classVarName}}s, user);
+};
+{{/vendorExtensions.x-sdk-put}}
+{{#vendorExtensions.x-sdk-get}}
+
+exports.get = async function (id, {user} = {}) {
+    /**
+     *
+     * Retrieve a specific {{classname}}
+     *
+     * @description Receive a single {{classname}} object previously created in the Stark Bank API by passing its id
+     *
+     * Parameters (required):
+     * @param id [string]: object unique id. ex: '5656565656565656'
+     *
+     * Parameters (optional):
+     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.user was set before function call
+     *
+     * Return:
+     * @returns {{classname}} object with updated attributes
+     *
+     */
+    return rest.getId(resource, id, user);
+};
+{{/vendorExtensions.x-sdk-get}}
+{{#vendorExtensions.x-sdk-query}}
+
+exports.query = async function ({user, ...query} = {}) {
+    /**
+     *
+     * Retrieve {{classname}}s
+     *
+     * @description Receive a generator of {{classname}} objects previously created in the Stark Bank API
+     *
+     * Parameters (optional):
+     * @param query [object, default null]: filters declared for this resource in the spec
+     * @param user [Project object, default null]: Project object. Not necessary if starkbank.user was set before function call
+     *
+     * Return:
+     * @returns generator of {{classname}} objects with updated attributes
+     *
+     */
+    return rest.getList(resource, query, user);
+};
+{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-page}}
+
+exports.page = async function ({user, ...query} = {}) {
+    /**
+     *
+     * Retrieve paged {{classname}}s
+     *
+     * @description Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
+     * Use this function instead of query if you want to manually page your requests.
+     *
+     * Parameters (optional):
+     * @param query [object, default null]: filters declared for this resource in the spec, plus cursor
+     * @param user [Project object, default null]: Project object. Not necessary if starkbank.user was set before function call
+     *
+     * Return:
+     * @returns list of {{classname}} objects with updated attributes and cursor to retrieve the next page
+     *
+     */
+    return rest.getPage(resource, query, user);
+};
+{{/vendorExtensions.x-sdk-page}}
+{{/model}}{{/models}}

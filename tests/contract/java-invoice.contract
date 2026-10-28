@@ -1,0 +1,75 @@
+# source:    ~/workspace/sdk-java/src/main/java/com/starkbank/Invoice.java (1161 linhas)
+# extracted: 2026-09-09
+
+declaration public final class Invoice extends Resource
+field       static ClassData data = new ClassData(Invoice.class, "Invoice");
+
+constructor public Invoice(Number amount, String due, String taxId, String name, Number expiration, Number fine, Number interest, List<Invoice.Description> descriptions, List<Invoice.Discount> discounts, List<Invoice.Rule> rules, List<Split> splits, String pdf, String link, String[] tags, Number nominalAmount, Number fineAmount, Number interestAmount, Number discountAmount, String id, String brcode, Integer fee, String[] transactionIds, String status, String created, String updated)
+constructor public Invoice(Map<String, Object> data) throws Exception
+constructor public Invoice()
+
+signature public static List<Invoice> create(List<?> invoices)
+signature public static List<Invoice> create(List<?> invoices, User user)
+signature public static Invoice get(String id)
+signature public static Invoice get(String id, User user)
+signature public static Generator<Invoice> query()
+signature public static Generator<Invoice> query(Map<String, Object> params)
+signature public static Generator<Invoice> query(User user)
+signature public static Generator<Invoice> query(Map<String, Object> params, User user)
+signature public static Page page()
+signature public static Page page(Map<String, Object> params)
+signature public static Page page(User user)
+signature public static Page page(Map<String, Object> params, User user)
+signature public static Invoice update(String id, Map<String, Object> patchData)
+signature public static Invoice update(String id, Map<String, Object> patchData, User user)
+signature public static InputStream pdf(String id)
+signature public static InputStream pdf(String id, User user)
+signature public static InputStream qrcode(String id)
+signature public static InputStream qrcode(String id, User user)
+signature public static Payment payment(String id)
+signature public static Payment payment(String id, User user)
+
+inner public final static class Rule
+inner public final static class Discount
+inner public final static class Description
+inner public final static class Payment
+inner public final static class Page
+inner public final static class Log
+
+signature public static Log get(String id)
+signature public static Log get(String id, User user)
+signature public static Generator<Log> query()
+signature public static Generator<Log> query(Map<String, Object> params)
+signature public static Generator<Log> query(User user)
+signature public static Generator<Log> query(Map<String, Object> params, User user)
+signature public static Log.Page page()
+signature public static Log.Page page(Map<String, Object> params)
+signature public static Log.Page page(User user)
+signature public static Log.Page page(Map<String, Object> params, User user)
+
+field public String due;
+field public String taxId;
+field public String name;
+field public String pdf;
+field public String link;
+field public String brcode;
+field public Integer fee;
+field public String status;
+field public String created;
+field public String updated;
+
+field public Number amount;
+field public Number expiration;
+field public Number fine;
+field public Number interest;
+field public Number nominalAmount;
+field public Number fineAmount;
+field public Number interestAmount;
+field public Number discountAmount;
+field public List<Invoice.Description> descriptions;
+field public List<Invoice.Discount> discounts;
+field public List<Invoice.Rule> rules;
+field public List<Split> splits;
+field public String[] tags;
+field public String[] transactionIds;
+

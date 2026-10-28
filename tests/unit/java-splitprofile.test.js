@@ -1,0 +1,72 @@
+const fs = require('fs');
+const path = require('path');
+const YAML = require('js-yaml');
+
+describe('Java SplitProfile Pilot', () => {
+
+  describe('Template & Config', () => {
+    test('should have the custom Java model template', () => {
+      const templatePath = path.join(__dirname, '../../templates/java/model.mustache');
+      expect(fs.existsSync(templatePath)).toBe(true);
+    });
+
+    test('should have generator config for Java', () => {
+      const configPath = path.join(__dirname, '../../tools/generator-java-config.yaml');
+      expect(fs.existsSync(configPath)).toBe(true);
+    });
+
+    test('generator config for Java should not reference the pilot templateDir', () => {
+      const configPath = path.join(__dirname, '../../tools/generator-java-config.yaml');
+      const config = YAML.load(fs.readFileSync(configPath, 'utf8'));
+
+      expect(config.templateDir).toBeUndefined();
+    });
+
+    test('spec should define SplitProfile with real fields, not the generic placeholder', () => {
+      const specPath = path.join(__dirname, '../../apis/spec-v2.openapi.yaml');
+      const spec = YAML.load(fs.readFileSync(specPath, 'utf8'));
+      const reference = spec.components.schemas.SplitProfile.$ref;
+
+      // o schema mora em apis/schemas/, como os outros 40; a spec so aponta
+      expect(reference).toBe('./schemas/splitprofile.yaml#/components/schemas/SplitProfile');
+      const schemaPath = path.join(__dirname, '../../apis/schemas/splitprofile.yaml');
+      const schema = YAML.load(fs.readFileSync(schemaPath, 'utf8')).components.schemas.SplitProfile;
+
+      expect(Object.keys(schema.properties)).toEqual(
+        expect.arrayContaining(['interval', 'delay', 'tags', 'status', 'created', 'updated'])
+      );
+      expect(spec.paths['/split_profile'].put).toBeDefined();
+      expect(spec.paths['/split_profile'].post).toBeUndefined();
+    });
+  });
+
+  describe('sdk-sync.yaml workflow', () => {
+    const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
+    const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));
+
+    test('should exist with the 7 expected jobs', () => {
+      expect(Object.keys(workflow.jobs)).toEqual(['wrong-ref', 'validate', 'drift', 'drift-pr', 'build', 'compile', 'deliver']);
+    });
+
+    test('should trigger manually, not on push', () => {
+      expect(workflow.on).toHaveProperty('workflow_dispatch');
+      expect(workflow.on.push).toBeUndefined();
+    });
+
+    test('should authenticate via GitHub App only, with no PAT or registry secrets', () => {
+      const raw = fs.readFileSync(workflowPath, 'utf8');
+
+      expect(raw).toMatch(/SDK_APP_ID/);
+      expect(raw).toMatch(/SDK_APP_PRIVATE_KEY/);
+      expect(raw).not.toMatch(/SDK_REPOS_TOKEN/);
+      for (const registrySecret of ['NPM_TOKEN', 'PYPI_API_TOKEN', 'MAVEN_CENTRAL_TOKEN', 'GEM_HOST_API_KEY', 'NUGET_API_KEY']) {
+        expect(raw).not.toMatch(registrySecret);
+      }
+    });
+
+    test('should not have a publish-to-registry stage', () => {
+      const jobNames = Object.keys(workflow.jobs);
+      expect(jobNames).not.toContain('publish');
+    });
+  });
+});

@@ -24,7 +24,7 @@ describe('OpenAPI Generator Configuration Tests', () => {
 
       // Extract major.minor from version string (e.g., "^2.41.0" → "2.41")
       const match = versionString.match(/(\d+)\.(\d+)/);
-      expect(match).toBeDefined();
+      expect(match).not.toBeNull();
 
       const [, major, minor] = match;
       const majorNum = parseInt(major, 10);
@@ -79,7 +79,6 @@ describe('OpenAPI Generator Configuration Tests', () => {
       'tsconfig.mustache',
       'gitignore'
     ];
-    const mustacheTemplates = requiredTemplates.filter(f => f !== 'gitignore');
 
     test('should have all 5 templates in place', () => {
       const templatesDir = path.join(__dirname, '../../templates/nodejs-axios');
@@ -89,10 +88,6 @@ describe('OpenAPI Generator Configuration Tests', () => {
         const filePath = path.join(templatesDir, file);
         expect(fs.existsSync(filePath)).toBe(true);
       }
-    });
-
-    test.each(mustacheTemplates)('template %s should have .mustache extension', (file) => {
-      expect(file).toMatch(/\.mustache$/);
     });
 
     test('should have valid Mustache variables in package template', () => {

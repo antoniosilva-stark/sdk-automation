@@ -1,0 +1,20 @@
+[transfer/impl]
+require const { Rule } = require('./rule/rule.js')  # sub-recurso Rule fora do alcance do template; lote 2
+require const ruleResource = require('./rule/rule.js').subResource  # sub-recurso Rule fora do alcance do template; lote 2
+require const parseObjects = require('../utils/parse.js').parseObjects  # usado apenas pelo sub-recurso Rule
+export exports.delete = async function (id, { user } = {})  # operacao sem secao no template Node
+export exports.pdf = async function (id, {user} = {})  # operacao sem secao no template Node
+
+[transfer/barrel]
+export exports.log = require('./log')  # sub-recurso Log fora do alcance do template Node
+export exports.Rule = require('./rule/rule.js').Rule  # sub-recurso Rule fora do alcance do template; lote 2
+export exports.delete = transfer.delete  # operacao sem secao no template Node
+export exports.pdf = transfer.pdf  # operacao sem secao no template Node
+
+[transfer/types]
+signature export function get(id: string, params?:{ user?: Project | Organization | null}): Promise<Transfer>  # assinatura tipada com parametro nomeado fora do alcance do template
+signature export function pdf(id: string, params?:{ user?: Project | Organization | null}): Promise<Buffer>  # operacao sem secao no template Node
+signature function _delete(id: string, user?: Project | Organization): Promise<Transfer>  # operacao sem secao no template Node
+inner export class Rule  # sub-objeto sem schema nomeado na spec; lote 2
+inner export class Log  # sub-recurso Log fora do alcance do template Node
+namespace export namespace log  # sub-recurso Log fora do alcance do template Node

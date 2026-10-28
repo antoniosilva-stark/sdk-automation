@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "validate-spec": "openapi-spec-validator apis/spec-v2.openapi.yaml",
-    "check-breaking-changes": "python3 tools/breaking-change-detector.py",
+    "check-breaking-changes": "make check-bc",
     "test": "jest",
     "test:watch": "jest --watch",
     "generate-sdks": "make generate",

@@ -1,0 +1,107 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/corporaterule/__corporaterule.py
+components:
+  schemas:
+    CorporateRule:
+      type: object
+      description: "The CorporateRule object displays the spending rules of CorporateCards and CorporateHolders created in your Workspace."
+      properties:
+        name:
+          type: string
+          description: "rule name. ex: \"Travel\" or \"Food\""
+        amount:
+          type: integer
+          format: int64
+          description: "maximum amount that can be spent in the informed interval. ex: 200000 (= R$ 2000.00)"
+        interval:
+          type: string
+          description: "interval after which the rule amount counter will be reset to 0. ex: \"instant\", \"day\", \"week\", \"month\", \"year\" or \"lifetime\""
+        schedule:
+          type: string
+          description: "schedule time for user to spend. ex: \"every monday, wednesday from 00:00 to 23:59 in America/Sao_Paulo\""
+        purposes:
+          type: array
+          items:
+            type: string
+          description: "list of strings representing the allowed purposes for card purchases, you can use this to restrict ATM withdrawals. ex: [\"purchase\", \"withdrawal\"]"
+        currencyCode:
+          type: string
+          description: "code of the currency that the rule amount refers to. ex: \"BRL\" or \"USD\""
+        categories:
+          type: array
+          items:
+            type: object
+          description: "merchant categories accepted by the rule. ex: [MerchantCategory(code=\"fastFoodRestaurants\")]"
+        countries:
+          type: array
+          items:
+            type: object
+          description: "countries accepted by the rule. ex: [MerchantCountry(code=\"BRA\")]"
+        methods:
+          type: array
+          items:
+            type: object
+          description: "card purchase methods accepted by the rule. ex: [CardMethod(code=\"magstripe\")]"
+        id:
+          type: string
+          description: "unique id returned when a CorporateRule is created, used to update a specific CorporateRule. ex: \"5656565656565656\""
+          x-sdk-id: true
+        counterAmount:
+          type: integer
+          description: "current rule spent amount. ex: 1000"
+        currencySymbol:
+          type: string
+          description: "currency symbol. ex: \"R$\""
+        currencyName:
+          type: string
+          description: "currency name. ex: \"Brazilian Real\""
+      required:
+        - name
+        - amount
+        - id
+        - counterAmount
+        - currencySymbol
+        - currencyName
+
+    CorporateRuleCreate:
+      type: object
+      description: "CorporateRule creation request"
+      properties:
+        name:
+          type: string
+          description: "rule name. ex: \"Travel\" or \"Food\""
+        amount:
+          type: integer
+          format: int64
+          description: "maximum amount that can be spent in the informed interval. ex: 200000 (= R$ 2000.00)"
+        interval:
+          type: string
+          description: "interval after which the rule amount counter will be reset to 0. ex: \"instant\", \"day\", \"week\", \"month\", \"year\" or \"lifetime\""
+        schedule:
+          type: string
+          description: "schedule time for user to spend. ex: \"every monday, wednesday from 00:00 to 23:59 in America/Sao_Paulo\""
+        purposes:
+          type: array
+          items:
+            type: string
+          description: "list of strings representing the allowed purposes for card purchases, you can use this to restrict ATM withdrawals. ex: [\"purchase\", \"withdrawal\"]"
+        currencyCode:
+          type: string
+          description: "code of the currency that the rule amount refers to. ex: \"BRL\" or \"USD\""
+        categories:
+          type: array
+          items:
+            type: object
+          description: "merchant categories accepted by the rule. ex: [MerchantCategory(code=\"fastFoodRestaurants\")]"
+        countries:
+          type: array
+          items:
+            type: object
+          description: "countries accepted by the rule. ex: [MerchantCountry(code=\"BRA\")]"
+        methods:
+          type: array
+          items:
+            type: object
+          description: "card purchase methods accepted by the rule. ex: [CardMethod(code=\"magstripe\")]"
+      required:
+        - name
+        - amount

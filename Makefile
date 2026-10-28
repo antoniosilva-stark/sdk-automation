@@ -1,7 +1,19 @@
-.PHONY: help setup install validate check-bc generate clean
+.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
-# Colors for output
+BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
+SDK_PYTHON ?=
+SDK_JAVA ?=
+SDK_NODE ?=
+SDK_REMOTE ?= https://github.com/starkbank
+
+# Commits que os testes comparam com os schemas versionados. Subir um pin e reextrair os
+# schemas (apply-schema) e um mesmo ato; o HEAD fica so no drift e no sync.
+SDK_PYTHON_PIN ?= 65fc3f89dc2f05751bc9376f3885d6893d57fa9b
+SDK_JAVA_PIN ?= f60902a1702aab081a25012bd200db00a9e25c4e
+SDK_NODE_PIN ?= cd8b4eba50aeb5c40faffc7fa04d28ead4effaf4
+
 GREEN := \033[0;32m
+RED := \033[0;31m
 BLUE := \033[0;34m
 NC := \033[0m # No Color
 
@@ -11,7 +23,7 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Requirements:"
-	@echo "  Python 3.9+             # For openapi-spec-validator & breaking-change-detector"
+	@echo "  Python 3.10+            # For openapi-spec-validator & breaking-change-detector"
 	@echo "  Node.js 18+             # For OpenAPI Generator CLI & tests (npm)"
 	@echo "  Java 11+ JRE            # For SDK generation (OpenAPI Generator CLI runtime)"
 	@echo ""
@@ -49,24 +61,74 @@ install-node: ## Install Node.js dependencies (npm)
 	npm install
 	@echo "$(GREEN)✅ Node.js dependencies installed$(NC)"
 
-clone-sdk-ref: ## Clone Python SDK v0.28.0 as reference
-	@echo "$(BLUE)Cloning Python SDK reference...$(NC)"
-	mkdir -p _references
-	@if [ ! -d "_references/sdk-python" ]; then \
-		git clone -q https://github.com/starkbank/sdk-python.git _references/sdk-python; \
-		echo "$(GREEN)✅ Python SDK reference cloned$(NC)"; \
+clone-sdk-ref: ## Clone the SDK references into _references/ (override with SDK_PYTHON / SDK_JAVA)
+	@mkdir -p _references
+	@$(MAKE) --no-print-directory reference REPO=sdk-python MARKER=starkbank OVERRIDE="$(SDK_PYTHON)"
+	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)"
+	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)"
+
+clone-sdk-ref-pinned: ## Clone the SDK references at the pinned commits, for tests (override with SDK_PYTHON / SDK_JAVA)
+	@mkdir -p _references
+	@$(MAKE) --no-print-directory reference REPO=sdk-python MARKER=starkbank OVERRIDE="$(SDK_PYTHON)" PIN=$(SDK_PYTHON_PIN)
+	@$(MAKE) --no-print-directory reference REPO=sdk-java MARKER=src/main/java/com/starkbank OVERRIDE="$(SDK_JAVA)" PIN=$(SDK_JAVA_PIN)
+	@$(MAKE) --no-print-directory reference REPO=sdk-node MARKER=sdk OVERRIDE="$(SDK_NODE)" PIN=$(SDK_NODE_PIN)
+
+refresh-sdk-ref: ## Atualiza os clones em _references/ (override por symlink e preservado)
+	@for repo in sdk-python sdk-java sdk-node; do \
+		if [ -L "_references/$$repo" ]; then \
+			echo "$(BLUE)↷ $$repo: override, nao atualizado$(NC)"; \
+		elif [ -d "_references/$$repo/.git" ]; then \
+			if ! git -C "_references/$$repo" fetch --quiet --depth 1 origin HEAD \
+			  || ! git -C "_references/$$repo" checkout --quiet --detach FETCH_HEAD; then \
+				echo "$(RED)❌ $$repo: fetch falhou — gerar contra clone velho e pior que nao gerar$(NC)"; \
+				exit 1; \
+			fi; \
+			echo "$(GREEN)✅ $$repo: $$(git -C _references/$$repo rev-parse --short HEAD)$(NC)"; \
+		else \
+			echo "$(RED)❌ $$repo: sem clone em _references, rode make clone-sdk-ref$(NC)"; exit 1; \
+		fi; \
+	done
+
+reference: ## Internal: resolve one reference clone (PIN fixes the commit; empty means remote HEAD)
+	@if [ -n "$(OVERRIDE)" ]; then \
+		if [ ! -d "$(OVERRIDE)/$(MARKER)" ]; then \
+			echo "$(RED)❌ $(REPO): $(OVERRIDE) nao contem $(MARKER)$(NC)"; exit 1; \
+		fi; \
+		ln -sfn "$(OVERRIDE)" _references/$(REPO); \
+		echo "$(GREEN)✅ $(REPO): $(OVERRIDE) (override)$(NC)"; \
+	elif [ -L "_references/$(REPO)" ]; then \
+		echo "$(BLUE)↷ $(REPO): override existente, nao alterado$(NC)"; \
+	elif [ -n "$(PIN)" ]; then \
+		if [ ! -d "_references/$(REPO)/.git" ]; then \
+			git init -q _references/$(REPO); \
+			git -C _references/$(REPO) remote add origin $(SDK_REMOTE)/$(REPO).git; \
+		fi; \
+		if ! git -C _references/$(REPO) fetch -q --depth 1 origin $(PIN) \
+		  || ! git -C _references/$(REPO) checkout -q --detach FETCH_HEAD; then \
+			echo "$(RED)❌ $(REPO): nao foi possivel fixar $(PIN)$(NC)"; exit 1; \
+		fi; \
+		echo "$(GREEN)✅ $(REPO): $$(echo $(PIN) | cut -c1-7) (fixado)$(NC)"; \
+	elif [ -d "_references/$(REPO)/$(MARKER)" ]; then \
+		echo "$(GREEN)✅ $(REPO): _references/$(REPO)$(NC)"; \
 	else \
-		echo "$(GREEN)✅ Python SDK reference already exists$(NC)"; \
+		git clone -q --depth 1 $(SDK_REMOTE)/$(REPO).git _references/$(REPO); \
+		echo "$(GREEN)✅ $(REPO): clonado em _references/$(REPO)$(NC)"; \
 	fi
 
 # ============================================
 # Tests
 # ============================================
 
-test: ## Run all unit tests (Jest)
-	@echo "$(BLUE)Running all unit tests...$(NC)"
-	npm test
+test: test-node test-python ## Run all unit tests (Jest + pytest)
 	@echo "$(GREEN)✅ All tests passed$(NC)"
+
+test-node: ## Run Node unit tests (Jest)
+	@echo "$(BLUE)Running Node tests (Jest)...$(NC)"
+	npm test
+
+test-python: ## Run Python tool tests (pytest)
+	@echo "$(BLUE)Running Python tests (pytest)...$(NC)"
+	python3 -m pytest tests/ -q
 
 test-watch: ## Run tests in watch mode (re-run on file change)
 	@echo "$(BLUE)Running tests in watch mode...$(NC)"
@@ -83,7 +145,7 @@ validate: ## Validate OpenAPI spec (Python)
 
 check-bc: ## Detect breaking changes (Python)
 	@echo "$(BLUE)Checking for breaking changes...$(NC)"
-	python3 tools/breaking-change-detector.py
+	python3 tools/breaking-change-detector.py --base "$(BC_BASE)"
 	@echo "$(GREEN)✅ Breaking change check passed$(NC)"
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)

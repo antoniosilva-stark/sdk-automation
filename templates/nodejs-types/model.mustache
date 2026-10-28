@@ -1,0 +1,41 @@
+{{#models}}{{#model}}
+declare module 'starkbank' {
+
+    export class {{classname}} {
+        /**
+         *
+         * {{classname}} object
+         *
+         * @description {{{description}}}
+         *
+         * Parameters:
+{{#vars}}         * @param {{name}} [{{{dataType}}}{{^required}}, optional{{/required}}]: {{{description}}}
+{{/vars}}         *
+         */
+
+{{#vars}}        {{name}}{{^required}}?{{/required}}: {{{dataType}}}
+{{/vars}}
+        constructor(params: {
+{{#vars}}            {{name}}{{^required}}?{{/required}}: {{{dataType}}}
+{{/vars}}        })
+    }
+
+    export namespace {{classVarName}} {
+{{#vendorExtensions.x-sdk-create}}
+        export function create({{classVarName}}s: {{classname}}[], params?: { user?: Project | Organization | null }): Promise<{{classname}}[]>;
+{{/vendorExtensions.x-sdk-create}}
+{{#vendorExtensions.x-sdk-put}}
+        export function put({{classVarName}}s: {{classname}}[], params?: { user?: Project | Organization | null }): Promise<{{classname}}[]>;
+{{/vendorExtensions.x-sdk-put}}
+{{#vendorExtensions.x-sdk-get}}
+        export function get(id: string, params?: { user?: Project | Organization | null }): Promise<{{classname}}>;
+{{/vendorExtensions.x-sdk-get}}
+{{#vendorExtensions.x-sdk-query}}
+        export function query(params?: { [key: string]: any, user?: Project | Organization | null }): Promise<{{classname}}[]>;
+{{/vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-page}}
+        export function page(params?: { cursor?: string, [key: string]: any, user?: Project | Organization | null }): Promise<[{{classname}}[], string | null]>;
+{{/vendorExtensions.x-sdk-page}}
+    }
+}
+{{/model}}{{/models}}

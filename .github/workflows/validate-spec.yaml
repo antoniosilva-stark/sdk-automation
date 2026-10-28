@@ -7,37 +7,42 @@ on:
       - 'apis/schemas/**'
       - 'tools/breaking-change-detector.py'
 
+concurrency:
+  group: validate-spec-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.9'
+          python-version: '3.11'
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
 
       - name: Install dependencies
-        run: pip install pyyaml openapi-spec-validator && npm ci
+        run: pip install -r requirements.txt && npm ci
 
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
 
-      - name: Detect breaking changes
-        run: python3 tools/breaking-change-detector.py
-        continue-on-error: false
+      - name: Lint spec resources
+        run: python3 tools/lint-spec.py --quiet --require SplitProfile,Invoice,Transfer,Transaction
 
-      - name: Comment on PR (if BC detected)
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '⚠️ Breaking changes detected! Please review and discuss with Tech-Lead (@elias) before proceeding.'
-            })
+      - name: Detect breaking changes
+        id: breaking-change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 tools/breaking-change-detector.py --base "$BASE_SHA"
