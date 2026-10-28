@@ -700,7 +700,8 @@ def test_requiredSectionAndWrappedDescriptionAreKept(tmpPath):
 
 def test_docstringWithoutSectionsKeepsTitleAndDescriptionOnly(extractSchema):
     parsed = extractSchema.parseOperationDocstring(
-        "# [DEPRECATED] Create Widgets\nThis function is deprecated and always raises a StarkError."
+        "# [DEPRECATED] Create Widgets\nThis function is deprecated and always raises a StarkError.",
+        "Widget.create",
     )
 
     assert parsed == {
@@ -790,3 +791,182 @@ def test_twoExtractionsProduceTheSameBytesWhateverTheExportOrder(tmpPath):
     assert [code for code, _ in runs] == [0, 0, 0]
     assert runs[0][1] == runs[1][1]
     assert runs[0][1].split("\n", 1)[1] == runs[2][1].split("\n", 1)[1]
+
+
+def _parsed(extractSchema, *lines: str) -> dict:
+    return extractSchema.parseOperationDocstring("\n".join(("# Retrieve Widgets", *lines)), "Widget.query")
+
+
+def test_typeIsReadWithBalancedBracketsWhateverTheDescriptionHolds(extractSchema):
+    parsed = _parsed(
+        extractSchema,
+        "## Parameters (optional):",
+        "- tags [list of strings, default []]: tags to filter. ex: [\"a\"]",
+        "- code [string]: see [the docs]: https://starkbank.com/docs",
+        "- rules [list of [Rule, dict], default None]: nested type",
+    )
+
+    assert [(param["name"], param["type"], param["description"]) for param in parsed["params"]] == [
+        ("tags", "list of strings, default []", 'tags to filter. ex: ["a"]'),
+        ("code", "string", "see [the docs]: https://starkbank.com/docs"),
+        ("rules", "list of [Rule, dict], default None", "nested type"),
+    ]
+
+
+def test_lineBeforeTheFirstReturnItemIsWarnedAndDiscarded(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Return:", "stray text", "- generator of Widgets")
+
+    assert parsed["returns"] == ["generator of Widgets"]
+    assert "[WARN] Widget.query: linha fora do formato: stray text" in capsys.readouterr().err
+
+
+def test_lineBeforeTheFirstParameterIsWarnedAndDiscarded(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (optional):", "stray text", "- limit [integer]: max")
+
+    assert [param["name"] for param in parsed["params"]] == ["limit"]
+    assert "[WARN] Widget.query: linha fora do formato: stray text" in capsys.readouterr().err
+
+
+def test_lineKeptByFallbackOnAnItemOfAnotherSectionIsWarned(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (required):", "- id [string]: unique id",
+                     "## Parameters (optional):", "orphan continuation")
+
+    assert parsed["params"][0]["description"] == "unique id orphan continuation"
+    assert "[WARN] Widget.query: linha fora do formato: orphan continuation" in capsys.readouterr().err
+
+
+def test_bulletThatIsNotATypedItemIsWarnedNotGluedToThePreviousOne(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (optional):", "- limit [integer]: max", "- broken item without type")
+
+    assert parsed["params"][0]["description"] == "max"
+    assert "linha fora do formato: - broken item without type" in capsys.readouterr().err
+
+
+def test_unrecognizedHeaderIsWarnedAndItsLinesNeverBecomeReturns(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Return:", "- generator of Widgets", "## Raises:", "- StarkError: on failure")
+
+    assert parsed["returns"] == ["generator of Widgets"]
+    assert "[WARN] Widget.query: cabeçalho não reconhecido" in capsys.readouterr().err
+
+
+def test_unrecognizedHeaderDoesNotFailTheExtraction(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS.replace("    ## Return:\n    - Widget object", "    ## Raises:\n    - StarkError: boom\n"
+                                           "    ## Return:\n    - Widget object", 1)
+    root = _documentedSdk(tmpPath, operations=operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.get: cabeçalho não reconhecido" in captured.err
+    assert yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]["get"]["returns"] == [
+        "Widget object with updated attributes"
+    ]
+
+
+CONDITIONAL_OPERATIONS = '''
+
+def create(widgets, user=None):
+    """# Create Widgets
+    Send a list of Widget objects for creation in the Stark Bank API
+    ## Parameters (required):
+    - widgets [list of Widget objects]: list of Widget objects to be created in the API
+    ## Parameters (conditionally required):
+    - code [string, default None]: needed for some kinds. ex: "fastFood"
+    ## Return:
+    - list of Widget objects
+        with updated attributes
+    - cursor to the next page
+    """
+    return rest.post_multi(resource=_resource, entities=widgets, user=user)
+'''
+
+
+def test_conditionallyRequiredSectionAndWrappedReturnsAreKept(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath, "create", CONDITIONAL_OPERATIONS))["create"]
+
+    assert [(param["name"], param["section"]) for param in docs["params"]] == [
+        ("widgets", "required"),
+        ("code", "conditional"),
+    ]
+    assert docs["returns"] == ["list of Widget objects with updated attributes", "cursor to the next page"]
+
+
+ESCAPING_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve "quoted" widgets: a #1 case — ação
+    Matches 'single' quotes, key: value, # not a comment, ünïcödé ✓
+    ## Parameters (required):
+    - id [string, default "x: y"]: say "hi": it's # fine, c:/path — ação ✓
+    ## Return:
+    - Widget: "ok" # done
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+'''
+
+
+def test_yamlSpecialCharactersSurviveTheRoundTrip(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath, "get", ESCAPING_OPERATIONS))["get"]
+
+    assert docs["summary"] == 'Retrieve "quoted" widgets: a #1 case — ação'
+    assert docs["description"] == ["Matches 'single' quotes, key: value, # not a comment, ünïcödé ✓"]
+    assert docs["params"] == [{
+        "name": "id",
+        "type": 'string, default "x: y"',
+        "description": 'say "hi": it\'s # fine, c:/path — ação ✓',
+        "section": "required",
+    }]
+    assert docs["returns"] == ['Widget: "ok" # done']
+
+
+LOG_QUERY_AND_PAGE = '''
+
+def query(limit=None, user=None):
+    """# Retrieve widget.Logs
+    Receive a generator of Widget.Log objects
+    ## Parameters (optional):
+    - limit [integer, default None]: maximum number of objects to be retrieved
+    ## Return:
+    - generator of widget.Log objects
+    """
+    return rest.get_stream(resource=_resource, limit=limit)
+
+
+def page(cursor=None, user=None):
+    """# Retrieve paged widget.Logs
+    Receive a list of widget.Log objects
+    ## Parameters (optional):
+    - cursor [string, default None]: cursor returned on the previous page function call
+    ## Return:
+    - list of widget.Log objects
+    """
+    return rest.get_page(resource=_resource, cursor=cursor)
+'''
+
+
+def test_logWithDifferentOperationsThanTheResourceKeepsOnlyItsOwn(tmpPath):
+    root = _documentedSdk(tmpPath, "get, query, page")
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import query, page\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_QUERY_AND_PAGE, encoding="utf-8")
+
+    docs = _extractedDocs(root)
+
+    assert set(docs["log"]) == {"query", "page"}
+    assert docs["log"]["query"]["summary"] == "Retrieve widget.Logs"
+    assert docs["query"]["summary"] == "Retrieve Widgets"
+
+
+def test_logDocsNeverAppearWithoutTheResourceInit(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get")
+    (root / "starkbank" / "widget" / "__init__.py").unlink()
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import get\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_OPERATIONS, encoding="utf-8")
+
+    assert extractSchema.declaredDocs(root, "Widget") == {}
+

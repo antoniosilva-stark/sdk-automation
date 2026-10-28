@@ -322,4 +322,3 @@ def test_reapplyingOnlyAddsTheDocsToAnExistingSchema(tmpPath):
     assert set(after["Widget"].pop("x-sdk-docs")) == {"get", "query", "page"}
     assert after == before
     assert spec.read_text(encoding="utf-8") == specBefore
-

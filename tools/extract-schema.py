@@ -24,6 +24,7 @@ SECTION_OPTIONAL = "optional"
 SECTION_READONLY = "readonly"
 SECTION_CONDITIONAL = "conditional"
 SECTION_RETURNS = "returns"
+SECTION_IGNORED = "ignored"
 
 _SECTIONS = {
     "## Parameters (required):": SECTION_REQUIRED,
@@ -41,6 +42,7 @@ _OPERATION_SECTIONS = {
 }
 _RETURN_SECTION = "## Return:"
 
+_ITEM_HEAD = re.compile(r"^-\s+(\w+)\s+\[")
 _FIELD = re.compile(r"^-\s+(\w+)\s+\[(.+)\]\s*:\s*(.*)$")
 _OPTIONS = re.compile(r"Options:\s*(.+)$")
 
@@ -199,12 +201,15 @@ def collectDocs(initFile: Path, moduleFile: Path, label: str) -> dict:
         if not doc:
             warn(f"[WARN] {label}.{name} sem docstring")
             continue
-        docs[name] = parseOperationDocstring(doc)
+        docs[name] = parseOperationDocstring(doc, f"{label}.{name}")
     return docs
 
 
 def declaredDocs(root: Path, resource: str) -> dict:
     package = Path(root) / "starkbank" / resource.lower()
+    if not (package / "__init__.py").is_file():
+        return {}
+
     docs = collectDocs(package / "__init__.py", modulePath(root, resource), resource)
     logDocs = collectDocs(package / "log" / "__init__.py", package / "log" / "__log.py", f"{resource}.log")
     if not logDocs:
@@ -400,7 +405,63 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
     return (" ".join(summary), fields)
 
 
-def parseOperationDocstring(doc: str) -> dict:
+def splitTypedItem(line: str) -> tuple[str, str, str] | None:
+    """`- nome [tipo]: descricao` com o tipo lido por balanceamento de colchetes: a descricao
+    pode conter `]:` ou colchetes, e o `_FIELD` guloso engoliria parte dela no tipo."""
+    head = _ITEM_HEAD.match(line)
+    if not head:
+        return None
+
+    depth = 0
+    for index in range(head.end() - 1, len(line)):
+        depth += (line[index] == "[") - (line[index] == "]")
+        if depth:
+            continue
+        rest = line[index + 1:].lstrip()
+        if not rest.startswith(":"):
+            return None
+        return (head.group(1), line[head.end():index].strip(), rest[1:].strip())
+    return None
+
+
+def operationSection(header: str, label: str) -> str:
+    if header == _RETURN_SECTION:
+        return SECTION_RETURNS
+    if header in _OPERATION_SECTIONS:
+        return _OPERATION_SECTIONS[header]
+    warn(f"[WARN] {label}: cabeçalho não reconhecido, seção ignorada: {header}")
+    return SECTION_IGNORED
+
+
+def addSectionLine(parsed: dict, section: str, line: str, label: str) -> None:
+    returns, params = parsed["returns"], parsed["params"]
+    outOfFormat = f"[WARN] {label}: linha fora do formato: {line[:80]}"
+
+    if section == SECTION_RETURNS:
+        if line.startswith("- "):
+            returns.append(line[2:].strip())
+            return
+        if not returns:
+            warn(outOfFormat)
+            return
+        returns[-1] += f" {line}"
+        return
+
+    item = splitTypedItem(line)
+    if item:
+        params.append({"name": camelCase(item[0]), "type": item[1], "description": item[2], "section": section})
+        return
+
+    # linha quebrada do item anterior: descartar perderia texto do docstring
+    if line.startswith("- ") or not params:
+        warn(outOfFormat)
+        return
+    if params[-1]["section"] != section:
+        warn(outOfFormat)
+    params[-1]["description"] += f" {line}"
+
+
+def parseOperationDocstring(doc: str, label: str) -> dict:
     """Texto e tipo ficam como o Python escreveu: traduzir para o vocabulario do SDK-alvo e
     trabalho de quem emite, e uma traducao aqui nao se desfaria."""
     lines = [line.strip() for line in doc.splitlines() if line.strip()]
@@ -408,29 +469,15 @@ def parseOperationDocstring(doc: str) -> dict:
     section = None
 
     for line in lines[1:]:
-        if line == _RETURN_SECTION:
-            section = SECTION_RETURNS
-            continue
-        if line in _OPERATION_SECTIONS:
-            section = _OPERATION_SECTIONS[line]
+        if line.startswith("## "):
+            section = operationSection(line, label)
             continue
         if section is None:
             parsed["description"].append(line)
             continue
-        if section == SECTION_RETURNS and line.startswith("- "):
-            parsed["returns"].append(line[2:].strip())
+        if section == SECTION_IGNORED:
             continue
-        match = _FIELD.match(line)
-        if section != SECTION_RETURNS and match:
-            parsed["params"].append({"name": camelCase(match.group(1)), "type": match.group(2).strip(),
-                                     "description": match.group(3).strip(), "section": section})
-            continue
-        # linha quebrada do item anterior: descartar perderia texto do docstring
-        if section == SECTION_RETURNS and parsed["returns"]:
-            parsed["returns"][-1] += f" {line}"
-            continue
-        if section != SECTION_RETURNS and parsed["params"]:
-            parsed["params"][-1]["description"] += f" {line}"
+        addSectionLine(parsed, section, line, label)
     return parsed
 
 
