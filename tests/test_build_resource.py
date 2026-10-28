@@ -1,6 +1,8 @@
+import re
 import hashlib
-import yaml
 from pathlib import Path
+import yaml
+import pytest
 
 from conftest import REPO_ROOT, requiresGenerator, runTool
 
@@ -681,3 +683,167 @@ def test_aBuildLeavesTheSpecAndSchemasByteIdenticalAndRemovesItsCopy(tmpPath, re
     assert _snapshot(REPO_ROOT / "apis") == before
     assert list(scratch.glob("build-apis-*")) == []
     assert list(scratch.glob("build-resource-*")) == []
+
+
+JAVA_SOURCES = "src/main/java/com/starkbank"
+PYTHON_RESIDUE = ("datetime.", '\\"', "None", "User.defaultUser")
+USER_LINE = ("@param user [Organization/Project object, default null]: Organization or Project object."
+             " Not necessary if starkbank.Settings.user was set before function call")
+
+
+def _generatedSource(builtOnce, resource: str, *extra: str) -> str:
+    code, out, target = builtOnce(resource, "java", *extra)
+    assert code == 0, out
+    return (target / JAVA_SOURCES / f"{resource}.java").read_text(encoding="utf-8")
+
+
+def _javadocBefore(source: str, signature: str) -> list[str]:
+    """Linhas do Javadoc que fecha logo acima da assinatura, ignorando anotacoes."""
+    head = source[:source.index(signature)].rstrip().splitlines()
+    while head and head[-1].strip().startswith("@") and not head[-1].strip().startswith("@param"):
+        head.pop()
+    assert head and head[-1].strip() == "*/", f"sem Javadoc acima de {signature}"
+    block = []
+    while head[-1].strip() != "/**":
+        block.append(head.pop().strip())
+        if not head:
+            break
+    return [line.removeprefix("* ").removeprefix("*") for line in reversed(block[1:])]
+
+
+@requiresGenerator
+def test_generatedClassHasNoClassJavadocAndTheDocLivesOnTheDataField(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    declaration = source.index("public final class SplitProfile")
+    assert "/**" not in source[:declaration]
+    doc = _javadocBefore(source, "static ClassData data = new ClassData(SplitProfile.class")
+    assert doc[0] == "SplitProfile object"
+    assert doc.count("Parameters:") == 1
+
+
+@requiresGenerator
+def test_generatedFieldDocHasOneLinePerFieldWithTheArrayDescription(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    doc = _javadocBefore(source, "static ClassData data = new ClassData(SplitProfile.class")
+    assert "tags [list of strings]: list of strings for tagging" in doc
+    assert 'created [string]: creation datetime for the SplitProfile. ex: "2020-03-10 10:30:00.000000+00:00"' in doc
+
+
+@requiresGenerator
+def test_generatedConstructorsAreDocumentedExceptTheEmptyOne(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    allArgs = _javadocBefore(source, "public SplitProfile(String interval, Integer delay")
+    mapDoc = _javadocBefore(source, "public SplitProfile(Map<String, Object> data)")
+    assert "@param interval [string]: frequency of transfer, default \"week\". Options: \"day\", \"week\", \"month\"" in allArgs
+    assert "@param data map of properties for the creation of the SplitProfile" in mapDoc
+    assert "Attributes (return-only):" in mapDoc
+    emptyConstructor = source.index("public SplitProfile() {")
+    assert not source[:emptyConstructor].rstrip().endswith("*/")
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource,extra", [("SplitProfile", ()), ("Transfer", ("--advisory",)),
+                                            ("VerifiedTransfer", ("--advisory",))])
+def test_generatedJavadocHasNoPythonResidueNorEmptyDescription(builtOnce, resource, extra):
+    source = _generatedSource(builtOnce, resource, *extra)
+
+    for number, line in enumerate(source.splitlines(), start=1):
+        if not line.strip().startswith("*"):
+            continue
+        assert not any(token in line for token in PYTHON_RESIDUE), f"{resource}:{number}: {line}"
+        assert not re.search(r"\]\s*(, optional)?:\s*$", line), f"{resource}:{number}: descricao vazia: {line}"
+        assert line == line.rstrip(), f"{resource}:{number}: espaco no fim"
+
+
+@requiresGenerator
+def test_generatedQueryAndPageListTheirFiltersAndTheDecidedUserText(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    query = _javadocBefore(source, "public static Generator<SplitProfile> query(Map<String, Object> params, User user)")
+    page = _javadocBefore(source, "public static Page page(Map<String, Object> params, User user)")
+    assert "@param params map of parameters for the query" in query
+    assert "limit [integer, default null]: maximum number of objects to be retrieved. Unlimited if null. ex: 35" in query
+    assert 'after [string, default null] date filter for objects created or updated only after specified date. ex: "2020-03-10"' in query
+    assert "@param params parameters of the query" in page
+    assert "cursor [string, default null]: cursor returned on the previous page function call" in page
+    assert any(line.startswith("tags [list of strings, default null]") for line in page)
+    assert USER_LINE in query and USER_LINE in page
+
+
+@requiresGenerator
+def test_generatedOverloadsListOnlyTheirOwnParameters(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    noArguments = _javadocBefore(source, "public static Generator<SplitProfile> query() throws Exception")
+    onlyUser = _javadocBefore(source, "public static Generator<SplitProfile> query(User user)")
+    onlyParams = _javadocBefore(source, "public static Generator<SplitProfile> query(Map<String, Object> params) ")
+    assert "Parameters:" not in noArguments
+    assert [line for line in onlyUser if line.startswith("@param")] == [USER_LINE]
+    assert not any(line.startswith("@param user") for line in onlyParams)
+
+
+@requiresGenerator
+def test_generatedTitlesFollowTheVerbPhrases(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    titles = {
+        "public static List<SplitProfile> put(List<?> splitProfiles) ": "Create or update a SplitProfile",
+        "public static SplitProfile get(String id) ": "Retrieve a specific SplitProfile",
+        "public static Generator<SplitProfile> query() ": "Retrieve SplitProfiles",
+        "public static Page page() ": "Retrieve paged SplitProfiles",
+        "public static SplitProfile.Log get(String id) ": "Retrieve a specific SplitProfile Log",
+        "public static Generator<SplitProfile.Log> query() ": "Retrieve SplitProfile Logs",
+        "public static SplitProfile.Log.Page page() ": "Retrieve paged SplitProfile.Logs",
+    }
+    for signature, title in titles.items():
+        assert _javadocBefore(source, signature)[0] == title, signature
+
+
+@requiresGenerator
+def test_generatedReturnBlockDescribesThePageObject(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    doc = _javadocBefore(source, "public static Page page() ")
+    assert doc[-5:] == [
+        "Return:",
+        "@return SplitProfile.Page object:",
+        "SplitProfile.Page.splitProfiles: list of SplitProfile objects with updated attributes",
+        "SplitProfile.Page.cursor: cursor to retrieve the next page of SplitProfile objects",
+        "@throws Exception error in the request",
+    ]
+
+
+@requiresGenerator
+def test_generatedLogOperationsKeepTheirFiltersAndLogReturn(builtOnce):
+    source = _generatedSource(builtOnce, "SplitProfile")
+
+    doc = _javadocBefore(source, "public static Generator<SplitProfile.Log> query(Map<String, Object> params, User user)")
+    assert any(line.startswith("profileIds [list of strings, default null]") for line in doc)
+    assert "@return generator of SplitProfile Log objects with updated attributes" in doc
+    assert USER_LINE in doc
+
+
+@requiresGenerator
+def test_generatedResourceWithLogAndPdfDocumentsEveryOperation(builtOnce):
+    source = _generatedSource(builtOnce, "Transfer", "--advisory")
+
+    assert _javadocBefore(source, "public static List<Transfer> create(List<?> transfers) ")[0] == "Create Transfers"
+    pdf = _javadocBefore(source, "public static InputStream pdf(String id, User user)")
+    assert pdf[0] == "Retrieve a specific Transfer pdf file"
+    assert USER_LINE in pdf
+    logQuery = _javadocBefore(source, "public static Generator<Transfer.Log> query(Map<String, Object> params) ")
+    assert any(line.startswith("types [list of strings, default null]") for line in logQuery)
+
+
+@requiresGenerator
+def test_generatedCreateOnlyResourceDocumentsItsCreate(builtOnce):
+    source = _generatedSource(builtOnce, "VerifiedTransfer", "--advisory")
+
+    doc = _javadocBefore(source, "public static List<VerifiedTransfer> create(List<?> verifiedTransfers) ")
+    assert doc[0] == "Create VerifiedTransfers"
+    assert "@param verifiedTransfers [list of VerifiedTransfer objects or HashMaps]: " \
+           "list of VerifiedTransfer objects to be created in the API" in doc
+    assert "Retrieve" not in source
