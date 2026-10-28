@@ -42,6 +42,138 @@ components:
         - organizationId
         - pictureUrl
         - created
+      x-sdk-docs:
+        create:
+          summary: "Create Workspace"
+          description:
+            - "Send a Workspace for creation in the Stark Bank API"
+          params:
+            - name: "username"
+              type: "string"
+              description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+              section: "required"
+            - name: "name"
+              type: "string"
+              description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""
+              section: "required"
+            - name: "allowedTaxIds"
+              type: "list of strings, default None"
+              description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization object, default None"
+              description: "Organization object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Workspace object with updated attributes"
+        get:
+          summary: "Retrieve a specific Workspace"
+          description:
+            - "Receive a single Workspace object previously created in the Stark Bank API by passing its id"
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Workspace object with updated attributes"
+        query:
+          summary: "Retrieve Workspaces"
+          description:
+            - "Receive a generator of Workspace objects previously created in the Stark Bank API."
+            - "If no filters are passed and the user is an Organization, all of the Organization Workspaces"
+            - "will be retrieved."
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "username"
+              type: "string, default None"
+              description: "query by the simplified name that defines the workspace URL. This name is always unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+              section: "optional"
+            - name: "ids"
+              type: "list of strings, default None"
+              description: "list of ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of Workspace objects with updated attributes"
+        page:
+          summary: "Retrieve paged Workspaces"
+          description:
+            - "Receive a list of up to 100 Workspace objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your requests."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "username"
+              type: "string, default None"
+              description: "query by the simplified name that defines the workspace URL. This name is always unique across all Stark Bank Workspaces. ex: \"starkbankworkspace\""
+              section: "optional"
+            - name: "ids"
+              type: "list of strings, default None"
+              description: "list of ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of Workspace objects with updated attributes"
+            - "cursor to retrieve the next page of Workspace objects"
+        update:
+          summary: "Update Workspace entity"
+          description:
+            - "Update a Workspace by passing its ID."
+          params:
+            - name: "id"
+              type: "string"
+              description: "Workspace ID. ex: '5656565656565656'"
+              section: "required"
+            - name: "pictureType"
+              type: "string"
+              description: "picture MIME type. This parameter will be required if the picture parameter is informed ex: \"image/png\" or \"image/jpeg\""
+              section: "conditional"
+            - name: "username"
+              type: "string, default None"
+              description: "Simplified name to define the workspace URL. This name must be unique across all Stark Bank Workspaces. ex: \"starkbank-workspace\""
+              section: "optional"
+            - name: "name"
+              type: "string, default None"
+              description: "Full name that identifies the Workspace. This name will appear when people access the Workspace on our platform, for example. ex: \"Stark Bank Workspace\""
+              section: "optional"
+            - name: "allowedTaxIds"
+              type: "list of strings, default None"
+              description: "list of tax IDs that will be allowed to send Deposits to this Workspace. If empty, all are allowed. ex: [\"012.345.678-90\", \"20.018.183/0001-80\"]"
+              section: "optional"
+            - name: "status"
+              type: "string, default None"
+              description: "current Workspace status. Options: \"active\" or \"blocked\""
+              section: "optional"
+            - name: "picture"
+              type: "bytes, default None"
+              description: "Binary buffer of the picture. ex: open(\"/path/to/file.png\", \"rb\").read()"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "target Workspace with updated attributes"
 
     WorkspaceCreate:
       type: object

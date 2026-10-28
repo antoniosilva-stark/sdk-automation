@@ -23,6 +23,22 @@ components:
         - id
         - type
         - payment
+      x-sdk-docs:
+        create:
+          summary: "Create PaymentPreviews"
+          description:
+            - "Send a list of PaymentPreviews objects for processing in the Stark Bank API"
+          params:
+            - name: "previews"
+              type: "list of PaymentPreviews objects"
+              description: "list of PaymentPreviews objects to be created in the API"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of PaymentPreviews objects with updated attributes"
 
     PaymentPreviewCreate:
       type: object

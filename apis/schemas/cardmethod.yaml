@@ -19,6 +19,22 @@ components:
         - code
         - name
         - number
+      x-sdk-docs:
+        query:
+          summary: "Retrieve CardMethods"
+          description:
+            - "Receive a generator of CardMethod objects previously created in the Stark Bank API"
+          params:
+            - name: "search"
+              type: "string, default None"
+              description: "keyword to search for code, name, number or short_code"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of CardMethod objects with updated attributes"
 
     CardMethodCreate:
       type: object

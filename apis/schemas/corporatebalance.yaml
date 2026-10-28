@@ -33,6 +33,18 @@ components:
         - maxLimit
         - currency
         - updated
+      x-sdk-docs:
+        get:
+          summary: "Retrieve the CorporateBalance object"
+          description:
+            - "Receive the CorporateBalance object linked to your Workspace in the Stark Bank API"
+          params:
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call."
+              section: "optional"
+          returns:
+            - "CorporateBalance object with updated attributes"
 
     CorporateBalanceCreate:
       type: object

@@ -20,6 +20,22 @@ components:
       required:
         - name
         - number
+      x-sdk-docs:
+        query:
+          summary: "Retrieve MerchantCategories"
+          description:
+            - "Receive a generator of MerchantCategory objects previously created in the Stark Bank API"
+          params:
+            - name: "search"
+              type: "string, default None"
+              description: "keyword to search for code, type, name or number"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of MerchantCategory objects with updated attributes"
 
     MerchantCategoryCreate:
       type: object
