@@ -333,6 +333,17 @@ def test_withoutCreateOnlyAnExistingDeclaredPathDoesNotFail(remote):
     assert outputs == {"exists": "false", "old": ""}
 
 
+def test_createOnlyFailsClosedWhenTheBaseTreeCannotBeListed(remote):
+    target = _checkout(remote)
+
+    # caminho fora do repositorio faz o ls-tree falhar: erro de verdade nao pode ser lido como "ausente"
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "../escape"), "--create-only")
+
+    assert code == 2, log
+    assert outputs == {}
+    assert _localBranches(target) == ""
+
+
 def test_createOnlyWithoutAllowedPathsFileIsAnArgumentError(remote):
     target = _checkout(remote)
 
