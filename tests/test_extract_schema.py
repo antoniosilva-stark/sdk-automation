@@ -1,8 +1,9 @@
+import sys
 import yaml
 import pytest
 from pathlib import Path
 
-from conftest import PYTHON_SDK, REPO_ROOT, requiresPythonSdk, runTool
+from conftest import PYTHON_SDK, REPO_ROOT, WIDGET_OPERATIONS, requiresPythonSdk, runTool
 
 WIDGET_MODULE = '''
 from starkcore.utils.resource import Resource
@@ -649,3 +650,143 @@ def test_backslashInADescriptionSurvivesTheYamlRoundTrip(extractSchema):
     rendered = extractSchema.yamlScalar('regex \\d+ and a tab \\t, with "quotes"')
 
     assert yaml.safe_load(f"description: {rendered}")["description"] == 'regex \\d+ and a tab \\t, with "quotes"'
+
+
+def _documentedSdk(tmpPath: Path, exports: str = "get, query, page", operations: str = WIDGET_OPERATIONS) -> Path:
+    return _withInit(_fakeSdk(tmpPath, body=WIDGET_MODULE + operations), "widget", exports)
+
+
+def _extractedDocs(root: Path) -> dict:
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    return yaml.safe_load(out)["components"]["schemas"]["Widget"]["x-sdk-docs"]
+
+
+def test_queryAndPageFiltersKeepTheOriginalTypeDescriptionAndSection(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath))
+    query, page = docs["query"], docs["page"]
+
+    assert query["summary"] == "Retrieve Widgets"
+    assert query["description"] == [
+        "Receive a generator of Widget objects previously created in the Stark Bank API.",
+        "Use this function instead of page if you want to stream Widgets without worrying about cursors and pagination.",
+    ]
+    assert [param["name"] for param in query["params"]] == ["limit", "after", "tags", "externalIds", "user"]
+    assert query["params"][3] == {
+        "name": "externalIds",
+        "type": "list of strings, default None",
+        "description": 'list of external ids to filter retrieved objects. ex: ["5656565656565656"]',
+        "section": "optional",
+    }
+    assert query["params"][1]["type"] == "datetime.date or string, default None"
+    assert query["returns"] == ["generator of Widget objects with updated attributes"]
+    assert [param["name"] for param in page["params"]][:2] == ["cursor", "limit"]
+    assert page["returns"] == [
+        "list of Widget objects with updated attributes",
+        "cursor to retrieve the next page of Widget objects",
+    ]
+
+
+def test_requiredSectionAndWrappedDescriptionAreKept(tmpPath):
+    params = _extractedDocs(_documentedSdk(tmpPath))["get"]["params"]
+
+    assert params[0]["name"] == "id"
+    assert params[0]["section"] == "required"
+    assert params[1]["description"] == (
+        "Organization or Project object. Not necessary if starkbank.user was set before function call"
+    )
+
+
+def test_docstringWithoutSectionsKeepsTitleAndDescriptionOnly(extractSchema):
+    parsed = extractSchema.parseOperationDocstring(
+        "# [DEPRECATED] Create Widgets\nThis function is deprecated and always raises a StarkError."
+    )
+
+    assert parsed == {
+        "summary": "[DEPRECATED] Create Widgets",
+        "description": ["This function is deprecated and always raises a StarkError."],
+        "params": [],
+        "returns": [],
+    }
+
+
+def test_operationWithoutDocstringWarnsAndIsLeftOut(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS + "\n\ndef delete(id, user=None):\n    return rest.delete_id(id=id)\n"
+    root = _documentedSdk(tmpPath, "get, query, page, delete", operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.delete sem docstring" in captured.err
+    docs = yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]
+    assert "delete" not in docs
+    assert {"get", "query", "page"} <= set(docs)
+
+
+def test_exportWithoutFlagIsWarnedAndNotDocumented(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS + '\n\ndef parse(content):\n    """# Parse a Widget"""\n    return content\n'
+    root = _documentedSdk(tmpPath, "get, parse", operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.parse exportada sem flag" in captured.err
+    assert list(yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]) == ["get"]
+
+
+def test_resourceWithoutInitHasNoDocsKey(tmpPath):
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(_fakeSdk(tmpPath)))
+
+    assert code == 0, out
+    assert "x-sdk-docs" not in out
+
+
+def test_docsStayOutOfTheCreateSchema(tmpPath):
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(_documentedSdk(tmpPath)))
+
+    assert code == 0, out
+    assert "x-sdk-docs" not in yaml.safe_load(out)["components"]["schemas"]["WidgetCreate"]
+
+
+LOG_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve a specific widget.Log
+    Receive a single Widget.Log object previously created by the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Return:
+    - widget.Log object with updated attributes
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+'''
+
+
+def test_logDocsComeUnderTheirOwnKey(tmpPath):
+    root = _documentedSdk(tmpPath)
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import get\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_OPERATIONS, encoding="utf-8")
+
+    docs = _extractedDocs(root)
+
+    assert docs["log"]["get"]["summary"] == "Retrieve a specific widget.Log"
+    assert docs["log"]["get"]["returns"] == ["widget.Log object with updated attributes"]
+    assert docs["get"]["summary"] == "Retrieve a specific Widget"
+    assert set(docs["log"]) == {"get"}
+
+
+def test_twoExtractionsProduceTheSameBytesWhateverTheExportOrder(tmpPath):
+    first = _documentedSdk(tmpPath / "first", "get, query, page")
+    second = _documentedSdk(tmpPath / "second", "page, get, query")
+    runs = [runTool("extract-schema.py", "Widget", "--from", str(root)) for root in (first, first, second)]
+
+    assert [code for code, _ in runs] == [0, 0, 0]
+    assert runs[0][1] == runs[1][1]
+    assert runs[0][1].split("\n", 1)[1] == runs[2][1].split("\n", 1)[1]

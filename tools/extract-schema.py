@@ -22,6 +22,8 @@ VENDORED_ROOT = Path("_references/sdk-python")
 SECTION_REQUIRED = "required"
 SECTION_OPTIONAL = "optional"
 SECTION_READONLY = "readonly"
+SECTION_CONDITIONAL = "conditional"
+SECTION_RETURNS = "returns"
 
 _SECTIONS = {
     "## Parameters (required):": SECTION_REQUIRED,
@@ -31,6 +33,13 @@ _SECTIONS = {
     "## Attributes (return only):": SECTION_READONLY,
     "## Attributes:": SECTION_READONLY,
 }
+
+_OPERATION_SECTIONS = {
+    "## Parameters (required):": SECTION_REQUIRED,
+    "## Parameters (optional):": SECTION_OPTIONAL,
+    "## Parameters (conditionally required):": SECTION_CONDITIONAL,
+}
+_RETURN_SECTION = "## Return:"
 
 _FIELD = re.compile(r"^-\s+(\w+)\s+\[(.+)\]\s*:\s*(.*)$")
 _OPTIONS = re.compile(r"Options:\s*(.+)$")
@@ -170,6 +179,37 @@ def logEntity(root: Path, resource: str) -> str | None:
         if call.args[0].id in parentResources:
             return camelCase(target.attr)
     return None
+
+
+def collectDocs(initFile: Path, moduleFile: Path, label: str) -> dict:
+    """Ordem fixa de OPERATION_FLAGS, nao a dos exports: reordenar o __init__ no sdk-python
+    nao pode mudar os bytes do schema."""
+    if not initFile.is_file() or not moduleFile.is_file():
+        return {}
+
+    exported = set(exportedNames(initFile.read_text(encoding="utf-8")))
+    functions = {node.name: node for node in ast.parse(moduleFile.read_text(encoding="utf-8")).body
+                 if isinstance(node, ast.FunctionDef)}
+
+    docs = {}
+    for name in OPERATION_FLAGS:
+        if name not in exported:
+            continue
+        doc = ast.get_docstring(functions[name]) if name in functions else None
+        if not doc:
+            warn(f"[WARN] {label}.{name} sem docstring")
+            continue
+        docs[name] = parseOperationDocstring(doc)
+    return docs
+
+
+def declaredDocs(root: Path, resource: str) -> dict:
+    package = Path(root) / "starkbank" / resource.lower()
+    docs = collectDocs(package / "__init__.py", modulePath(root, resource), resource)
+    logDocs = collectDocs(package / "log" / "__init__.py", package / "log" / "__log.py", f"{resource}.log")
+    if not logDocs:
+        return docs
+    return {**docs, "log": logDocs}
 
 
 def resourceClass(source: str, resource: str) -> ast.ClassDef:
@@ -360,6 +400,40 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
     return (" ".join(summary), fields)
 
 
+def parseOperationDocstring(doc: str) -> dict:
+    """Texto e tipo ficam como o Python escreveu: traduzir para o vocabulario do SDK-alvo e
+    trabalho de quem emite, e uma traducao aqui nao se desfaria."""
+    lines = [line.strip() for line in doc.splitlines() if line.strip()]
+    parsed = {"summary": lines[0].lstrip("#").strip(), "description": [], "params": [], "returns": []}
+    section = None
+
+    for line in lines[1:]:
+        if line == _RETURN_SECTION:
+            section = SECTION_RETURNS
+            continue
+        if line in _OPERATION_SECTIONS:
+            section = _OPERATION_SECTIONS[line]
+            continue
+        if section is None:
+            parsed["description"].append(line)
+            continue
+        if section == SECTION_RETURNS and line.startswith("- "):
+            parsed["returns"].append(line[2:].strip())
+            continue
+        match = _FIELD.match(line)
+        if section != SECTION_RETURNS and match:
+            parsed["params"].append({"name": camelCase(match.group(1)), "type": match.group(2).strip(),
+                                     "description": match.group(3).strip(), "section": section})
+            continue
+        # linha quebrada do item anterior: descartar perderia texto do docstring
+        if section == SECTION_RETURNS and parsed["returns"]:
+            parsed["returns"][-1] += f" {line}"
+            continue
+        if section != SECTION_RETURNS and parsed["params"]:
+            parsed["params"][-1]["description"] += f" {line}"
+    return parsed
+
+
 def renderSchema(name: str, summary: str, fields: list[dict], indent: int,
                  markId: bool = False) -> list[str]:
     pad = " " * indent
@@ -397,6 +471,39 @@ def yamlScalar(text: str) -> str:
     return json.dumps(" ".join(text.split()), ensure_ascii=False)
 
 
+def renderOperationDocs(name: str, parsed: dict, indent: int) -> list[str]:
+    pad = " " * indent
+    lines = [f"{pad}{name}:", f"{pad}  summary: {yamlScalar(parsed['summary'])}"]
+
+    lines.append(f"{pad}  description:" if parsed["description"] else f"{pad}  description: []")
+    lines.extend(f"{pad}    - {yamlScalar(item)}" for item in parsed["description"])
+
+    lines.append(f"{pad}  params:" if parsed["params"] else f"{pad}  params: []")
+    for param in parsed["params"]:
+        lines.append(f"{pad}    - name: {yamlScalar(param['name'])}")
+        lines.extend(f"{pad}      {key}: {yamlScalar(param[key])}" for key in ("type", "description", "section"))
+
+    lines.append(f"{pad}  returns:" if parsed["returns"] else f"{pad}  returns: []")
+    lines.extend(f"{pad}    - {yamlScalar(item)}" for item in parsed["returns"])
+    return lines
+
+
+def renderDocs(docs: dict, indent: int) -> list[str]:
+    if not docs:
+        return []
+
+    pad = " " * indent
+    lines = [f"{pad}x-sdk-docs:"]
+    for name, parsed in docs.items():
+        if name == "log":
+            lines.append(f"{pad}  log:")
+            for logName, logParsed in parsed.items():
+                lines.extend(renderOperationDocs(logName, logParsed, indent + 4))
+            continue
+        lines.extend(renderOperationDocs(name, parsed, indent + 2))
+    return lines
+
+
 def provenance(root: Path, source: Path) -> str:
     """Fica em comentário de propósito: SHA dentro do YAML faria todo commit upstream
     virar defasagem falsa na comparação semântica."""
@@ -406,7 +513,8 @@ def provenance(root: Path, source: Path) -> str:
     return f"# fonte: starkbank/sdk-python@{sha} · {source.relative_to(root)}"
 
 
-def buildDocument(resource: str, summary: str, fields: list[dict], header: str | None = None) -> str:
+def buildDocument(resource: str, summary: str, fields: list[dict], header: str | None = None,
+                  docs: dict | None = None) -> str:
     """A ordem do docstring é a do construtor Java: parâmetros, depois `id` e os atributos."""
     readFields = fields
     createFields = [f for f in fields if f["section"] != SECTION_READONLY]
@@ -414,6 +522,7 @@ def buildDocument(resource: str, summary: str, fields: list[dict], header: str |
     lines = [header] if header else []
     lines += ["components:", "  schemas:"]
     lines.extend(renderSchema(resource, summary, readFields, 4, markId=True))
+    lines.extend(renderDocs(docs or {}, 6))
     lines.append("")
     lines.extend(renderSchema(f"{resource}Create", f"{resource} creation request", createFields, 4))
     return "\n".join(lines) + "\n"
@@ -517,7 +626,11 @@ def main() -> int:
     for field in reconcileRequired(fields, defaults):
         warn(f"[WARN] {args.resource}.{field}: documentado como opcional, posicional no __init__")
 
-    document = buildDocument(args.resource, summary, fields, provenance(root, source))
+    for name in declaredOperations(root, args.resource)["unsupported"]:
+        warn(f"[WARN] {args.resource}.{name} exportada sem flag: docstring não extraído")
+
+    document = buildDocument(args.resource, summary, fields, provenance(root, source),
+                             declaredDocs(root, args.resource))
     if args.out:
         Path(args.out).write_text(document, encoding="utf-8")
         emit(f"[OK] {args.resource}: {len(fields)} campo(s) → {args.out}")

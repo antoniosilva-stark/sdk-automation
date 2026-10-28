@@ -10,6 +10,57 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS_DIR = REPO_ROOT / "tools"
 
 
+WIDGET_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve a specific Widget
+    Receive a single Widget object previously created in the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Parameters (optional):
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user
+        was set before function call
+    ## Return:
+    - Widget object with updated attributes
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+
+
+def query(limit=None, after=None, tags=None, external_ids=None, user=None):
+    """# Retrieve Widgets
+    Receive a generator of Widget objects previously created in the Stark Bank API.
+    Use this function instead of page if you want to stream Widgets without worrying about cursors and pagination.
+    ## Parameters (optional):
+    - limit [integer, default None]: maximum number of objects to be retrieved. Unlimited if None. ex: 35
+    - after [datetime.date or string, default None]: date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)
+    - tags [list of strings, default None]: tags to filter retrieved objects. ex: ["tony", "stark"]
+    - external_ids [list of strings, default None]: list of external ids to filter retrieved objects. ex: ["5656565656565656"]
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user was set before function call
+    ## Return:
+    - generator of Widget objects with updated attributes
+    """
+    return rest.get_stream(resource=_resource, limit=limit)
+
+
+def page(cursor=None, limit=None, after=None, tags=None, external_ids=None, user=None):
+    """# Retrieve paged Widgets
+    Receive a list of up to 100 Widget objects previously created in the Stark Bank API and the cursor to the next page.
+    Use this function instead of query if you want to manually page your requests.
+    ## Parameters (optional):
+    - cursor [string, default None]: cursor returned on the previous page function call
+    - limit [integer, default 100]: maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50
+    - after [datetime.date or string, default None]: date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)
+    - tags [list of strings, default None]: tags to filter retrieved objects. ex: ["tony", "stark"]
+    - external_ids [list of strings, default None]: list of external ids to filter retrieved objects. ex: ["5656565656565656"]
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user was set before function call
+    ## Return:
+    - list of Widget objects with updated attributes
+    - cursor to retrieve the next page of Widget objects
+    """
+    return rest.get_page(resource=_resource, cursor=cursor)
+'''
+
+
 def commandWorks(*command: str) -> bool:
     if not shutil.which(command[0]):
         return False

@@ -2,7 +2,7 @@ import yaml
 import pytest
 from pathlib import Path
 
-from conftest import PYTHON_SDK, REPO_ROOT, _loadTool, requiresPythonSdk, runTool
+from conftest import PYTHON_SDK, REPO_ROOT, WIDGET_OPERATIONS, _loadTool, requiresPythonSdk, runTool
 
 
 def _schemaDir(tmpPath: Path, resource: str, document: dict) -> Path:
@@ -184,3 +184,88 @@ def test_unexpectedFailureIsAnErrorNotDrift(tmpPath):
 
     assert code == 2, out
     assert "[ERROR]" in out
+
+
+WIDGET_CLASS = '''
+from starkcore.utils.resource import Resource
+
+
+class Widget(Resource):
+    """# Widget object
+    A Widget does widget things.
+    ## Parameters (required):
+    - amount [integer]: amount in cents. ex: 1234
+    ## Attributes (return-only):
+    - id [string]: unique id returned on creation. ex: "5656"
+    """
+
+    def __init__(self, amount, id=None):
+        Resource.__init__(self, id=id)
+        self.amount = amount
+'''
+
+
+def _appliedWidget(tmpPath: Path) -> tuple[Path, Path, Path]:
+    root = tmpPath / "sdk-python"
+    package = root / "starkbank" / "widget"
+    package.mkdir(parents=True)
+    (package / "__widget.py").write_text(WIDGET_CLASS + WIDGET_OPERATIONS, encoding="utf-8")
+    (package / "__init__.py").write_text("from .__widget import get, query, page\n", encoding="utf-8")
+    spec = tmpPath / "spec.yaml"
+    spec.write_text("openapi: 3.1.0\ninfo:\n  title: Test\n  version: 1.0.0\npaths: {}\n"
+                    "components:\n  schemas: {}\n", encoding="utf-8")
+    schemas = tmpPath / "schemas"
+    schemas.mkdir()
+    code, out = runTool("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
+
+    assert code == 0, out
+    return (root, spec, schemas)
+
+
+def _drift(root: Path, spec: Path, schemas: Path) -> tuple[int, str]:
+    return runTool("detect-drift.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
+
+
+def test_unchangedOperationDocstringsAreNotDrift(tmpPath):
+    code, out = _drift(*_appliedWidget(tmpPath))
+
+    assert code == 0, out
+    assert "em sincronia" in out
+
+
+def test_onlyAnOperationDocstringChangingIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8").replace("# Retrieve Widgets", "# Retrieve all Widgets"),
+                      encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.query: docstring mudou (summary)" in out
+    assert "1 divergência" in out
+
+
+def test_aParameterChangingInThePageDocstringIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8").replace(
+        "- cursor [string, default None]:", "- cursor [string, default \"\"]:"), encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.page: docstring mudou (params)" in out
+
+
+def test_operationLosingItsDocstringIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(WIDGET_CLASS + "\n\ndef get(id, user=None):\n    return id\n"
+                      + WIDGET_OPERATIONS[WIDGET_OPERATIONS.index("def query"):], encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.get: o schema versionado documenta, o sdk-python nao documenta mais" in out
+

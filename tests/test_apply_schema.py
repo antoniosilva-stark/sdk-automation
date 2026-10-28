@@ -1,10 +1,11 @@
 import os
+import difflib
 import yaml
 import subprocess
 import pytest
 from pathlib import Path
 
-from conftest import REPO_ROOT, runTool
+from conftest import REPO_ROOT, WIDGET_OPERATIONS, runTool
 
 
 WIDGET_MODULE = '''
@@ -298,3 +299,27 @@ def test_logEntityIsWrittenNextToTheFlags(tmpPath):
     block = yaml.safe_load(spec.read_text(encoding="utf-8"))["components"]["schemas"]["Widget"]
     assert block["x-sdk-log"] is True
     assert block["x-sdk-log-entity"] == "holder"
+
+
+def test_reapplyingOnlyAddsTheDocsToAnExistingSchema(tmpPath):
+    root = _sdk(tmpPath)
+    spec, schemas = _workspace(tmpPath)
+    args = ("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
+    code, out = runTool(*args)
+    assert code == 0, out
+    existing = (schemas / "widget.yaml").read_text(encoding="utf-8")
+    specBefore = spec.read_text(encoding="utf-8")
+
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8") + WIDGET_OPERATIONS, encoding="utf-8")
+    code, out = runTool(*args)
+    assert code == 0, out
+    updated = (schemas / "widget.yaml").read_text(encoding="utf-8")
+
+    changes = list(difflib.unified_diff(existing.splitlines(), updated.splitlines(), lineterm="", n=0))
+    assert [line for line in changes if line.startswith("-") and not line.startswith("---")] == []
+    before, after = (yaml.safe_load(text)["components"]["schemas"] for text in (existing, updated))
+    assert set(after["Widget"].pop("x-sdk-docs")) == {"get", "query", "page"}
+    assert after == before
+    assert spec.read_text(encoding="utf-8") == specBefore
+
