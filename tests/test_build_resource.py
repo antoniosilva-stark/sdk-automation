@@ -631,3 +631,53 @@ def test_existsCodeDoesNotCollideWithTheOtherExitCodes(buildResource):
 
     assert buildResource.EXIT_EXISTS == 4
     assert buildResource.EXIT_EXISTS not in taken
+
+
+def _stagedSpec(buildResource, tmpPath: Path, resource: str) -> dict:
+    staged = buildResource.stageJavaDocs(resource, tmpPath)
+    return yaml.safe_load(Path(staged["spec"]).read_text(encoding="utf-8"))["components"]["schemas"][resource]
+
+
+def test_stagedCopyCarriesTheRenderedDocsBesideTheFlagsOfTheResource(buildResource, tmpPath):
+    entry = _stagedSpec(buildResource, tmpPath, "SplitProfile")
+
+    assert entry["x-sdk-java-docs"]["getPlain"][0] == "Retrieve a specific SplitProfile"
+    assert entry["x-sdk-java-docs"]["dataDoc"][0] == "SplitProfile object"
+    assert entry["x-sdk-get"] is True
+
+
+def test_stagingNeverWritesTheSpecOrTheSchemasOfTheRepo(buildResource, tmpPath):
+    before = _snapshot(REPO_ROOT / "apis")
+
+    buildResource.stageJavaDocs("SplitProfile", tmpPath)
+
+    assert _snapshot(REPO_ROOT / "apis") == before
+    assert "x-sdk-java-docs" not in (REPO_ROOT / "apis/spec-v2.openapi.yaml").read_text(encoding="utf-8")
+
+
+def test_stagedCopyKeepsTheOriginalDocsAndTheSchemasForTheRefs(buildResource, tmpPath):
+    staged = buildResource.stageJavaDocs("SplitProfile", tmpPath)
+
+    copiedSchema = Path(staged["spec"]).parent / "schemas/splitprofile.yaml"
+    assert copiedSchema.read_bytes() == (REPO_ROOT / "apis/schemas/splitprofile.yaml").read_bytes()
+
+
+def test_stagingReportsTheIrregularPluralInsteadOfGuessingIt(buildResource, tmpPath):
+    staged = buildResource.stageJavaDocs("BoletoHolmes", tmpPath)
+
+    assert any("BoletoHolmes" in warning for warning in staged["warnings"])
+
+
+@requiresGenerator
+def test_aBuildLeavesTheSpecAndSchemasByteIdenticalAndRemovesItsCopy(tmpPath, referenceWithout):
+    before = _snapshot(REPO_ROOT / "apis")
+    scratch = tmpPath / "scratch"
+    scratch.mkdir()
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(_target(tmpPath)),
+                        env={**referenceWithout("java", "SplitProfile"), "TMPDIR": str(scratch)})
+
+    assert code == 0, out
+    assert _snapshot(REPO_ROOT / "apis") == before
+    assert list(scratch.glob("build-apis-*")) == []
+    assert list(scratch.glob("build-resource-*")) == []

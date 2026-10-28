@@ -203,6 +203,11 @@ def extractSchema():
 
 
 @pytest.fixture
+def javaDocs():
+    return _loadTool("java-docs.py")
+
+
+@pytest.fixture
 def coverageReport():
     return _loadTool("coverage-report.py")
 

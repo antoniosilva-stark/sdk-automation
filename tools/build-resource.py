@@ -77,6 +77,45 @@ def hasObjectArray(resource: str) -> bool:
     )
 
 
+def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
+    """Schema do componente, seguindo o `$ref` para o arquivo em `schemas/` quando ha."""
+    entry = ((spec.get("components") or {}).get("schemas") or {}).get(name)
+    if entry is None or "$ref" not in entry:
+        return entry
+    fileName, _, fragment = entry["$ref"].partition("#")
+    node = loadFast((apisDir / fileName).read_text(encoding="utf-8"))
+    for part in fragment.strip("/").split("/"):
+        node = node[part]
+    return node
+
+
+def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
+    """Copia `apis/` para `stagedDir` e injeta o Javadoc pre-renderizado na entrada do recurso da copia.
+
+    O gerador descarta as extensoes `x-*` do arquivo apontado por `$ref` (so as irmas do `$ref` chegam a
+    `vendorExtensions`), entao o `x-sdk-java-docs` fica ao lado das flags `x-sdk-*` da spec copiada. O
+    `x-sdk-docs` original segue no schema copiado e a spec e os schemas do repo nao sao tocados."""
+    javaDocs = loadTool("java-docs")
+    apisDir = REPO_ROOT / "apis"
+    specPath = REPO_ROOT / SPEC_FILE
+    specText = specPath.read_text(encoding="utf-8")
+    spec = loadFast(specText)
+    schema = resolveRef(spec, resource, apisDir)
+    createSchema = resolveRef(spec, f"{resource}Create", apisDir)
+    flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
+    entity = javaDocs.describeEntity(schema, createSchema)
+    rendered = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)
+
+    shutil.copytree(apisDir, stagedDir / "apis")
+    entryLine = f"\n    {resource}:\n"
+    if specText.count(entryLine) != 1:
+        raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
+    docsLine = f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
+    stagedSpec = stagedDir / SPEC_FILE
+    stagedSpec.write_text(specText.replace(entryLine, f"{entryLine}{docsLine}", 1), encoding="utf-8")
+    return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}
+
+
 def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
@@ -151,7 +190,7 @@ def plannedPairs(resource: str, language: str) -> dict[str, tuple[str, str]]:
     return pairs
 
 
-def generate(resource: str, run: dict, outputDir: Path) -> int:
+def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FILE) -> int:
     extra = list(run["extra"])
     properties = javaImports(declaredFlags(resource), hasObjectArray(resource)) if run["generator"] == "java" else []
     if properties:
@@ -161,7 +200,7 @@ def generate(resource: str, run: dict, outputDir: Path) -> int:
         f"generate {run['role']} ({run['generator']})",
         [
             "npx", "openapi-generator-cli", "generate",
-            "-i", SPEC_FILE,
+            "-i", specFile,
             "-g", run["generator"],
             "--template-dir", run["templateDir"],
             "-o", str(outputDir),
@@ -170,6 +209,16 @@ def generate(resource: str, run: dict, outputDir: Path) -> int:
         ],
     )
     return code
+
+
+def stageAndAnnounceDocs(resource: str, stagedDir: Path) -> Path:
+    staged = stageJavaDocs(resource, stagedDir)
+    for warning in staged["warnings"]:
+        emit(f"[WARN] javadoc: {warning}")
+    if staged["fallbacks"]:
+        emit(f"[INFO] javadoc: {len(staged['fallbacks'])} operação(ões) sem x-sdk-docs usam o bloco genérico:"
+             f" {', '.join(staged['fallbacks'])}")
+    return staged["spec"]
 
 
 BUCKET_NAMES = {"gaps": "lacuna canônica", "subObjects": "sub-objeto", "extras": "extra do Java"}
@@ -300,11 +349,15 @@ def main() -> int:
         return 1
 
     generatedDir = Path(tempfile.mkdtemp(prefix="build-resource-"))
+    stagedDir = Path(tempfile.mkdtemp(prefix="build-apis-"))
     try:
         emit(f"[INFO] régua derivada de sdk-{args.lang} @ {referenceSha(args.lang)}")
 
         for run in runs:
-            if generate(args.resource, run, generatedDir / run["role"]) != 0:
+            specFile = SPEC_FILE
+            if run["generator"] == "java":
+                specFile = str(stageAndAnnounceDocs(args.resource, stagedDir))
+            if generate(args.resource, run, generatedDir / run["role"], specFile) != 0:
                 return 1
 
         rulers, absent = {}, 0
@@ -343,6 +396,7 @@ def main() -> int:
         return 0
     finally:
         shutil.rmtree(generatedDir, ignore_errors=True)
+        shutil.rmtree(stagedDir, ignore_errors=True)
 
 
 if __name__ == "__main__":
