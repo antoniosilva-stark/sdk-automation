@@ -254,6 +254,7 @@ jobs:
       contents: read
     outputs:
       digest: ${{ steps.fingerprint.outputs.digest }}
+      intent: ${{ steps.built.outputs.intent }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -298,20 +299,39 @@ jobs:
         run: make clone-sdk-ref
 
       - name: Build and verify resource
+        id: built
         env:
           RESOURCE: ${{ inputs.resource }}
           LANGUAGE: ${{ inputs.language }}
         run: |
           mkdir -p staging
-          python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging
+          # 0 gerou, 4 ja existe no SDK de referencia; outro codigo e falha e nao escreve intent
+          CODE=0
+          python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging || CODE=$?
+          case "$CODE" in
+            0)
+              echo "intent=create" >> "$GITHUB_OUTPUT"
+              echo "recurso ausente no SDK de referencia: gerado e verificado" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            4)
+              echo "intent=exists" >> "$GITHUB_OUTPUT"
+              echo "recurso ja existe no SDK de referencia: relatorio de paridade no log, nada entregue" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "build-resource terminou com codigo $CODE."
+              exit "$CODE"
+              ;;
+          esac
 
       # o resumo e calculado aqui, logo antes do upload: o job com o token confere o que baixa
       - name: Fingerprint the verified artifact
         id: fingerprint
+        if: steps.built.outputs.intent == 'create'
         run: echo "digest=$(python3 tools/artifact-digest.py staging)" >> "$GITHUB_OUTPUT"
 
       # o artefato sai daqui, antes de existir qualquer codigo do alvo neste job
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.built.outputs.intent == 'create'
         with:
           name: staging
           path: staging
@@ -322,7 +342,7 @@ jobs:
   # sobre o artefato: este job so le o que o build verificou.
   compile:
     needs: build
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -393,7 +413,7 @@ jobs:
   # nenhum pip, npm ou maven. Copia apenas os caminhos declarados, nunca a arvore inteira.
   deliver:
     needs: [build, compile]
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -501,35 +521,18 @@ jobs:
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
 
-          # a branch existente so e reaproveitada se contem a base atual; senao e regerada sobre ela
-          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" >> "$GITHUB_OUTPUT"
+          # a branch existente so e reaproveitada se contem a base atual; senao e regerada sobre ela.
+          # --create-only: se o recurso apareceu na base depois do build, sai com 4 em vez de sobrescrever
+          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" --create-only >> "$GITHUB_OUTPUT"
 
       - name: Copy only the declared paths into the target
         run: python3 tools/apply-artifacts.py --staging staging --target target --paths-file "$RUNNER_TEMP/paths.txt"
-
-      - name: Name the change
-        id: verb
-        working-directory: target
-        env:
-          BASE: ${{ steps.base.outputs.base }}
-        run: |
-          # sem a ref, o cat-file falharia para todo caminho e o titulo viraria "Add" em silencio
-          git rev-parse --verify --quiet "origin/$BASE^{commit}" >/dev/null || { echo "origin/$BASE ausente."; exit 1; }
-          # decide pela arvore da base e nao pelo commit: a reexecucao sobre a mesma branch tem de dar o mesmo titulo
-          VERB=Add
-          while IFS= read -r declared; do
-            if git cat-file -e "origin/$BASE:$declared" 2>/dev/null; then
-              VERB=Update
-            fi
-          done < "$RUNNER_TEMP/paths.txt"
-          echo "verb=$VERB" >> "$GITHUB_OUTPUT"
 
       - name: Commit when the generated output differs
         id: commit
         working-directory: target
         env:
           RESOURCE: ${{ inputs.resource }}
-          VERB: ${{ steps.verb.outputs.verb }}
         run: |
           test -s "$RUNNER_TEMP/paths.txt" || { echo "lista de caminhos ausente ou vazia."; exit 1; }
           while IFS= read -r declared; do
@@ -543,7 +546,7 @@ jobs:
           fi
 
           git diff --cached --name-only
-          git -c core.hooksPath=/dev/null commit -m "$VERB $RESOURCE resource"
+          git -c core.hooksPath=/dev/null commit -m "Add $RESOURCE resource"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push branch
@@ -570,7 +573,10 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RESOURCE: ${{ inputs.resource }}
-          VERB: ${{ steps.verb.outputs.verb }}
+          LANGUAGE: ${{ inputs.language }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANGED: ${{ steps.commit.outputs.changed }}
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
           BRANCH: ${{ steps.branch.outputs.branch }}
@@ -580,7 +586,11 @@ jobs:
           # filtra pelo dono: um fork com a mesma branch nao pode contar como a PR do bot
           OPEN=$(gh api "repos/$TARGET/pulls?state=open&head=$OWNER:$BRANCH" --jq length)
           if [ "$OPEN" -gt 0 ]; then
-            echo "PR ja aberta para $BRANCH — o push atualizou."
+            if [ "$CHANGED" = "true" ]; then
+              echo "PR ja aberta para $BRANCH — o push atualizou a branch."
+              exit 0
+            fi
+            echo "PR ja aberta para $BRANCH — nada foi enviado neste run."
             exit 0
           fi
 
@@ -593,7 +603,7 @@ jobs:
 
           gh pr create \
             --repo "$TARGET" \
-            --title "$VERB $RESOURCE resource" \
-            --body "$RESOURCE gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
+            --title "Add $RESOURCE resource" \
+            --body "Criacao do recurso $RESOURCE ($LANGUAGE), ausente neste SDK, gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos." \
             --base "$BASE" \
             --head "$BRANCH"

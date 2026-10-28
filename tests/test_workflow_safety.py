@@ -183,7 +183,8 @@ def test_deliverReadsFromTheBuildOnlyTheArtifactDigestAndNothingFromCompile():
     raw = yaml.safe_dump(yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"]["deliver"])
 
     used = set(re.findall(r"needs\.[\w-]+\.outputs\.[\w-]+", raw))
-    assert used == {"needs.build.outputs.digest"}, f"o job com o token le saida de job que roda codigo de terceiros: {used}"
+    assert used == {"needs.build.outputs.digest", "needs.build.outputs.intent"}, \
+        f"o job com o token le saida de job que roda codigo de terceiros: {used}"
 
 
 def test_deliverChecksTheArtifactDigestBeforeUsingAnyFileFromIt():
@@ -716,53 +717,122 @@ def test_theStrayFileGuardFailsClosedWhenTheComparisonItselfFails(tmpPath, mode,
     assert message in resultado.stdout + resultado.stderr
 
 
-def _runNameTheChange(tmpPath, existing, revParse="0"):
-    steps = jobSteps("deliver")
-    script = steps[stepIndex(steps, "cat-file", "run")]["run"]
-    (tmpPath / "paths.txt").write_text("src/main/A.java\nsrc/test/ATest.java\n", encoding="utf-8")
+FIXED_BUILD_SUMMARIES = {
+    "0": ("intent=create", "recurso ausente no SDK de referencia: gerado e verificado"),
+    "4": ("intent=exists", "recurso ja existe no SDK de referencia: relatorio de paridade no log, nada entregue"),
+}
+
+
+def test_theBuildExposesTheIntentAndOnlyCreateFingerprintsAndUploads():
+    jobs = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"]
+    steps = jobs["build"]["steps"]
+    built = steps[stepIndex(steps, "build-resource.py", "run")]
+    upload = next(step for step in steps if "upload-artifact" in (step.get("uses") or ""))
+    fingerprint = steps[stepIndex(steps, "artifact-digest.py", "run")]
+    condition = f"steps.{built['id']}.outputs.intent == 'create'"
+
+    assert jobs["build"]["outputs"]["intent"] == f"${{{{ steps.{built['id']}.outputs.intent }}}}"
+    assert fingerprint.get("if") == condition
+    assert upload.get("if") == condition
+
+
+@pytest.mark.parametrize("name", ["compile", "deliver"])
+def test_compileAndDeliverOnlyRunWhenTheBuildIntentIsCreate(name):
+    condition = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"][name]["if"]
+
+    assert "needs.build.outputs.intent == 'create'" in condition
+    assert "github.event.repository.default_branch" in condition
+    assert not re.search(r"always\(|cancelled\(|failure\(|success\(", condition)
+
+
+@pytest.mark.parametrize("code", ["0", "4", "1"])
+def test_theBuildStepTurnsTheExitCodeIntoAnIntentAndFailsOnAnythingElse(tmpPath, code):
+    steps = buildSteps()
+    script = steps[stepIndex(steps, "build-resource.py", "run")]["run"]
     binario = tmpPath / "bin"
     binario.mkdir()
-    (binario / "git").write_text(
-        '#!/bin/sh\n'
-        'if [ "$1" = rev-parse ]; then exit "${REVPARSE:-0}"; fi\n'
-        '# cat-file -e origin/BASE:path\n'
-        'for existing in $EXISTING; do case "$*" in *":$existing") exit 0;; esac; done\n'
-        'exit 1\n',
-        encoding="utf-8")
-    (binario / "git").chmod(0o755)
+    (binario / "python3").write_text(f"#!/bin/sh\necho LOG-DO-BUILD-NAO-COPIAR\nexit {code}\n", encoding="utf-8")
+    (binario / "python3").chmod(0o755)
     output = tmpPath / "output.txt"
-    resultado = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", script], capture_output=True, text=True,
-                               cwd=tmpPath, env={"PATH": f"{binario}:/usr/bin:/bin", "BASE": "master",
-                                                 "EXISTING": existing, "REVPARSE": revParse, "RUNNER_TEMP": str(tmpPath),
-                                                 "GITHUB_OUTPUT": str(output)})
-    return resultado, output.read_text(encoding="utf-8") if output.exists() else ""
+    summary = tmpPath / "summary.txt"
+
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", script], capture_output=True, text=True, cwd=tmpPath,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "RESOURCE": "SplitProfile",
+                                    "LANGUAGE": "java", "GITHUB_OUTPUT": str(output),
+                                    "GITHUB_STEP_SUMMARY": str(summary)})
+
+    written = output.read_text(encoding="utf-8") if output.exists() else ""
+    text = summary.read_text(encoding="utf-8") if summary.exists() else ""
+    assert "LOG-DO-BUILD-NAO-COPIAR" not in text, "o resumo copiou log do build"
+    if code not in FIXED_BUILD_SUMMARIES:
+        assert resultado.returncode == int(code), resultado.stdout
+        assert "intent=" not in written
+        return
+    intent, fixedText = FIXED_BUILD_SUMMARIES[code]
+    assert resultado.returncode == 0, resultado.stderr
+    assert written.strip() == intent
+    assert text.strip() == fixedText
 
 
-@pytest.mark.parametrize("existing,verb", [
-    ("", "Add"),
-    ("src/main/A.java", "Update"),
-    ("src/test/ATest.java", "Update"),
-    ("src/main/A.java src/test/ATest.java", "Update"),
+def test_noStepNamesAnUpdateAndTheCreationGuardIsOnTheBranchPreparation():
+    raw = yaml.safe_dump(yaml.safe_load(SYNC.read_text(encoding="utf-8")))
+    steps = deliverSteps()
+    prepare = steps[stepIndex(steps, "prepare-branch.py", "run")]["run"]
+    commit = steps[stepIndex(steps, "git -c core.hooksPath=/dev/null commit", "run")]
+    pullRequest = steps[stepIndex(steps, "gh pr create", "run")]
+
+    assert "Update" not in raw
+    assert "steps.verb" not in raw and "VERB" not in raw
+    assert "--create-only" in prepare
+    assert 'commit -m "Add $RESOURCE resource"' in commit["run"]
+    assert '--title "Add $RESOURCE resource"' in pullRequest["run"]
+
+
+def _runOpenPullRequest(tmpPath, changed, open_):
+    steps = deliverSteps()
+    step = steps[stepIndex(steps, "gh pr create", "run")]
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    chamadas = tmpPath / "chamadas.txt"
+    (binario / "gh").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> {chamadas}\n'
+        'case "$*" in *pulls*) echo "$OPEN";; *compare*) echo 3;; esac\n',
+        encoding="utf-8")
+    (binario / "gh").chmod(0o755)
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "OPEN": open_, "CHANGED": changed,
+                                    "RESOURCE": "SplitProfile", "LANGUAGE": "java", "SHA": "abc123",
+                                    "RUN_URL": "https://github.com/dono/repo/actions/runs/9",
+                                    "OWNER": "dono", "TARGET_REPO": "sdk-java", "BRANCH": "sdk-automation/x",
+                                    "BASE": "master"})
+    return step, resultado, chamadas.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("changed,message", [
+    ("true", "PR ja aberta para sdk-automation/x — o push atualizou a branch."),
+    ("false", "PR ja aberta para sdk-automation/x — nada foi enviado neste run."),
 ])
-def test_theChangeIsNamedUpdateWhenTheTargetAlreadyHasTheResource(tmpPath, existing, verb):
-    resultado, written = _runNameTheChange(tmpPath, existing)
+def test_theAlreadyOpenMessageSaysWhetherAnythingWasPushed(tmpPath, changed, message):
+    step, resultado, chamadas = _runOpenPullRequest(tmpPath, changed, "1")
 
     assert resultado.returncode == 0, resultado.stderr
-    assert f"verb={verb}" in written
+    assert message in resultado.stdout
+    assert "pr create" not in chamadas
+    assert "${{ steps.commit.outputs.changed }}" in str(step["env"].get("CHANGED"))
 
 
-def test_theChangeNameFailsClosedWhenTheBaseRefIsMissing(tmpPath):
-    resultado, written = _runNameTheChange(tmpPath, "src/main/A.java", revParse="1")
+def test_theCreationPullRequestBodyIsFixedAndBuiltOnlyFromTrustedEnv(tmpPath):
+    step, resultado, chamadas = _runOpenPullRequest(tmpPath, "true", "0")
 
-    assert resultado.returncode != 0
-    assert "verb=" not in written
-
-
-def test_theCommitAndThePullRequestShareTheChangeVerb():
-    steps = jobSteps("deliver")
-    for needle in ("git -c core.hooksPath=/dev/null commit", "gh pr create"):
-        step = steps[stepIndex(steps, needle, "run")]
-
-        assert "${{ steps.verb.outputs.verb }}" in str(step["env"].get("VERB")), needle
-        assert '"$VERB $RESOURCE resource"' in step["run"], needle
-        assert "Add $RESOURCE" not in step["run"], needle
+    assert resultado.returncode == 0, resultado.stderr
+    assert "--title Add SplitProfile resource" in chamadas
+    assert ("--body Criacao do recurso SplitProfile (java), ausente neste SDK, gerado a partir de "
+            "apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@abc123, run "
+            "https://github.com/dono/repo/actions/runs/9. Verificacao: lint-spec e assert-generated estrito contra "
+            "a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio "
+            "nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos.") in chamadas
+    assert "--body-file" not in step["run"]
+    assert "${{" not in step["run"]
+    assert step["env"]["SHA"] == "${{ github.sha }}"
+    assert step["env"]["RUN_URL"] == "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    assert step["env"]["LANGUAGE"] == "${{ inputs.language }}"
