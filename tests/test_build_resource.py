@@ -686,7 +686,8 @@ def test_aBuildLeavesTheSpecAndSchemasByteIdenticalAndRemovesItsCopy(tmpPath, re
 
 
 JAVA_SOURCES = "src/main/java/com/starkbank"
-PYTHON_RESIDUE = ("datetime.", '\\"', "None", "User.defaultUser")
+PYTHON_RESIDUE = (r"datetime\.\w", r"timedelta", r"\bNone\b", r"\bTrue\b", r"\bFalse\b", r'\\"', r"starkbank\.user\b",
+                  r"User\.defaultUser")
 USER_LINE = ("@param user [Organization/Project object, default null]: Organization or Project object."
              " Not necessary if starkbank.Settings.user was set before function call")
 
@@ -746,14 +747,16 @@ def test_generatedConstructorsAreDocumentedExceptTheEmptyOne(builtOnce):
 
 @requiresGenerator
 @pytest.mark.parametrize("resource,extra", [("SplitProfile", ()), ("Transfer", ("--advisory",)),
-                                            ("VerifiedTransfer", ("--advisory",))])
+                                            ("VerifiedTransfer", ("--advisory",)), ("Boleto", ("--advisory",)),
+                                            ("Invoice", ("--advisory",)), ("Event", ("--advisory",)),
+                                            ("Webhook", ("--advisory",))])
 def test_generatedJavadocHasNoPythonResidueNorEmptyDescription(builtOnce, resource, extra):
     source = _generatedSource(builtOnce, resource, *extra)
 
     for number, line in enumerate(source.splitlines(), start=1):
         if not line.strip().startswith("*"):
             continue
-        assert not any(token in line for token in PYTHON_RESIDUE), f"{resource}:{number}: {line}"
+        assert not any(re.search(pattern, line) for pattern in PYTHON_RESIDUE), f"{resource}:{number}: {line}"
         assert not re.search(r"\]\s*(, optional)?:\s*$", line), f"{resource}:{number}: descricao vazia: {line}"
         assert line == line.rstrip(), f"{resource}:{number}: espaco no fim"
 

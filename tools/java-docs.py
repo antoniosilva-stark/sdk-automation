@@ -61,6 +61,9 @@ DATETIME_CALL = re.compile(r"datetime\.datetime\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?(?:
 DATE_CALL = re.compile(r"datetime\.date\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
 DATE_OR_STRING = re.compile(r"datetime\.date(?:time)? or string")
 BARE_DATETIME = re.compile(r"datetime\.date(?:time)?\b")
+TIMEDELTA = re.compile(r"\s+or\s+(?:datetime\.)?timedelta\b")
+PYTHON_LITERAL = re.compile(r"(?<![\w.])(True|False|None)(?!\w)")
+JAVA_LITERALS = {"True": "true", "False": "false", "None": "null"}
 SETTINGS_REFERENCE = re.compile(r"starkbank\.(?:User\.defaultUser|user)\b")
 TYPE_DEFAULT = re.compile(r"^(?P<base>.*?)(?:,\s*default\s+(?P<default>.*))?$")
 
@@ -70,7 +73,8 @@ def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: di
 
     Chaves planas (`getPlain`, `queryParamsUser`, `logPageParams`...) porque o Mustache resolve nome ausente
     no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo."""
-    context = {"className": className, "profile": profile, "warnings": [], "fallbacks": []}
+    context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
+               "snakeNames": snakeNames(docs, entity)}
     lines = {
         "dataDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"]),
         "ctorAllDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"], atParam=True),
@@ -82,6 +86,7 @@ def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: di
             context["fallbacks"].append(operation)
             doc = genericDoc(operation, className)
         lines.update(renderOperation(context, operation, doc))
+    lines = {key: [neutralizeComment(line) for line in block] for key, block in lines.items()}
     return {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
 
 
@@ -117,21 +122,44 @@ def pluralize(name: str) -> str | None:
     return f"{name}s"
 
 
-def mapText(text: str, className: str, profile: dict = JAVA_PROFILE) -> str:
+def mapText(text: str, className: str, profile: dict = JAVA_PROFILE, snakeNames: dict | None = None) -> str:
     text = text.replace('\\"', '"')
     text = DATETIME_CALL.sub(lambda match: quoted(datetimeLiteral(match, profile)), text)
     text = DATE_CALL.sub(lambda match: quoted(dateLiteral(match, profile)), text)
-    text = text.replace("Unlimited if None", "Unlimited if null")
+    text = DATE_OR_STRING.sub("string", text)
+    text = BARE_DATETIME.sub("string", text)
+    text = TIMEDELTA.sub("", text)
+    text = PYTHON_LITERAL.sub(lambda match: JAVA_LITERALS[match.group(1)], text)
     text = SETTINGS_REFERENCE.sub(profile["settingsReference"], text)
-    text = classNameText(text, className)
-    return neutralizeComment(text)
+    text = knownSnakeNames(text, snakeNames or {})
+    return classNameText(text, className)
+
+
+def contextText(context: dict, text: str) -> str:
+    return mapText(text, context["className"], context["profile"], context["snakeNames"])
+
+
+def snakeNames(docs: dict, entity: dict) -> dict:
+    """Forma snake -> camel so dos nomes que o recurso conhece (campos e parametros); `my_description` nao e nome."""
+    known = {field["name"] for field in entity["fields"]}
+    groups = [docs or {}, ((docs or {}).get("log")) or {}]
+    known |= {param["name"] for group in groups for doc in group.values() if isinstance(doc, dict)
+              for param in doc.get("params") or []}
+    return {re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower(): name for name in known if name != name.lower()}
+
+
+def knownSnakeNames(text: str, names: dict) -> str:
+    if not names:
+        return text
+    pattern = "|".join(re.escape(name) for name in sorted(names, key=len, reverse=True))
+    return re.sub(rf"(?<![\w.])({pattern})(?!\w)", lambda match: names[match.group(1)], text)
 
 
 def mapType(pythonType: str) -> str:
     """`datetime.date or string, default None` -> `string, default null`."""
     match = TYPE_DEFAULT.match(pythonType.strip())
     base = DATE_OR_STRING.sub("string", match.group("base").strip())
-    base = BARE_DATETIME.sub("string", base)
+    base = BARE_DATETIME.sub("string", TIMEDELTA.sub("", base))
     default = match.group("default")
     if default is None:
         return base
@@ -191,8 +219,9 @@ def operationKey(operation: str, variant: str) -> str:
 
 def renderOperation(context: dict, operation: str, doc: dict) -> dict:
     kind = OPERATION_KINDS[operation]
+    doc = listFormDoc(operation, context["className"], doc) if kind == "list" else doc
     variants = VARIANTS_FILTERS if kind == "filters" else VARIANTS_PLAIN
-    description = [mapText(line, context["className"], context["profile"]) for line in doc.get("description") or []]
+    description = [contextText(context, line) for line in doc.get("description") or []]
     title = operationTitle(context, operation, doc)
     returns = returnLines(context, operation, doc)
     rendered = {}
@@ -202,6 +231,15 @@ def renderOperation(context: dict, operation: str, doc: dict) -> dict:
         rendered[operationKey(operation, variant)] = blockLines(context["profile"], title, description,
                                                                 parameters, returns)
     return rendered
+
+
+def listFormDoc(operation: str, className: str, doc: dict) -> dict:
+    """O Java so recebe a lista; create de objeto unico no Python viraria texto que a assinatura contradiz."""
+    returns = doc.get("returns") or []
+    if not returns or returns[0].startswith("list of"):
+        return doc
+    generic = genericDoc(operation, className)["description"]
+    return {**doc, "description": generic[:1] + (doc.get("description") or [])[1:], "returns": []}
 
 
 def blockLines(profile: dict, title: str, description: list, parameters: list, returns: list) -> list:
@@ -220,7 +258,7 @@ def operationTitle(context: dict, operation: str, doc: dict) -> str:
             context["warnings"].append(f"plural irregular nao suportado: {className}; titulo de {operation}"
                                        " vem do resumo do Python")
         summary = doc.get("summary") or genericDoc(operation, className)["summary"]
-        return mapText(summary, className, profile)
+        return contextText(context, summary)
     return template.replace("{Xs}", plural or "").replace("{X}", className).replace("{a}", article(className))
 
 
@@ -249,7 +287,7 @@ def entityListLine(context: dict, operation: str, pythonParams: list) -> str:
     isList = first.get("type", "").startswith("list of")
     verb = "created/updated" if operation == "put" else "created"
     generic = f"list of {className} objects to be {verb} in the API"
-    description = mapText(first["description"], className, context["profile"]) if isList and first.get("description") else generic
+    description = contextText(context, first["description"]) if isList and first.get("description") else generic
     return f"@param {name} [list of {className} objects or HashMaps]: {description}"
 
 
@@ -262,7 +300,7 @@ def idLine(context: dict, pythonParams: list) -> str:
 def paramText(context: dict, param: dict) -> str:
     profile = context["profile"]
     head = f"{param['name']} [{mapType(param.get('type') or 'string')}]"
-    description = mapText(param.get("description") or "", context["className"], profile)
+    description = contextText(context, param.get("description") or "")
     if not description:
         return head
     separator = " " if param["name"] in profile["noColonParams"] else ": "
@@ -276,7 +314,7 @@ def userLine(profile: dict) -> str:
 
 def returnLines(context: dict, operation: str, doc: dict) -> list:
     className, profile = context["className"], context["profile"]
-    returns = [mapText(item, className, profile) for item in doc.get("returns") or []]
+    returns = [contextText(context, item) for item in doc.get("returns") or []]
     if operation not in PAGE_OPERATIONS:
         return [f"@return {returns[0]}", *returns[1:]] if returns else [f"@return {genericReturns(operation, className)[0]}"]
     returns = returns if len(returns) == 2 else genericReturns(operation, className)
@@ -288,7 +326,7 @@ def returnLines(context: dict, operation: str, doc: dict) -> list:
 
 def entityHeader(context: dict, entity: dict) -> list:
     className, profile = context["className"], context["profile"]
-    description = mapText(entity.get("description") or "", className, profile)
+    description = contextText(context, entity.get("description") or "")
     return [f"{className} object", *(["<p>", description] if description else [])]
 
 
@@ -299,7 +337,7 @@ def fieldSection(context: dict, fields: list, atParam: bool = False) -> list:
 
 
 def fieldLine(context: dict, field: dict, prefix: str = "") -> str:
-    description = mapText(field["description"], context["className"], context["profile"])
+    description = contextText(context, field["description"])
     head = f"{prefix}{field['name']} [{field['type']}]"
     return f"{head}: {description}" if description else head
 

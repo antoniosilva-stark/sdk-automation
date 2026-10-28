@@ -7,7 +7,21 @@ from conftest import REPO_ROOT
 SCHEMAS = REPO_ROOT / "apis/schemas"
 ALL_FLAGS = {"x-sdk-create", "x-sdk-get", "x-sdk-query", "x-sdk-page", "x-sdk-log", "x-sdk-delete", "x-sdk-put",
              "x-sdk-update", "x-sdk-cancel", "x-sdk-pdf"}
-RESIDUE = ("datetime.", '\\"', "None", "User.defaultUser", "starkbank.user ")
+RESIDUE = (r"datetime\.\w", r"timedelta", r"\bNone\b", r"\bTrue\b", r"\bFalse\b", r'\\"', r"starkbank\.user\b",
+           r"User\.defaultUser")
+SINGULAR_CREATES = ("Webhook", "Workspace", "CorporateCard", "CorporateInvoice", "CorporateWithdrawal",
+                    "MerchantPurchase", "MerchantSession")
+
+
+def _specResources() -> list:
+    try:
+        from yaml import CSafeLoader as Loader
+    except ImportError:
+        from yaml import SafeLoader as Loader
+    schemas = yaml.load((REPO_ROOT / "apis/spec-v2.openapi.yaml").read_text(encoding="utf-8"), Loader=Loader)
+    schemas = schemas["components"]["schemas"]
+    return sorted(name for name, entry in schemas.items()
+                  if not name.endswith("Create") and any(key.startswith("x-sdk-") for key in entry))
 
 
 def _schemas(fileName: str) -> dict:
@@ -95,10 +109,6 @@ def test_singleWordClassNameIsLeftAloneBecauseItIsAnEnglishWord(javaDocs):
 def test_logModuleReferenceBecomesTheClassNameFollowedByLog(javaDocs):
     assert javaDocs.mapText("splitprofile.Log object", "SplitProfile") == "SplitProfile Log object"
     assert javaDocs.mapText("SplitProfile.Log object", "SplitProfile") == "SplitProfile Log object"
-
-
-def test_aCommentTerminatorCannotCloseTheJavadoc(javaDocs):
-    assert "*/" not in javaDocs.mapText("pattern a*/b and \\u0041", "Transfer")
 
 
 @pytest.mark.parametrize("operation,expected", [
@@ -283,7 +293,94 @@ def test_noGoldenResourceCarriesPythonResidueOrAnEmptyDescription(javaDocs, reso
 
     for key, lines in result["lines"].items():
         for line in lines:
-            assert not any(token in line for token in RESIDUE), f"{resource}.{key}: {line}"
+            assert not any(re.search(pattern, line) for pattern in RESIDUE), f"{resource}.{key}: {line}"
             assert not re.search(r"\]:\s*$", line), f"{resource}.{key}: descricao vazia em {line}"
             assert line == line.rstrip(), f"{resource}.{key}: espaco no fim de {line!r}"
             assert line.strip() not in ("", "*"), f"{resource}.{key}: linha vazia"
+
+
+def test_dateTypesInsideTheTextBecomeString(javaDocs):
+    text = 'list of up to 2 dictionaries with "percentage":float and "date":datetime.datetime or string pairs'
+
+    assert javaDocs.mapText(text, "Boleto") == (
+        'list of up to 2 dictionaries with "percentage":float and "date":string pairs')
+
+
+def test_timedeltaIsDroppedFromTheType(javaDocs):
+    assert javaDocs.mapType("integer or datetime.timedelta, default None") == "integer, default null"
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("ex: True or False", "ex: true or false"),
+    ("If True and event hasn't been delivered", "If true and event hasn't been delivered"),
+    ("defaults to None.", "defaults to null."),
+    ("NoneType and Falsey stay", "NoneType and Falsey stay"),
+    ("Rule.True stays", "Rule.True stays"),
+])
+def test_isolatedPythonLiteralsBecomeJavaLiterals(javaDocs, text, expected):
+    assert javaDocs.mapText(text, "Event") == expected
+
+
+def test_snakeCaseBecomesCamelCaseOnlyForKnownNames(javaDocs):
+    known = {"external_ids": "externalIds"}
+
+    text = "filter external_ids and my_description"
+    assert javaDocs.mapText(text, "Transfer", snakeNames=known) == "filter externalIds and my_description"
+
+
+def test_renderedDocsUseTheCamelNamesOfTheResourceAndLeaveTheOthersAlone(javaDocs):
+    event = _rendered(javaDocs, "Event", "event")["lines"]
+    webhook = _rendered(javaDocs, "Webhook", "webhook")["lines"]
+
+    assert not any("is_delivered" in line for lines in event.values() for line in lines)
+    assert any("isDelivered" in line for line in event["queryParams"])
+    assert any("is_delivered=false" in line for lines in webhook.values() for line in lines)
+
+
+@pytest.mark.parametrize("resource", SINGULAR_CREATES)
+def test_createDocNeverContradictsTheListSignature(javaDocs, resource):
+    schemas = _schemas(resource.lower())
+    entity = javaDocs.describeEntity(schemas[resource], schemas.get(f"{resource}Create"))
+    docs = schemas[resource]["x-sdk-docs"]
+
+    lines = javaDocs.renderDocs(resource, docs, {"x-sdk-create"}, entity)["lines"]["createUser"]
+
+    assert f"Send a list of {resource} objects for creation in the Stark Bank API" in lines
+    assert f"@return list of {resource} objects with updated attributes" in lines
+    assert not any("single" in line.lower() for line in lines)
+
+
+def test_everyTextFromTheSchemaPassesTheCommentGuard(javaDocs):
+    docs = {"query": {
+        "summary": "s*/", "description": ["d*/ \\u0041"], "returns": ["r*/"],
+        "params": [{"name": "a*/b", "type": "string*/x, default \\u0041", "description": "x*/", "section": "optional"}]}}
+    entity = {"description": "c*/", "fields": [
+        {"name": "n*/", "type": "t*/", "description": "f\\u0041", "isId": False, "returnOnly": False}]}
+
+    lines = javaDocs.renderDocs("Widget", docs, {"x-sdk-query"}, entity)["lines"]
+
+    for key, rendered in lines.items():
+        assert not any("*/" in line or "\\u" in line for line in rendered), key
+
+
+@pytest.mark.parametrize("resource", _specResources())
+def test_noResourceOfTheSpecCarriesPythonResidueNorAnEmptyDescription(javaDocs, buildResource, resource):
+    spec = buildResource.loadFast((REPO_ROOT / "apis/spec-v2.openapi.yaml").read_text(encoding="utf-8"))
+    schema = buildResource.resolveRef(spec, resource, REPO_ROOT / "apis")
+    createSchema = buildResource.resolveRef(spec, f"{resource}Create", REPO_ROOT / "apis")
+    flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
+    entity = javaDocs.describeEntity(schema, createSchema)
+
+    lines = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)["lines"]
+
+    known = {field["name"] for field in entity["fields"]}
+    for operation in [schema.get("x-sdk-docs") or {}, ((schema.get("x-sdk-docs") or {}).get("log")) or {}]:
+        known |= {param["name"] for doc in operation.values() if isinstance(doc, dict)
+                  for param in doc.get("params") or []}
+    snake = [re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower() for name in known if name != name.lower()]
+    patterns = list(RESIDUE) + [rf"\b{name}\b" for name in snake]
+    for key, rendered in lines.items():
+        for line in rendered:
+            assert not any(re.search(pattern, line) for pattern in patterns), f"{resource}.{key}: {line}"
+            assert not re.search(r"\]:\s*$", line), f"{resource}.{key}: descricao vazia em {line}"
+            assert line == line.rstrip(), f"{resource}.{key}: espaco no fim de {line!r}"
