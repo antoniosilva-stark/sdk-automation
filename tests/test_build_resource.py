@@ -1,3 +1,4 @@
+import hashlib
 import yaml
 from pathlib import Path
 
@@ -173,13 +174,14 @@ def test_putAndPageGoThroughTheRestPrimitives(builtOnce):
 
 
 @requiresGenerator
-def test_twoRunsProduceTheSameContent(tmpPath):
+def test_twoRunsProduceTheSameContent(tmpPath, referenceWithout):
     target = _target(tmpPath)
     args = ("SplitProfile", "--lang", "java", "--into", str(target))
+    reference = referenceWithout("java", "SplitProfile")
 
-    first, _ = runTool("build-resource.py", *args)
+    first, _ = runTool("build-resource.py", *args, env=reference)
     content = (target / ARTIFACT).read_text(encoding="utf-8")
-    second, _ = runTool("build-resource.py", *args)
+    second, _ = runTool("build-resource.py", *args, env=reference)
 
     assert (first, second) == (0, 0)
     assert (target / ARTIFACT).read_text(encoding="utf-8") == content
@@ -390,11 +392,13 @@ def test_strictIsNotOptionalInTheWorkflow():
 
 
 @requiresGenerator
-def test_substitutionIsAnnouncedAsSuch(builtOnce):
-    code, out, _ = builtOnce("Invoice", "java", "--advisory")
+def test_existingResourceIsAnnouncedAsAParityReport(tmpPath):
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(_target(tmpPath)))
 
-    assert code == 0, out
-    assert "SUBSTITUI" in out
+    assert code == 4, out
+    assert "já existe" in out
+    assert "nada será entregue" in out
+    assert "SUBSTITUI" not in out
 
 
 def test_gapFillingIsAnnouncedAsSuch(buildResource, capsys):
@@ -489,8 +493,8 @@ def test_javaImportsNeverAskForTheRemovedSettingsFlag(buildResource):
 
 
 @requiresGenerator
-def test_relativeTargetIsResolvedAgainstTheCallersDirectory(tmpPath):
-    import subprocess, sys
+def test_relativeTargetIsResolvedAgainstTheCallersDirectory(tmpPath, referenceWithout):
+    import os, subprocess, sys
     target = tmpPath / "sdk-java"
     (target / "src/main/java/com/starkbank").mkdir(parents=True)
     subprocess.run(["git", "init", "-q"], cwd=target, check=True)
@@ -499,6 +503,7 @@ def test_relativeTargetIsResolvedAgainstTheCallersDirectory(tmpPath):
         [sys.executable, str(REPO_ROOT / "tools/build-resource.py"), "SplitProfile", "--lang", "java",
          "--into", "sdk-java", "--advisory"],
         cwd=tmpPath, capture_output=True, text=True,
+        env={**os.environ, **referenceWithout("java", "SplitProfile")},
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -516,7 +521,7 @@ def _forgedJavaSdk(tmpPath: Path, generated: str, extra: str = "") -> Path:
 
 
 @requiresGenerator
-def test_strictSubstitutionAgainstADerivedRulerFailsWhenTheGeneratedLosesAnItem(builtOnce, tmpPath):
+def test_aFailingGateOnAnExistingResourceStillExitsWithTheExistsCode(builtOnce, tmpPath):
     code, out, built = builtOnce("SplitProfile", "java")
     assert code == 0, out
     generated = (built / "src/main/java/com/starkbank/SplitProfile.java").read_text(encoding="utf-8")
@@ -527,14 +532,15 @@ def test_strictSubstitutionAgainstADerivedRulerFailsWhenTheGeneratedLosesAnItem(
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
                         env={"SDK_JAVA": str(sdk)})
 
-    assert code == 1, out
+    assert code == 4, out
     assert "CONTRACT_GAP" in out
     assert "onlyInProduction" in out
-    assert list(target.rglob("*.java")) == [], "o que reprovou no gate nao pode ter sido colocado"
+    assert "0 passaram, 1 reprovaram" in out
+    assert list(target.rglob("*")) == [], "o que reprovou no gate nao pode ter sido colocado"
 
 
 @requiresGenerator
-def test_strictSubstitutionPassesWhenTheGeneratedKeepsEveryItem(builtOnce, tmpPath):
+def test_theParityReportCountsTheRolesThatPassedTheGate(builtOnce, tmpPath):
     code, out, built = builtOnce("SplitProfile", "java")
     assert code == 0, out
     generated = (built / "src/main/java/com/starkbank/SplitProfile.java").read_text(encoding="utf-8")
@@ -545,9 +551,9 @@ def test_strictSubstitutionPassesWhenTheGeneratedKeepsEveryItem(builtOnce, tmpPa
     code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
                         env={"SDK_JAVA": str(sdk)})
 
-    assert code == 0, out
-    assert "SUBSTITUI" in out
-    assert (target / "src/main/java/com/starkbank/SplitProfile.java").is_file()
+    assert code == 4, out
+    assert "1 passaram, 0 reprovaram" in out
+    assert list(target.rglob("*")) == []
 
 
 @requiresGenerator
@@ -558,3 +564,70 @@ def test_logJavadocParamNamesTheConstructorParameter(builtOnce):
     assert "public Log(String created, String type, List<ErrorElement> errors, SplitProfile profile, String id)" in source
     assert "@param profile [SplitProfile]" in source
     assert "@param splitProfile [SplitProfile]" not in source
+
+
+def _snapshot(root: Path) -> dict[str, str]:
+    return {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+@requiresGenerator
+def test_existingResourceYieldsTheExistsCodeAndLeavesTheTargetUntouched(tmpPath):
+    # Mutacao: religar o ramo "existe" para `place` cria SplitProfile.java em `into`
+    # e este teste passa a falhar (codigo 0 e arquivo novo).
+    target = _target(tmpPath)
+    (target / "keep.txt").write_text("alvo\n", encoding="utf-8")
+    before = _snapshot(target)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target))
+
+    assert code == 4, out
+    assert "já existe" in out
+    assert _snapshot(target) == before
+    assert not (target / ARTIFACT).exists()
+
+
+@requiresGenerator
+def test_absentResourceIsStillGeneratedAndPlacedWithExitZero(tmpPath, referenceWithout):
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        env=referenceWithout("java", "SplitProfile"))
+
+    assert code == 0, out
+    assert "preenche a lacuna" in out
+    assert (target / ARTIFACT).is_file()
+
+
+@requiresGenerator
+def test_partiallyExistingResourceIsReportedAndNothingIsPlaced(tmpPath, referenceWithout):
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target),
+                        env=referenceWithout("node", "Transaction", keepRoles=("impl",)))
+
+    assert code == 4, out
+    assert "existe parcialmente" in out
+    # papel sem regua fica fora do gate e conta como ausente: sem isso o relatorio mentiria
+    assert "0 passaram, 1 reprovaram, 2 ausentes no SDK de referência" in out
+    assert list(target.rglob("*")) == []
+
+
+@requiresGenerator
+def test_advisoryDoesNotSoftenTheParityReportOfAnExistingResource(tmpPath):
+    target = _target(tmpPath)
+
+    # Invoice reprova o gate estrito; se --advisory afrouxasse o relatorio, o veredito viraria "passou"
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(target),
+                        "--advisory")
+
+    assert code == 4, out
+    assert "0 passaram, 1 reprovaram" in out
+    assert list(target.rglob("*")) == []
+
+
+def test_existsCodeDoesNotCollideWithTheOtherExitCodes(buildResource):
+    taken = {0, 1, 2, buildResource.EXIT_ABSENT_UPSTREAM, buildResource.EXIT_NO_EXECUTABLE}
+
+    assert buildResource.EXIT_EXISTS == 4
+    assert buildResource.EXIT_EXISTS not in taken

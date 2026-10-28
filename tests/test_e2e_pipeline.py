@@ -46,10 +46,11 @@ def _commitDeclared(repo: Path) -> bool:
 
 
 @requiresGenerator
-def test_fullChainLeavesNoUndeclaredArtifact(tmpPath):
+def test_fullChainLeavesNoUndeclaredArtifact(tmpPath, referenceWithout):
     repo = _repo(tmpPath)
 
-    code, out = runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
+    code, out = runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo),
+                        env=referenceWithout(LANGUAGE, RESOURCE))
     assert code == 0, out
 
     untracked = _git(repo, "status", "--porcelain", "-uall").split()
@@ -57,9 +58,10 @@ def test_fullChainLeavesNoUndeclaredArtifact(tmpPath):
 
 
 @requiresGenerator
-def test_commitCarriesOnlyTheResourceFile(tmpPath):
+def test_commitCarriesOnlyTheResourceFile(tmpPath, referenceWithout):
     repo = _repo(tmpPath)
-    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
+    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo),
+            env=referenceWithout(LANGUAGE, RESOURCE))
 
     assert _commitDeclared(repo) is True
 
@@ -70,14 +72,15 @@ def test_commitCarriesOnlyTheResourceFile(tmpPath):
 
 
 @requiresGenerator
-def test_secondRunCreatesNoCommit(tmpPath):
+def test_secondRunCreatesNoCommit(tmpPath, referenceWithout):
     repo = _repo(tmpPath)
+    reference = referenceWithout(LANGUAGE, RESOURCE)
 
-    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
+    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo), env=reference)
     assert _commitDeclared(repo) is True
     first = _git(repo, "rev-parse", "HEAD").strip()
 
-    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo))
+    runTool("build-resource.py", RESOURCE, "--lang", LANGUAGE, "--into", str(repo), env=reference)
     assert _commitDeclared(repo) is False
     assert _git(repo, "rev-parse", "HEAD").strip() == first
 
@@ -97,19 +100,20 @@ def _isolatedCopyOfTheTooling(tmpPath):
 
 
 @requiresGenerator
-def test_isolatedCopyOfTheToolingBuildsWhenTheTemplateIsIntact(tmpPath):
+def test_isolatedCopyOfTheToolingBuildsWhenTheTemplateIsIntact(tmpPath, referenceWithout):
     repo = _repo(tmpPath)
     isolated = _isolatedCopyOfTheTooling(tmpPath)
 
     result = subprocess.run([sys.executable, str(isolated / "tools/build-resource.py"), RESOURCE,
-                             "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True)
+                             "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True,
+                            env={**os.environ, **referenceWithout(LANGUAGE, RESOURCE)})
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (repo / "src/main/java/com/starkbank/SplitProfile.java").is_file()
 
 
 @requiresGenerator
-def test_corruptTemplateAbortsBeforePlacing(tmpPath):
+def test_corruptTemplateAbortsBeforePlacing(tmpPath, referenceWithout):
     repo = _repo(tmpPath)
     isolated = _isolatedCopyOfTheTooling(tmpPath)
     template = isolated / "templates/java/model.mustache"
@@ -122,7 +126,7 @@ def test_corruptTemplateAbortsBeforePlacing(tmpPath):
     scratch.mkdir()
     result = subprocess.run([sys.executable, str(isolated / "tools/build-resource.py"), RESOURCE,
                              "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True,
-                            env={**os.environ, "TMPDIR": str(scratch)})
+                            env={**os.environ, **referenceWithout(LANGUAGE, RESOURCE), "TMPDIR": str(scratch)})
     code, out = result.returncode, result.stdout
 
     assert code == 1, out

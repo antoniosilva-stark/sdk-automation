@@ -28,6 +28,7 @@ def loadTool(name: str):
 
 EXIT_ABSENT_UPSTREAM = loadTool("derive-contract").EXIT_ABSENT_UPSTREAM
 EXIT_NO_EXECUTABLE = 127
+EXIT_EXISTS = 4  # recurso já existe no SDK de referência: relatório emitido, nada entregue
 
 SCOPE = "supportingFiles=false,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false"
 
@@ -197,8 +198,11 @@ def announceIntent(resource: str, language: str, absent: int, total: int) -> Non
         emit(f"[INFO] {resource} não existe no sdk-{language}{detail}"
              " — esta execução preenche a lacuna")
         return
-    emit(f"[INFO] {resource} já existe no sdk-{language} — esta execução SUBSTITUI"
-         " arquivo em produção; a régua derivada é o que impede regressão")
+    if absent == 0:
+        emit(f"[INFO] {resource} já existe no sdk-{language} — relatório de paridade, nada será entregue")
+        return
+    emit(f"[INFO] {resource} existe parcialmente no sdk-{language} ({total - absent} de {total} papéis presentes)"
+         " — relatório de paridade, nada será entregue")
 
 
 def deriveRuler(resource: str, language: str, role: str, into: Path) -> tuple[Path | None, int]:
@@ -246,6 +250,16 @@ def place(resource: str, language: str, generatedDir: Path, targetDir: Path) -> 
         ],
     )
     return code
+
+
+def reportParity(language: str, runs: list[dict], artifacts: dict[str, Path],
+                 rulers: dict[str, Path | None]) -> None:
+    """Mede sem bloquear: o gate de substituição roda em todo papel presente, sem parar no primeiro gap."""
+    present = [run["role"] for run in runs if rulers[run["role"]] is not None]
+    failed = [role for role in present
+              if assertGenerated(artifacts[role], language, role, rulers[role], True, True) != 0]
+    emit(f"[INFO] paridade medida pelo gate estrito: {len(present) - len(failed)} passaram,"
+         f" {len(failed)} reprovaram, {len(runs) - len(present)} ausentes no SDK de referência")
 
 
 def main() -> int:
@@ -305,14 +319,21 @@ def main() -> int:
 
         announceIntent(args.resource, args.lang, absent, len(runs))
 
+        artifacts = {}
         for run in runs:
             source, _ = pairs[run["role"]]
-            artifact = generatedDir / source
-            if not artifact.is_file():
+            artifacts[run["role"]] = generatedDir / source
+            if not artifacts[run["role"]].is_file():
                 emit(f"[ERROR] gerador {run['role']} retornou 0 mas não produziu o artefato: {source}")
                 return 1
-            if assertGenerated(artifact, args.lang, run["role"], rulers[run["role"]],
-                               not args.advisory, absent < len(runs)) != 0:
+
+        if absent < len(runs):
+            reportParity(args.lang, runs, artifacts, rulers)
+            return EXIT_EXISTS
+
+        for run in runs:
+            if assertGenerated(artifacts[run["role"]], args.lang, run["role"], rulers[run["role"]],
+                               not args.advisory, False) != 0:
                 return 1
 
         if place(args.resource, args.lang, generatedDir, targetDir) != 0:

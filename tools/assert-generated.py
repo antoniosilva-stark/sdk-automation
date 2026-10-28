@@ -398,7 +398,9 @@ def main() -> int:
             ignored, waivers = waivers, []
 
     contractPath = resolveContract(target, language, args.contract, args.role)
-    hasContract = bool(contractPath and contractPath.exists())
+    # a fixture legada, achada pelo nome, não vale quando a régua foi dispensada: o recurso é novo
+    skipLegacyFixture = args.allowMissingContract and not args.contract
+    hasContract = bool(contractPath and contractPath.exists()) and not skipLegacyFixture
     gaps, applied, unused = [], [], []
     if hasContract:
         try:

@@ -156,8 +156,38 @@ def coverageReport():
     return _loadTool("coverage-report.py")
 
 
+REFERENCES = {"java": REPO_ROOT / "_references/sdk-java", "node": REPO_ROOT / "_references/sdk-node"}
+
+
 @pytest.fixture(scope="session")
-def builtOnce(tmp_path_factory):
+def referenceWithout(tmp_path_factory):
+    """Referencia sem os arquivos do recurso, para exercitar o caminho de criacao.
+
+    A existencia e medida contra o SDK de referencia, nao contra `--into`; e os recursos
+    de teste ja existem nos pins. Arvore de symlinks: nenhum arquivo e copiado."""
+    placeGenerated = _loadTool("place-generated.py")
+    cache: dict[tuple, dict] = {}
+
+    def build(language: str, resource: str, keepRoles: tuple[str, ...] = ()) -> dict:
+        key = (language, resource, keepRoles)
+        if key in cache:
+            return cache[key]
+        root = tmp_path_factory.mktemp(f"ref-{language}-{resource}") / "sdk"
+        source = REFERENCES[language]
+        shutil.copytree(source, root, symlinks=True, copy_function=os.symlink,
+                        ignore=shutil.ignore_patterns(".git"))
+        (root / ".git").symlink_to(source / ".git")
+        for planned, target in placeGenerated.resolvePairs(language, resource):
+            if planned.split("/", 1)[0] not in keepRoles:
+                (root / target).unlink(missing_ok=True)
+        cache[key] = {f"SDK_{language.upper()}": str(root)}
+        return cache[key]
+
+    return build
+
+
+@pytest.fixture(scope="session")
+def builtOnce(tmp_path_factory, referenceWithout):
     cache: dict[tuple, tuple] = {}
 
     def build(resource: str, language: str, *extra: str):
@@ -165,7 +195,8 @@ def builtOnce(tmp_path_factory):
         if key not in cache:
             target = tmp_path_factory.mktemp(f"{resource}-{language}")
             code, out = runTool("build-resource.py", resource, "--lang", language,
-                                "--into", str(target), *extra)
+                                "--into", str(target), *extra,
+                                env=referenceWithout(language, resource))
             cache[key] = (code, out, target)
         return cache[key]
 

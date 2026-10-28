@@ -695,3 +695,32 @@ public record Widget(String id) {
     target = _write(tmpPath, "Widget.java", source)
     code, out = runTool("assert-generated.py", str(target))
     assert code == 0, out
+
+
+def _legacyNamed(tmpPath: Path) -> Path:
+    """Artefato cujo nome casa com a fixture legada tests/contract/java-transaction.contract."""
+    return _write(tmpPath, "Transaction.java", CLEAN_JAVA.replace("Widget", "Transaction"))
+
+
+def test_legacyFixtureIsNotUsedWhenTheMissingContractIsAllowed(tmpPath):
+    target = _legacyNamed(tmpPath)
+    code, out = runTool("assert-generated.py", str(target), "--lang", "java", "--strict",
+                        "--allow-missing-contract")
+    assert code == 0, out
+    assert "CONTRACT_GAP" not in out
+
+
+def test_legacyFixtureStillAppliesWithoutTheAllowFlag(tmpPath):
+    target = _legacyNamed(tmpPath)
+    code, out = runTool("assert-generated.py", str(target), "--lang", "java", "--strict")
+    assert code == 1
+    assert "CONTRACT_GAP" in out
+
+
+def test_explicitContractStillAppliesWhenTheMissingContractIsAllowed(tmpPath):
+    target = _legacyNamed(tmpPath)
+    contract = _write(tmpPath, "x.contract", "signature public static void ausente()\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "java", "--strict",
+                        "--allow-missing-contract", "--contract", str(contract))
+    assert code == 1
+    assert "ausente" in out
