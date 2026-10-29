@@ -120,6 +120,33 @@ def resolvedNodeSdk() -> Path | None:
     return None
 
 
+# Jars que o javac precisa para compilar e executar o arquivo gerado contra o sdk-java de referencia, sem rede.
+JAVA_RUNTIME_JARS = (
+    "com/starkinfra/core/starkcore/0.5.0/starkcore-0.5.0.jar",
+    "com/google/code/gson/gson/2.8.9/gson-2.8.9.jar",
+    "com/starkbank/ellipticcurve/starkbank-ecdsa/2.0.0/starkbank-ecdsa-2.0.0.jar",
+    "com/squareup/okhttp3/okhttp/4.9.2/okhttp-4.9.2.jar",
+    "com/squareup/okio/okio/2.8.0/okio-2.8.0.jar",
+    "org/jetbrains/kotlin/kotlin-stdlib/1.4.10/kotlin-stdlib-1.4.10.jar",
+    "com/squareup/retrofit2/retrofit/2.7.2/retrofit-2.7.2.jar",
+)
+
+
+def javaRuntimeClasspath() -> str:
+    repository = Path.home() / ".m2/repository"
+    return ":".join(str(repository / jar) for jar in JAVA_RUNTIME_JARS)
+
+
+def missingJavaRuntime() -> str | None:
+    repository = Path.home() / ".m2/repository"
+    missing = next((jar for jar in JAVA_RUNTIME_JARS if not (repository / jar).is_file()), None)
+    if missing:
+        return f"jar ausente em ~/.m2: {missing}"
+    if not (REPO_ROOT / "_references/sdk-java/src/main/java").is_dir():
+        return "sdk-java de referencia ausente: o javac precisa do -sourcepath"
+    return None
+
+
 PYTHON_SDK = resolvedPythonSdk()
 JAVA_SDK = resolvedJavaSdk()
 NODE_SDK = resolvedNodeSdk()
@@ -127,6 +154,11 @@ NODE_SDK = resolvedNodeSdk()
 requiresPythonSdk = pytest.mark.skipif(PYTHON_SDK is None, reason="sdk-python do Stark Bank não resolvido")
 requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não resolvido")
 requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
+
+# Fora de missingDependencies: sao jars de uma dependencia transitiva do SDK, nao do pipeline; sem eles o teste de
+# runtime do construtor pula com a razao dita (o javac e o SDK de referencia seguem exigidos por missingDependencies).
+JAVA_RUNTIME_SKIP = missingJavaRuntime()
+requiresJavaRuntime = pytest.mark.skipif(JAVA_RUNTIME_SKIP is not None, reason=JAVA_RUNTIME_SKIP or "")
 
 
 def missingDependencies() -> list[str]:

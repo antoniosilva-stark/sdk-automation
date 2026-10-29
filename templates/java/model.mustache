@@ -1,18 +1,19 @@
 package {{package}};
 {{#models}}{{#model}}
-
-{{#usesRest}}import com.starkbank.utils.Rest;
-{{/usesRest}}import com.starkbank.utils.Resource;
 {{#usesGenerator}}import com.starkbank.utils.Generator;
-{{/usesGenerator}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
+{{/usesGenerator}}import com.starkbank.utils.Resource;
+{{#usesRest}}import com.starkbank.utils.Rest;
+{{/usesRest}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
 {{/usesSubResource}}{{#vendorExtensions.x-sdk-log}}import com.starkbank.error.ErrorElement;
 {{/vendorExtensions.x-sdk-log}}
+
 {{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
 {{/usesList}}import java.util.HashMap;
 {{#usesList}}import java.util.List;
 {{/usesList}}{{^usesList}}{{#usesObjectList}}import java.util.List;
 {{/usesObjectList}}{{/usesList}}import java.util.Map;
+
 
 public final class {{classname}} extends Resource {
     /**
@@ -34,12 +35,13 @@ public final class {{classname}} extends Resource {
     /**
 {{#vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     */
-    @SuppressWarnings("unchecked")
-    public {{classname}}(Map<String, Object> data) throws Exception {
+{{#vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    @SuppressWarnings("unchecked")
+{{/vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    public {{classname}}(Map<String, Object> data) throws Exception {
         super(null);
         HashMap<String, Object> dataCopy = new HashMap<>(data);
-{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = ({{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}}) dataCopy.remove("{{name}}");
-{{/vendorExtensions.x-sdk-id}}{{/vars}}
+{{#vendorExtensions.x-sdk-java-code.ctorMapBody}}        {{{.}}}
+{{/vendorExtensions.x-sdk-java-code.ctorMapBody}}
+
         if (!dataCopy.isEmpty()) {
             throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
         }
@@ -48,32 +50,6 @@ public final class {{classname}} extends Resource {
     public {{classname}}() {
         super(null);
     }
-{{#vendorExtensions.x-sdk-create}}
-
-    /**
-{{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
-    public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
-        return {{classname}}.create({{classVarName}}s, null);
-    }
-
-    /**
-{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.createUser}}     */
-    @SuppressWarnings("unchecked")
-    public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
-        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
-        for (Object {{classVarName}} : {{classVarName}}s) {
-            if ({{classVarName}} instanceof Map)
-                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
-            else if ({{classVarName}} instanceof {{classname}})
-                {{classVarName}}List.add(({{classname}}) {{classVarName}});
-            else
-                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
-        }
-        return Rest.post(data, {{classVarName}}List, user);
-    }
-{{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-put}}
 
     /**
@@ -90,12 +66,15 @@ public final class {{classname}} extends Resource {
     public static List<{{classname}}> put(List<?> {{classVarName}}s, User user) throws Exception {
         List<{{classname}}> {{classVarName}}List = new ArrayList<>();
         for (Object {{classVarName}} : {{classVarName}}s) {
-            if ({{classVarName}} instanceof Map)
+            if ({{classVarName}} instanceof Map) {
                 {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
-            else if ({{classVarName}} instanceof {{classname}})
+                continue;
+            }
+            if ({{classVarName}} instanceof {{classname}}) {
                 {{classVarName}}List.add(({{classname}}) {{classVarName}});
-            else
-                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+                continue;
+            }
+            throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
         }
         return Rest.put(data, {{classVarName}}List, user);
     }
@@ -119,17 +98,10 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-query}}
 
     /**
-{{#vendorExtensions.x-sdk-java-docs.queryPlain}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.queryPlain}}     */
-    public static Generator<{{classname}}> query() throws Exception {
-        return {{classname}}.query(new HashMap<>(), null);
-    }
-
-    /**
-{{#vendorExtensions.x-sdk-java-docs.queryUser}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.queryUser}}     */
-    public static Generator<{{classname}}> query(User user) throws Exception {
-        return {{classname}}.query(new HashMap<>(), user);
+{{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryParamsUser}}     */
+    public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
+        return Rest.getStream(data, params, user);
     }
 
     /**
@@ -140,10 +112,17 @@ public final class {{classname}} extends Resource {
     }
 
     /**
-{{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.queryParamsUser}}     */
-    public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
-        return Rest.getStream(data, params, user);
+{{#vendorExtensions.x-sdk-java-docs.queryUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryUser}}     */
+    public static Generator<{{classname}}> query(User user) throws Exception {
+        return {{classname}}.query(new HashMap<>(), user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryPlain}}     */
+    public static Generator<{{classname}}> query() throws Exception {
+        return {{classname}}.query(new HashMap<>(), null);
     }
 {{/vendorExtensions.x-sdk-query}}
 {{#vendorExtensions.x-sdk-page}}
@@ -159,10 +138,10 @@ public final class {{classname}} extends Resource {
     }
 
     /**
-{{#vendorExtensions.x-sdk-java-docs.pagePlain}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.pagePlain}}     */
-    public static Page page() throws Exception {
-        return {{classname}}.page(new HashMap<>(), null);
+{{#vendorExtensions.x-sdk-java-docs.pageParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pageParams}}     */
+    public static Page page(Map<String, Object> params) throws Exception {
+        return {{classname}}.page(params, null);
     }
 
     /**
@@ -173,10 +152,10 @@ public final class {{classname}} extends Resource {
     }
 
     /**
-{{#vendorExtensions.x-sdk-java-docs.pageParams}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.pageParams}}     */
-    public static Page page(Map<String, Object> params) throws Exception {
-        return {{classname}}.page(params, null);
+{{#vendorExtensions.x-sdk-java-docs.pagePlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pagePlain}}     */
+    public static Page page() throws Exception {
+        return {{classname}}.page(new HashMap<>(), null);
     }
 
     /**
@@ -185,11 +164,41 @@ public final class {{classname}} extends Resource {
     public static Page page(Map<String, Object> params, User user) throws Exception {
         com.starkcore.utils.Page page = Rest.getPage(data, params, user);
         List<{{classname}}> {{classVarName}}s = new ArrayList<>();
-        for (SubResource {{classVarName}}: page.entities)
+        for (SubResource {{classVarName}}: page.entities) {
             {{classVarName}}s.add(({{classname}}) {{classVarName}});
+        }
         return new Page({{classVarName}}s, page.cursor);
     }
 {{/vendorExtensions.x-sdk-page}}
+{{#vendorExtensions.x-sdk-create}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
+    public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
+        return {{classname}}.create({{classVarName}}s, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createUser}}     */
+    @SuppressWarnings("unchecked")
+    public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
+        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
+        for (Object {{classVarName}} : {{classVarName}}s) {
+            if ({{classVarName}} instanceof Map) {
+                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
+                continue;
+            }
+            if ({{classVarName}} instanceof {{classname}}) {
+                {{classVarName}}List.add(({{classname}}) {{classVarName}});
+                continue;
+            }
+            throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+        }
+        return Rest.post(data, {{classVarName}}List, user);
+    }
+{{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-update}}
 
     /**
@@ -206,6 +215,22 @@ public final class {{classname}} extends Resource {
         return Rest.patch(data, id, patchData, user);
     }
 {{/vendorExtensions.x-sdk-update}}
+{{#vendorExtensions.x-sdk-pdf}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfPlain}}     */
+    public static InputStream pdf(String id) throws Exception {
+        return {{classname}}.pdf(id, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfUser}}     */
+    public static InputStream pdf(String id, User user) throws Exception {
+        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
+    }
+{{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-delete}}
 
     /**
@@ -238,22 +263,6 @@ public final class {{classname}} extends Resource {
         return Rest.delete(data, id, user);
     }
 {{/vendorExtensions.x-sdk-cancel}}
-{{#vendorExtensions.x-sdk-pdf}}
-
-    /**
-{{#vendorExtensions.x-sdk-java-docs.pdfPlain}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.pdfPlain}}     */
-    public static InputStream pdf(String id) throws Exception {
-        return {{classname}}.pdf(id, null);
-    }
-
-    /**
-{{#vendorExtensions.x-sdk-java-docs.pdfUser}}     * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.pdfUser}}     */
-    public static InputStream pdf(String id, User user) throws Exception {
-        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
-    }
-{{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-log}}
 
     public final static class Log extends Resource {
@@ -305,13 +314,6 @@ public final class {{classname}} extends Resource {
         }
 
         /**
-{{#vendorExtensions.x-sdk-java-docs.logQueryPlain}}         * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.logQueryPlain}}         */
-        public static Generator<{{classname}}.Log> query() throws Exception {
-            return Log.query(new HashMap<>(), null);
-        }
-
-        /**
 {{#vendorExtensions.x-sdk-java-docs.logQueryParams}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logQueryParams}}         */
         public static Generator<{{classname}}.Log> query(Map<String, Object> params) throws Exception {
@@ -323,6 +325,13 @@ public final class {{classname}} extends Resource {
 {{/vendorExtensions.x-sdk-java-docs.logQueryUser}}         */
         public static Generator<{{classname}}.Log> query(User user) throws Exception {
             return Log.query(new HashMap<>(), user);
+        }
+
+        /**
+{{#vendorExtensions.x-sdk-java-docs.logQueryPlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logQueryPlain}}         */
+        public static Generator<{{classname}}.Log> query() throws Exception {
+            return Log.query(new HashMap<>(), null);
         }
 
         /**
@@ -343,13 +352,6 @@ public final class {{classname}} extends Resource {
         }
 
         /**
-{{#vendorExtensions.x-sdk-java-docs.logPagePlain}}         * {{{.}}}
-{{/vendorExtensions.x-sdk-java-docs.logPagePlain}}         */
-        public static {{classname}}.Log.Page page() throws Exception {
-            return Log.page(new HashMap<>(), null);
-        }
-
-        /**
 {{#vendorExtensions.x-sdk-java-docs.logPageParams}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPageParams}}         */
         public static {{classname}}.Log.Page page(Map<String, Object> params) throws Exception {
@@ -364,13 +366,21 @@ public final class {{classname}} extends Resource {
         }
 
         /**
+{{#vendorExtensions.x-sdk-java-docs.logPagePlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPagePlain}}         */
+        public static {{classname}}.Log.Page page() throws Exception {
+            return Log.page(new HashMap<>(), null);
+        }
+
+        /**
 {{#vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         */
         public static {{classname}}.Log.Page page(Map<String, Object> params, User user) throws Exception {
             com.starkcore.utils.Page page = Rest.getPage(data, params, user);
             List<{{classname}}.Log> logs = new ArrayList<>();
-            for (SubResource log: page.entities)
+            for (SubResource log: page.entities) {
                 logs.add((Log) log);
+            }
             return new Page(logs, page.cursor);
         }
     }
