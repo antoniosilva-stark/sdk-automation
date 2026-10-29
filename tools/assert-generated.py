@@ -5,6 +5,7 @@ import tempfile
 import argparse
 import subprocess
 from pathlib import Path
+from collections import Counter
 from dataclasses import dataclass
 from importlib.util import spec_from_file_location, module_from_spec
 
@@ -19,6 +20,14 @@ CODE_SYNTAX = "SYNTAX"
 CODE_CONTRACT_GAP = "CONTRACT_GAP"
 CODE_DEAD_IMPORT = "DEAD_IMPORT"
 CODE_MISSING_CONTRACT = "MISSING_CONTRACT"
+CODE_STYLE_RESIDUE = "STYLE_PYTHON_RESIDUE"
+CODE_STYLE_EMPTY_DOC = "STYLE_EMPTY_DOC"
+CODE_STYLE_TRAILING_SPACE = "STYLE_TRAILING_SPACE"
+CODE_STYLE_PARAM_ORPHAN = "STYLE_PARAM_ORPHAN"
+CODE_STYLE_NUMERIC_CAST = "STYLE_NUMERIC_CAST"
+CODE_STYLE_UNBRACED = "STYLE_UNBRACED"
+CODE_STYLE_PYTHON_CTOR = "STYLE_PYTHON_CTOR"
+CODE_STYLE_SNAKE_CASE = "STYLE_SNAKE_CASE"
 
 _INLINE_COMMENT = re.compile(r"\s+#")
 _WAIVER_SECTION = re.compile(r"^\[([\w.-]+)/([\w.-]+)\]$")
@@ -36,6 +45,14 @@ _JAVAC_DIAGNOSTIC = re.compile(r"^.*:(\d+): error: (.*)$")
 _JAVAC_PARSE_ONLY = ("-XDshould-stop.ifNoError=PARSE", "-XDshould-stop.ifError=PARSE")
 _IMPORT = re.compile(r"^import (?:static )?([\w.]+);", re.M)
 _FIELD_NAME = re.compile(r"(\w+)\s*;\s*$")
+_JAVADOC_RESIDUE = re.compile(r"datetime\.\w|timedelta|\bNone\b|\bTrue\b|\bFalse\b|\\\"|starkbank\.user\b|User\.defaultUser")
+_EMPTY_DOC_LINE = re.compile(r"\]\s*:\s*$")
+_PARAM_TAG = re.compile(r"^\s*\*\s*@param\s+(\w+)")
+_NUMERIC_REMOVE_CAST = re.compile(
+    r"\(\s*(?:java\.lang\.)?(?:Integer|Long|Float|Double|Short|Byte|int|long|float|double|short|byte)\s*\)\s*dataCopy\.remove\(")
+_BRANCH_KEYWORD = re.compile(r"\b(?:if|for)\s*\(")
+_PYTHON_CTOR = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*\(\w+=")
+_SNAKE_CASE = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
 
 
 @dataclass
@@ -212,6 +229,133 @@ def checkDeadImports(source: str, filePath: str) -> list[Issue]:
     return issues
 
 
+def commentLines(source: str) -> list[tuple[int, str]]:
+    """Linhas que só têm comentário: o scanner de ruído as esvazia. Comentário ao fim de linha com código fica de fora."""
+    cleaned = loadTool("derive-contract").withoutNoise(source, keepStrings=True)
+    return [(number, raw) for number, (raw, clean) in enumerate(zip(source.split("\n"), cleaned), start=1)
+            if raw.strip() and not clean.strip()]
+
+
+def checkJavadocText(comments: list[tuple[int, str]], filePath: str) -> list[Issue]:
+    issues = []
+    for number, text in comments:
+        residue = _JAVADOC_RESIDUE.search(text)
+        if residue:
+            issues.append(Issue(filePath, number, residue.start(), CODE_STYLE_RESIDUE,
+                                f"resíduo de Python no Javadoc {residue.group(0)!r}: {text.strip()}"))
+        if _EMPTY_DOC_LINE.search(text):
+            issues.append(Issue(filePath, number, 0, CODE_STYLE_EMPTY_DOC,
+                                f"descrição vazia no Javadoc: {text.strip()}"))
+    return issues
+
+
+def warnJavadocText(comments: list[tuple[int, str]], filePath: str) -> list[Issue]:
+    """Sem mapeamento seguro para o Java: avisa, não bloqueia."""
+    warnings = []
+    for number, text in comments:
+        constructor = _PYTHON_CTOR.search(text)
+        if constructor:
+            warnings.append(Issue(filePath, number, constructor.start(), CODE_STYLE_PYTHON_CTOR,
+                                  f"construtor Python em exemplo de doc: {text.strip()}"))
+        snake = _SNAKE_CASE.search(text)
+        if snake:
+            warnings.append(Issue(filePath, number, snake.start(), CODE_STYLE_SNAKE_CASE,
+                                  f"snake_case no texto do doc: {text.strip()}"))
+    return warnings
+
+
+def checkTrailingSpace(source: str, filePath: str) -> list[Issue]:
+    return [Issue(filePath, number, len(line.rstrip()), CODE_STYLE_TRAILING_SPACE,
+                  f"espaço no fim da linha: {line.strip()}")
+            for number, line in enumerate(source.split("\n"), start=1) if line != line.rstrip()]
+
+
+def declarationAfter(cleaned: list[str], start: int) -> str:
+    """Texto da declaração que segue o índice `start`: pula anotações e acumula até `{` ou `;`."""
+    index = start
+    while index < len(cleaned) and (not cleaned[index].strip() or cleaned[index].strip().startswith("@")):
+        index += 1
+    declaration = ""
+    while index < len(cleaned):
+        declaration += " " + cleaned[index].strip()
+        if "{" in cleaned[index] or ";" in cleaned[index]:
+            break
+        index += 1
+    return declaration
+
+
+def signatureNames(declaration: str) -> set[str]:
+    """Nomes dos parâmetros da assinatura; campo com inicializador e declaração sem `(` não têm nenhum."""
+    start, end = declaration.find("("), declaration.rfind(")")
+    if start < 0 or end < start or "=" in declaration[:start]:
+        return set()
+    return {normalise(part).rsplit(" ", 1)[-1] for part in splitTopLevel(declaration[start + 1:end])}
+
+
+def checkParamNames(source: str, filePath: str) -> list[Issue]:
+    lines = source.split("\n")
+    cleaned = loadTool("derive-contract").withoutNoise(source)
+    issues, index = [], 0
+    while index < len(lines):
+        if not lines[index].strip().startswith("/**"):
+            index += 1
+            continue
+        end = index
+        while end < len(lines) and "*/" not in lines[end]:
+            end += 1
+        declaration = declarationAfter(cleaned, end + 1)
+        names = signatureNames(declaration)
+        for number in range(index, min(end, len(lines) - 1) + 1):
+            tag = _PARAM_TAG.match(lines[number])
+            if tag and tag.group(1) not in names:
+                issues.append(Issue(filePath, number + 1, 0, CODE_STYLE_PARAM_ORPHAN,
+                                    f"@param {tag.group(1)} não está na assinatura de{declaration}:"
+                                    f" {lines[number].strip()}"))
+        index = end + 1
+    return issues
+
+
+def checkNumericCasts(source: str, filePath: str) -> list[Issue]:
+    cleaned = loadTool("derive-contract").withoutNoise(source)
+    return [Issue(filePath, number, 0, CODE_STYLE_NUMERIC_CAST,
+                  f"cast direto de numérico no Map, leia como Number: {raw.strip()}")
+            for number, (raw, line) in enumerate(zip(source.split("\n"), cleaned), start=1)
+            if _NUMERIC_REMOVE_CAST.search(line)]
+
+
+def matchingParen(text: str, opening: int) -> int:
+    depth = 0
+    for position in range(opening, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[position], 0)
+        if depth == 0:
+            return position
+    return -1
+
+
+def checkBraces(source: str, filePath: str) -> list[Issue]:
+    """Heurística sobre o fonte sem comentário nem string: `if`/`for` cujo `)` fechador não é seguido de `{`."""
+    bare = "\n".join(loadTool("derive-contract").withoutNoise(source))
+    lines = source.split("\n")
+    issues = []
+    for match in _BRANCH_KEYWORD.finditer(bare):
+        closing = matchingParen(bare, match.end() - 1)
+        if closing < 0 or bare[closing + 1:].lstrip().startswith("{"):
+            continue
+        number = bare.count("\n", 0, match.start()) + 1
+        issues.append(Issue(filePath, number, 0, CODE_STYLE_UNBRACED,
+                            f"{match.group(0).split()[0].rstrip('(')} sem chaves: {lines[number - 1].strip()}"))
+    return issues
+
+
+def checkStyle(source: str, filePath: str) -> tuple[list[Issue], list[Issue]]:
+    """Bloqueios e avisos de estilo do Java gerado: resíduo de Python e convenções que o gate de assinatura não vê."""
+    comments = commentLines(source)
+    blocking = checkJavadocText(comments, filePath) + checkTrailingSpace(source, filePath)
+    blocking += checkParamNames(source, filePath) + checkNumericCasts(source, filePath)
+    blocking += checkBraces(source, filePath)
+    return (blocking, warnJavadocText(comments, filePath))
+
+
 def declaredField(source: str, name: str) -> str | None:
     """Declaração do campo `name` como o fonte gerado a escreveu, com o tipo dele."""
     match = re.search(r"^\s*(public [^;{}\n]*\b" + re.escape(name) + r")\s*;", source, re.M)
@@ -334,10 +478,10 @@ def detectLanguage(target: Path, explicit: str | None) -> str:
     return "node"
 
 
-def reportIssues(issues: list[Issue]) -> None:
+def reportIssues(issues: list[Issue], level: str = "ERROR") -> None:
     for issue in sorted(issues, key=lambda i: (i.line, i.code)):
         location = f"{issue.file}:{issue.line}" if issue.line else issue.file
-        emit(f"[ERROR] {location} {issue.code} {issue.message}")
+        emit(f"[{level}] {location} {issue.code} {issue.message}")
 
 
 def main() -> int:
@@ -350,6 +494,8 @@ def main() -> int:
     parser.add_argument("--allow-missing-contract", dest="allowMissingContract", action="store_true",
                         help="aceita a ausência de régua, para recurso que ainda não existe no SDK alvo")
     parser.add_argument("--strict", action="store_true", help="trata gap de contrato como reprovação")
+    parser.add_argument("--style", action="store_true",
+                        help="Java: reprova resíduo de Python no Javadoc e convenção quebrada; só no caminho de criação")
     parser.add_argument("--role", help="papel do artefato, ex: impl, barrel, types")
     parser.add_argument("--waivers", default=None, help=f"arquivo de dispensas (padrão: {WAIVER_DIR}/<lang>.waivers)")
     args = parser.parse_args()
@@ -367,6 +513,12 @@ def main() -> int:
     skipped = []
     blocking = checkPlaceholders(source, filePath) + checkEmptyTokens(source, filePath)
     blocking += checkDeadImports(source, filePath)
+
+    styleWarnings = []
+    if args.style and language == "java":
+        styleBlocking, styleWarnings = checkStyle(source, filePath)
+        blocking += styleBlocking
+        executed.append("estilo")
 
     if language == "java":
         ran, syntaxIssues = javacSyntax(target)
@@ -398,7 +550,9 @@ def main() -> int:
             ignored, waivers = waivers, []
 
     contractPath = resolveContract(target, language, args.contract, args.role)
-    hasContract = bool(contractPath and contractPath.exists())
+    # a fixture legada, achada pelo nome, não vale quando a régua foi dispensada: o recurso é novo
+    skipLegacyFixture = args.allowMissingContract and not args.contract
+    hasContract = bool(contractPath and contractPath.exists()) and not skipLegacyFixture
     gaps, applied, unused = [], [], []
     if hasContract:
         try:
@@ -418,6 +572,11 @@ def main() -> int:
         emit("[INFO] recurso sem arquivo real no SDK alvo — régua dispensada nesta execução")
     if not hasContract and not args.allowMissingContract:
         emit("[WARN] sem contrato para este recurso — nada a medir contra o SDK real")
+    if styleWarnings:
+        reportIssues(styleWarnings, level="WARN")
+        kinds = Counter(warning.code for warning in styleWarnings)
+        emit(f"[WARN] {len(styleWarnings)} aviso(s) de estilo que não bloqueiam"
+             f" ({', '.join(f'{code} {count}' for code, count in sorted(kinds.items()))})")
     for entry in applied:
         emit(f"[INFO] dispensado: {entry['kind']} {entry['value']} — {entry['reason']}")
     for entry in ignored:

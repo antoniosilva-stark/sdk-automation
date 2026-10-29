@@ -21,6 +21,92 @@ components:
         - url
         - subscriptions
         - id
+      x-sdk-docs:
+        create:
+          summary: "Create Webhook subscription"
+          description:
+            - "Send a single Webhook subscription for creation in the Stark Bank API"
+          params:
+            - name: "url"
+              type: "string"
+              description: "url to which notification events will be sent to. ex: \"https://webhook.site/60e9c18e-4b5c-4369-bda1-ab5fcd8e1b29\""
+              section: "required"
+            - name: "subscriptions"
+              type: "list of strings"
+              description: "list of any non-empty combination of the available services. ex: [\"transfer\", \"boleto-payment\"]"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Webhook object with updated attributes"
+        get:
+          summary: "Retrieve a specific Webhook subscription"
+          description:
+            - "Receive a single Webhook subscription object previously created in the Stark Bank API by its id"
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Webhook object with updated attributes"
+        query:
+          summary: "Retrieve Webhook subscriptions"
+          description:
+            - "Receive a generator of Webhook subscription objects previously created in the Stark Bank API"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of Webhook objects with updated attributes"
+        page:
+          summary: "Retrieve paged Webhook subscriptions"
+          description:
+            - "Receive a list of up to 100 Webhook subscription objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your requests."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of Webhook objects with updated attributes"
+            - "cursor to retrieve the next page of Webhook objects"
+        delete:
+          summary: "Delete a Webhook subscription entity"
+          description:
+            - "Delete a Webhook subscription entity previously created in the Stark Bank API. This action cannot be undone."
+          params:
+            - name: "id"
+              type: "string"
+              description: "Webhook unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "deleted Webhook object"
 
     WebhookCreate:
       type: object

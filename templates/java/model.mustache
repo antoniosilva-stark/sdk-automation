@@ -1,12 +1,12 @@
 package {{package}};
 {{#models}}{{#model}}
-
-{{#usesRest}}import com.starkbank.utils.Rest;
-{{/usesRest}}import com.starkbank.utils.Resource;
 {{#usesGenerator}}import com.starkbank.utils.Generator;
-{{/usesGenerator}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
+{{/usesGenerator}}import com.starkbank.utils.Resource;
+{{#usesRest}}import com.starkbank.utils.Rest;
+{{/usesRest}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
 {{/usesSubResource}}{{#vendorExtensions.x-sdk-log}}import com.starkbank.error.ErrorElement;
 {{/vendorExtensions.x-sdk-log}}
+
 {{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
 {{/usesList}}import java.util.HashMap;
@@ -14,32 +14,34 @@ package {{package}};
 {{/usesList}}{{^usesList}}{{#usesObjectList}}import java.util.List;
 {{/usesObjectList}}{{/usesList}}import java.util.Map;
 
-/**
- * {{classname}} object
- * <p>
- * {{{description}}}
- * <p>
- * Parameters:
-{{#vars}} * {{name}} [{{{dataType}}}]{{^required}}, optional{{/required}}: {{{description}}}
-{{/vars}} *
- */
+
 public final class {{classname}} extends Resource {
+    /**
+{{#vendorExtensions.x-sdk-java-docs.dataDoc}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.dataDoc}}     */
     static ClassData data = new ClassData({{classname}}.class, "{{classname}}");
 
 {{#vars}}{{^vendorExtensions.x-sdk-id}}    public {{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}};
 {{/vendorExtensions.x-sdk-id}}{{/vars}}
 
+    /**
+{{#vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     */
     public {{classname}}({{#vars}}{{#vendorExtensions.x-sdk-id}}String id{{/vendorExtensions.x-sdk-id}}{{^vendorExtensions.x-sdk-id}}{{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}}{{/vendorExtensions.x-sdk-id}}{{^-last}}, {{/-last}}{{/vars}}) {
         super(id);
 {{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = {{name}};
 {{/vendorExtensions.x-sdk-id}}{{/vars}}    }
 
-    @SuppressWarnings("unchecked")
-    public {{classname}}(Map<String, Object> data) throws Exception {
+    /**
+{{#vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     */
+{{#vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    @SuppressWarnings("unchecked")
+{{/vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    public {{classname}}(Map<String, Object> data) throws Exception {
         super(null);
         HashMap<String, Object> dataCopy = new HashMap<>(data);
-{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = ({{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}}) dataCopy.remove("{{name}}");
-{{/vendorExtensions.x-sdk-id}}{{/vars}}
+{{#vendorExtensions.x-sdk-java-code.ctorMapBody}}        {{{.}}}
+{{/vendorExtensions.x-sdk-java-code.ctorMapBody}}
+
         if (!dataCopy.isEmpty()) {
             throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
         }
@@ -48,92 +50,31 @@ public final class {{classname}} extends Resource {
     public {{classname}}() {
         super(null);
     }
-{{#vendorExtensions.x-sdk-create}}
-
-    /**
-     * Create {{classname}}s
-     * <p>
-     * Send a list of {{classname}} objects for creation in the Stark Bank API
-     * <p>
-     * Parameters:
-     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created in the API
-     * <p>
-     * Return:
-     * @return list of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
-    public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
-        return {{classname}}.create({{classVarName}}s, null);
-    }
-
-    /**
-     * Create {{classname}}s
-     * <p>
-     * Send a list of {{classname}} objects for creation in the Stark Bank API
-     * <p>
-     * Parameters:
-     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created in the API
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return list of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
-    @SuppressWarnings("unchecked")
-    public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
-        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
-        for (Object {{classVarName}} : {{classVarName}}s) {
-            if ({{classVarName}} instanceof Map)
-                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
-            else if ({{classVarName}} instanceof {{classname}})
-                {{classVarName}}List.add(({{classname}}) {{classVarName}});
-            else
-                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
-        }
-        return Rest.post(data, {{classVarName}}List, user);
-    }
-{{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-put}}
 
     /**
-     * Create or update {{classname}}s
-     * <p>
-     * Send a list of {{classname}} objects for creation/update in the Stark Bank API
-     * <p>
-     * Parameters:
-     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created/updated in the API
-     * <p>
-     * Return:
-     * @return list of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.putPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.putPlain}}     */
     public static List<{{classname}}> put(List<?> {{classVarName}}s) throws Exception {
         return {{classname}}.put({{classVarName}}s, null);
     }
 
     /**
-     * Create or update {{classname}}s
-     * <p>
-     * Send a list of {{classname}} objects for creation/update in the Stark Bank API
-     * <p>
-     * Parameters:
-     * @param {{classVarName}}s [list of {{classname}} objects or HashMaps]: list of {{classname}} objects to be created/updated in the API
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return list of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.putUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.putUser}}     */
     @SuppressWarnings("unchecked")
     public static List<{{classname}}> put(List<?> {{classVarName}}s, User user) throws Exception {
         List<{{classname}}> {{classVarName}}List = new ArrayList<>();
         for (Object {{classVarName}} : {{classVarName}}s) {
-            if ({{classVarName}} instanceof Map)
+            if ({{classVarName}} instanceof Map) {
                 {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
-            else if ({{classVarName}} instanceof {{classname}})
+                continue;
+            }
+            if ({{classVarName}} instanceof {{classname}}) {
                 {{classVarName}}List.add(({{classname}}) {{classVarName}});
-            else
-                throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+                continue;
+            }
+            throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
         }
         return Rest.put(data, {{classVarName}}List, user);
     }
@@ -141,34 +82,15 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-get}}
 
     /**
-     * Retrieve a specific {{classname}}
-     * <p>
-     * Receive a single {{classname}} object previously created in the Stark Bank API by passing its id
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id. ex: "5656565656565656"
-     * <p>
-     * Return:
-     * @return {{classname}} object with updated attributes
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.getPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getPlain}}     */
     public static {{classname}} get(String id) throws Exception {
         return {{classname}}.get(id, null);
     }
 
     /**
-     * Retrieve a specific {{classname}}
-     * <p>
-     * Receive a single {{classname}} object previously created in the Stark Bank API by passing its id
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id. ex: "5656565656565656"
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return {{classname}} object with updated attributes
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.getUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getUser}}     */
     public static {{classname}} get(String id, User user) throws Exception {
         return Rest.getId(data, id, user);
     }
@@ -176,69 +98,31 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-query}}
 
     /**
-     * Retrieve {{classname}}s
-     * <p>
-     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
-     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
-     * <p>
-     * Return:
-     * @return generator of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
-    public static Generator<{{classname}}> query() throws Exception {
-        return {{classname}}.query(new HashMap<>(), null);
+{{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryParamsUser}}     */
+    public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
+        return Rest.getStream(data, params, user);
     }
 
     /**
-     * Retrieve {{classname}}s
-     * <p>
-     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
-     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
-     * <p>
-     * Parameters:
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return generator of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
-    public static Generator<{{classname}}> query(User user) throws Exception {
-        return {{classname}}.query(new HashMap<>(), user);
-    }
-
-    /**
-     * Retrieve {{classname}}s
-     * <p>
-     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
-     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
-     * <p>
-     * Parameters:
-     * @param params map of parameters for the query
-     * <p>
-     * Return:
-     * @return generator of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.queryParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryParams}}     */
     public static Generator<{{classname}}> query(Map<String, Object> params) throws Exception {
         return {{classname}}.query(params, null);
     }
 
     /**
-     * Retrieve {{classname}}s
-     * <p>
-     * Receive a generator of {{classname}} objects previously created in the Stark Bank API.
-     * Use this function instead of page if you want to stream the objects without worrying about cursors and pagination.
-     * <p>
-     * Parameters:
-     * @param params map of parameters for the query
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return generator of {{classname}} objects with updated attributes
-     * @throws Exception error in the request
-     */
-    public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
-        return Rest.getStream(data, params, user);
+{{#vendorExtensions.x-sdk-java-docs.queryUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryUser}}     */
+    public static Generator<{{classname}}> query(User user) throws Exception {
+        return {{classname}}.query(new HashMap<>(), user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryPlain}}     */
+    public static Generator<{{classname}}> query() throws Exception {
+        return {{classname}}.query(new HashMap<>(), null);
     }
 {{/vendorExtensions.x-sdk-query}}
 {{#vendorExtensions.x-sdk-page}}
@@ -254,135 +138,111 @@ public final class {{classname}} extends Resource {
     }
 
     /**
-     * Retrieve paged {{classname}}s
-     * <p>
-     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
-     * Use this function instead of query if you want to manually page your requests.
-     * <p>
-     * Return:
-     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
-     * @throws Exception error in the request
-     */
-    public static Page page() throws Exception {
-        return {{classname}}.page(new HashMap<>(), null);
-    }
-
-    /**
-     * Retrieve paged {{classname}}s
-     * <p>
-     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
-     * Use this function instead of query if you want to manually page your requests.
-     * <p>
-     * Parameters:
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
-     * @throws Exception error in the request
-     */
-    public static Page page(User user) throws Exception {
-        return {{classname}}.page(new HashMap<>(), user);
-    }
-
-    /**
-     * Retrieve paged {{classname}}s
-     * <p>
-     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
-     * Use this function instead of query if you want to manually page your requests.
-     * <p>
-     * Parameters:
-     * @param params parameters of the query
-     * <p>
-     * Return:
-     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.pageParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pageParams}}     */
     public static Page page(Map<String, Object> params) throws Exception {
         return {{classname}}.page(params, null);
     }
 
     /**
-     * Retrieve paged {{classname}}s
-     * <p>
-     * Receive a list of up to 100 {{classname}} objects previously created in the Stark Bank API and the cursor to the next page.
-     * Use this function instead of query if you want to manually page your requests.
-     * <p>
-     * Parameters:
-     * @param params parameters of the query
-     * @param user [Organization/Project object]: Organization or Project object. Not necessary if starkbank.User.defaultUser was set before function call
-     * <p>
-     * Return:
-     * @return {{classname}}.Page object with {{classVarName}}s list and cursor
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.pageUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pageUser}}     */
+    public static Page page(User user) throws Exception {
+        return {{classname}}.page(new HashMap<>(), user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pagePlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pagePlain}}     */
+    public static Page page() throws Exception {
+        return {{classname}}.page(new HashMap<>(), null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pageParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pageParamsUser}}     */
     public static Page page(Map<String, Object> params, User user) throws Exception {
         com.starkcore.utils.Page page = Rest.getPage(data, params, user);
         List<{{classname}}> {{classVarName}}s = new ArrayList<>();
-        for (SubResource {{classVarName}}: page.entities)
+        for (SubResource {{classVarName}}: page.entities) {
             {{classVarName}}s.add(({{classname}}) {{classVarName}});
+        }
         return new Page({{classVarName}}s, page.cursor);
     }
 {{/vendorExtensions.x-sdk-page}}
+{{#vendorExtensions.x-sdk-create}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
+    public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
+        return {{classname}}.create({{classVarName}}s, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createUser}}     */
+    @SuppressWarnings("unchecked")
+    public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
+        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
+        for (Object {{classVarName}} : {{classVarName}}s) {
+            if ({{classVarName}} instanceof Map) {
+                {{classVarName}}List.add(new {{classname}}((Map<String, Object>) {{classVarName}}));
+                continue;
+            }
+            if ({{classVarName}} instanceof {{classname}}) {
+                {{classVarName}}List.add(({{classname}}) {{classVarName}});
+                continue;
+            }
+            throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
+        }
+        return Rest.post(data, {{classVarName}}List, user);
+    }
+{{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-update}}
 
     /**
-     * Update {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * @param patchData map of parameters to patch
-     * <p>
-     * Return:
-     * @return updated {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.updatePlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.updatePlain}}     */
     public static {{classname}} update(String id, Map<String, Object> patchData) throws Exception {
         return {{classname}}.update(id, patchData, null);
     }
 
     /**
-     * Update {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * @param patchData map of parameters to patch
-     * @param user [Organization/Project object]: Organization or Project object
-     * <p>
-     * Return:
-     * @return updated {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.updateUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.updateUser}}     */
     public static {{classname}} update(String id, Map<String, Object> patchData, User user) throws Exception {
         return Rest.patch(data, id, patchData, user);
     }
 {{/vendorExtensions.x-sdk-update}}
+{{#vendorExtensions.x-sdk-pdf}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfPlain}}     */
+    public static InputStream pdf(String id) throws Exception {
+        return {{classname}}.pdf(id, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfUser}}     */
+    public static InputStream pdf(String id, User user) throws Exception {
+        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
+    }
+{{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-delete}}
 
     /**
-     * Delete a {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * <p>
-     * Return:
-     * @return deleted {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.deletePlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.deletePlain}}     */
     public static {{classname}} delete(String id) throws Exception {
         return {{classname}}.delete(id, null);
     }
 
     /**
-     * Delete a {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * @param user [Organization/Project object]: Organization or Project object
-     * <p>
-     * Return:
-     * @return deleted {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.deleteUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.deleteUser}}     */
     public static {{classname}} delete(String id, User user) throws Exception {
         return Rest.delete(data, id, user);
     }
@@ -390,65 +250,19 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-cancel}}
 
     /**
-     * Cancel a {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * <p>
-     * Return:
-     * @return canceled {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.cancelPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.cancelPlain}}     */
     public static {{classname}} cancel(String id) throws Exception {
         return {{classname}}.cancel(id, null);
     }
 
     /**
-     * Cancel a {{classname}} entity
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * @param user [Organization/Project object]: Organization or Project object
-     * <p>
-     * Return:
-     * @return canceled {{classname}} object
-     * @throws Exception error in the request
-     */
+{{#vendorExtensions.x-sdk-java-docs.cancelUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.cancelUser}}     */
     public static {{classname}} cancel(String id, User user) throws Exception {
         return Rest.delete(data, id, user);
     }
 {{/vendorExtensions.x-sdk-cancel}}
-{{#vendorExtensions.x-sdk-pdf}}
-
-    /**
-     * Retrieve a specific {{classname}} pdf file
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * <p>
-     * Return:
-     * @return {{classname}} pdf file content
-     * @throws Exception error in the request
-     */
-    public static InputStream pdf(String id) throws Exception {
-        return {{classname}}.pdf(id, null);
-    }
-
-    /**
-     * Retrieve a specific {{classname}} pdf file
-     * <p>
-     * Parameters:
-     * @param id [string]: object unique id
-     * @param user [Organization/Project object]: Organization or Project object
-     * <p>
-     * Return:
-     * @return {{classname}} pdf file content
-     * @throws Exception error in the request
-     */
-    public static InputStream pdf(String id, User user) throws Exception {
-        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
-    }
-{{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-log}}
 
     public final static class Log extends Resource {
@@ -486,84 +300,43 @@ public final class {{classname}} extends Resource {
         }
 
         /**
-         * Retrieve a specific {{classname}} Log
-         * <p>
-         * Parameters:
-         * @param id [string]: object unique id
-         * <p>
-         * Return:
-         * @return {{classname}} Log object with updated attributes
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logGetPlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logGetPlain}}         */
         public static {{classname}}.Log get(String id) throws Exception {
             return Log.get(id, null);
         }
 
         /**
-         * Retrieve a specific {{classname}} Log
-         * <p>
-         * Parameters:
-         * @param id [string]: object unique id
-         * @param user [Organization/Project object]: Organization or Project object
-         * <p>
-         * Return:
-         * @return {{classname}} Log object with updated attributes
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logGetUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logGetUser}}         */
         public static {{classname}}.Log get(String id, User user) throws Exception {
             return Rest.getId(data, id, user);
         }
 
         /**
-         * Retrieve {{classname}} Logs
-         * <p>
-         * Return:
-         * @return generator of {{classname}} Log objects with updated attributes
-         * @throws Exception error in the request
-         */
-        public static Generator<{{classname}}.Log> query() throws Exception {
-            return Log.query(new HashMap<>(), null);
-        }
-
-        /**
-         * Retrieve {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param params parameters of the query
-         * <p>
-         * Return:
-         * @return generator of {{classname}} Log objects with updated attributes
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logQueryParams}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logQueryParams}}         */
         public static Generator<{{classname}}.Log> query(Map<String, Object> params) throws Exception {
             return Log.query(params, null);
         }
 
         /**
-         * Retrieve {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param user [Organization/Project object]: Organization or Project object
-         * <p>
-         * Return:
-         * @return generator of {{classname}} Log objects with updated attributes
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logQueryUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logQueryUser}}         */
         public static Generator<{{classname}}.Log> query(User user) throws Exception {
             return Log.query(new HashMap<>(), user);
         }
 
         /**
-         * Retrieve {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param params parameters of the query
-         * @param user [Organization/Project object]: Organization or Project object
-         * <p>
-         * Return:
-         * @return generator of {{classname}} Log objects with updated attributes
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logQueryPlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logQueryPlain}}         */
+        public static Generator<{{classname}}.Log> query() throws Exception {
+            return Log.query(new HashMap<>(), null);
+        }
+
+        /**
+{{#vendorExtensions.x-sdk-java-docs.logQueryParamsUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logQueryParamsUser}}         */
         public static Generator<{{classname}}.Log> query(Map<String, Object> params, User user) throws Exception {
             return Rest.getStream(data, params, user);
         }
@@ -579,60 +352,35 @@ public final class {{classname}} extends Resource {
         }
 
         /**
-         * Retrieve paged {{classname}} Logs
-         * <p>
-         * Return:
-         * @return {{classname}}.Log.Page object with logs list and cursor
-         * @throws Exception error in the request
-         */
-        public static {{classname}}.Log.Page page() throws Exception {
-            return Log.page(new HashMap<>(), null);
-        }
-
-        /**
-         * Retrieve paged {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param params parameters of the query
-         * <p>
-         * Return:
-         * @return {{classname}}.Log.Page object with logs list and cursor
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logPageParams}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPageParams}}         */
         public static {{classname}}.Log.Page page(Map<String, Object> params) throws Exception {
             return Log.page(params, null);
         }
 
         /**
-         * Retrieve paged {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param user [Organization/Project object]: Organization or Project object
-         * <p>
-         * Return:
-         * @return {{classname}}.Log.Page object with logs list and cursor
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logPageUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPageUser}}         */
         public static {{classname}}.Log.Page page(User user) throws Exception {
             return Log.page(new HashMap<>(), user);
         }
 
         /**
-         * Retrieve paged {{classname}} Logs
-         * <p>
-         * Parameters:
-         * @param params parameters of the query
-         * @param user [Organization/Project object]: Organization or Project object
-         * <p>
-         * Return:
-         * @return {{classname}}.Log.Page object with logs list and cursor
-         * @throws Exception error in the request
-         */
+{{#vendorExtensions.x-sdk-java-docs.logPagePlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPagePlain}}         */
+        public static {{classname}}.Log.Page page() throws Exception {
+            return Log.page(new HashMap<>(), null);
+        }
+
+        /**
+{{#vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         */
         public static {{classname}}.Log.Page page(Map<String, Object> params, User user) throws Exception {
             com.starkcore.utils.Page page = Rest.getPage(data, params, user);
             List<{{classname}}.Log> logs = new ArrayList<>();
-            for (SubResource log: page.entities)
+            for (SubResource log: page.entities) {
                 logs.add((Log) log);
+            }
             return new Page(logs, page.cursor);
         }
     }

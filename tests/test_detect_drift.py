@@ -2,7 +2,7 @@ import yaml
 import pytest
 from pathlib import Path
 
-from conftest import PYTHON_SDK, REPO_ROOT, _loadTool, requiresPythonSdk, runTool
+from conftest import PYTHON_SDK, REPO_ROOT, WIDGET_OPERATIONS, _loadTool, requiresPythonSdk, runTool
 
 
 def _schemaDir(tmpPath: Path, resource: str, document: dict) -> Path:
@@ -184,3 +184,145 @@ def test_unexpectedFailureIsAnErrorNotDrift(tmpPath):
 
     assert code == 2, out
     assert "[ERROR]" in out
+
+
+WIDGET_CLASS = '''
+from starkcore.utils.resource import Resource
+
+
+class Widget(Resource):
+    """# Widget object
+    A Widget does widget things.
+    ## Parameters (required):
+    - amount [integer]: amount in cents. ex: 1234
+    ## Attributes (return-only):
+    - id [string]: unique id returned on creation. ex: "5656"
+    """
+
+    def __init__(self, amount, id=None):
+        Resource.__init__(self, id=id)
+        self.amount = amount
+'''
+
+
+WIDGET_LOG_OPERATIONS = '''
+def get(id, user=None):
+    """# Retrieve a specific widget.Log
+    Receive a single Widget.Log object previously created by the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Return:
+    - widget.Log object with updated attributes
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+'''
+
+
+def _appliedWidget(tmpPath: Path, operations: str = WIDGET_OPERATIONS, log: bool = False) -> tuple[Path, Path, Path]:
+    root = tmpPath / "sdk-python"
+    package = root / "starkbank" / "widget"
+    package.mkdir(parents=True)
+    (package / "__widget.py").write_text(WIDGET_CLASS + operations, encoding="utf-8")
+    (package / "__init__.py").write_text("from .__widget import get, query, page\n", encoding="utf-8")
+    if log:
+        (package / "log").mkdir()
+        (package / "log" / "__init__.py").write_text("from .__log import get\n", encoding="utf-8")
+        (package / "log" / "__log.py").write_text(WIDGET_LOG_OPERATIONS, encoding="utf-8")
+    spec = tmpPath / "spec.yaml"
+    spec.write_text("openapi: 3.1.0\ninfo:\n  title: Test\n  version: 1.0.0\npaths: {}\n"
+                    "components:\n  schemas: {}\n", encoding="utf-8")
+    schemas = tmpPath / "schemas"
+    schemas.mkdir()
+    code, out = runTool("apply-schema.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
+
+    assert code == 0, out
+    return (root, spec, schemas)
+
+
+def _drift(root: Path, spec: Path, schemas: Path) -> tuple[int, str]:
+    return runTool("detect-drift.py", "Widget", "--from", str(root), "--spec", str(spec), "--schemas", str(schemas))
+
+
+def test_unchangedOperationDocstringsAreNotDrift(tmpPath):
+    code, out = _drift(*_appliedWidget(tmpPath))
+
+    assert code == 0, out
+    assert "em sincronia" in out
+
+
+def test_onlyAnOperationDocstringChangingIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8").replace("# Retrieve Widgets", "# Retrieve all Widgets"),
+                      encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.query: docstring mudou (summary)" in out
+    assert "1 divergência" in out
+
+
+def test_aParameterChangingInThePageDocstringIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8").replace(
+        "- cursor [string, default None]:", "- cursor [string, default \"\"]:"), encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.page: docstring mudou (params)" in out
+
+
+def test_operationLosingItsDocstringIsDrift(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath)
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(WIDGET_CLASS + "\n\ndef get(id, user=None):\n    return id\n"
+                      + WIDGET_OPERATIONS[WIDGET_OPERATIONS.index("def query"):], encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.get: o schema versionado documenta, o sdk-python nao documenta mais" in out
+
+
+def test_operationGainingADocstringIsDrift(tmpPath):
+    undocumented = WIDGET_OPERATIONS.replace(
+        '''    """# Retrieve a specific Widget
+    Receive a single Widget object previously created in the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Parameters (optional):
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user
+        was set before function call
+    ## Return:
+    - Widget object with updated attributes
+    """
+''', "", 1)
+    root, spec, schemas = _appliedWidget(tmpPath, undocumented)
+    documented = yaml.safe_load((schemas / "widget.yaml").read_text(encoding="utf-8"))
+    assert set(documented["components"]["schemas"]["Widget"]["x-sdk-docs"]) == {"query", "page"}
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(WIDGET_CLASS + WIDGET_OPERATIONS, encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.get: o sdk-python documenta, o schema versionado nao tem" in out
+    assert "1 divergência" in out
+
+
+def test_logDocstringChangingIsDriftUnderTheLogPrefix(tmpPath):
+    root, spec, schemas = _appliedWidget(tmpPath, log=True)
+    assert _drift(root, spec, schemas)[0] == 0
+    module = root / "starkbank" / "widget" / "log" / "__log.py"
+    module.write_text(module.read_text(encoding="utf-8").replace("# Retrieve a specific widget.Log", "# Get a widget.Log"),
+                      encoding="utf-8")
+
+    code, out = _drift(root, spec, schemas)
+
+    assert code == 1, out
+    assert "Widget.x-sdk-docs.log.get: docstring mudou (summary)" in out
+    assert "1 divergência" in out
+

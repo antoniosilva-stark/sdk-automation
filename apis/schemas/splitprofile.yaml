@@ -39,6 +39,185 @@ components:
         - status
         - created
         - updated
+      x-sdk-docs:
+        put:
+          summary: "Create SplitProfile or update it if you already have it created"
+          description:
+            - "Send a list of SplitProfile objects for creation in the Stark Bank API"
+          params:
+            - name: "splitProfile"
+              type: "list of SplitProfile objects"
+              description: "list of SplitProfile objects to be created in the API"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of SplitProfile objects with updated attributes"
+        get:
+          summary: "Retrieve a specific SplitProfile"
+          description:
+            - "Receive a single SplitProfile object previously created in the Stark Bank API by its id"
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "SplitProfile object with updated attributes"
+        query:
+          summary: "Retrieve SplitProfile"
+          description:
+            - "Receive a generator of SplitProfile objects previously created in the Stark Bank API"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of SplitProfile objects with updated attributes"
+        page:
+          summary: "Retrieve paged Split Profiles"
+          description:
+            - "Receive a list of up to 100 SplitProfile objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your requests."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "tags"
+              type: "list of strings, default None"
+              description: "tags to filter retrieved objects. ex: [\"tony\", \"stark\"]"
+              section: "optional"
+            - name: "ids"
+              type: "list of strings, default None"
+              description: "list of ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+              section: "optional"
+            - name: "status"
+              type: "string, default None"
+              description: "filter for status of retrieved objects. ex: \"success\""
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of SplitProfile objects with updated attributes"
+            - "cursor to retrieve the next page of SplitProfile objects"
+        log:
+          get:
+            summary: "Retrieve a specific splitprofile.Log"
+            description:
+              - "Receive a single SplitProfile.Log object previously created by the Stark Bank API by its id"
+            params:
+              - name: "id"
+                type: "string"
+                description: "object unique id. ex: \"5656565656565656\""
+                section: "required"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "splitprofile.Log object with updated attributes"
+          query:
+            summary: "Retrieve splitprofile.Logs"
+            description:
+              - "Receive a generator of SplitProfile.Log objects previously created in the Stark Bank API"
+            params:
+              - name: "limit"
+                type: "integer, default None"
+                description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "types"
+                type: "list of strings, default None"
+                description: "filter retrieved objects by event types. ex: \"created\" or \"updated\""
+                section: "optional"
+              - name: "profileIds"
+                type: "list of strings, default None"
+                description: "list of SplitProfile ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "generator of splitprofile.Log objects with updated attributes"
+          page:
+            summary: "Retrieve paged splitprofile.Logs"
+            description:
+              - "Receive a list of up to 100 splitprofile.Log objects previously created in the Stark Bank API and the cursor to the next page."
+              - "Use this function instead of query if you want to manually page your requests."
+            params:
+              - name: "cursor"
+                type: "string, default None"
+                description: "cursor returned on the previous page function call"
+                section: "optional"
+              - name: "limit"
+                type: "integer, default 100"
+                description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "types"
+                type: "list of strings, default None"
+                description: "filter retrieved objects by event types. ex: \"created\" or \"updated\""
+                section: "optional"
+              - name: "profileIds"
+                type: "list of strings, default None"
+                description: "list of SplitProfile ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "list of splitprofile.Log objects with updated attributes"
+              - "cursor to retrieve the next page of splitprofile.Log objects"
 
     SplitProfileCreate:
       type: object

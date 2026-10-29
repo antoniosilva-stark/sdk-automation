@@ -25,6 +25,18 @@ components:
         - amount
         - currency
         - updated
+      x-sdk-docs:
+        get:
+          summary: "Retrieve the Balance object"
+          description:
+            - "Receive the Balance object linked to your workspace in the Stark Bank API"
+          params:
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Balance object with updated attributes"
 
     BalanceCreate:
       type: object

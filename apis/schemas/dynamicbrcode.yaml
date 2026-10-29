@@ -31,6 +31,105 @@ components:
       required:
         - amount
         - pictureUrl
+      x-sdk-docs:
+        create:
+          summary: "Create DynamicBrcodes"
+          description:
+            - "Send a list of DynamicBrcode objects for creation in the Stark Bank API"
+          params:
+            - name: "brcodes"
+              type: "list of DynamicBrcode objects"
+              description: "list of DynamicBrcode objects to be created in the API"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of DynamicBrcode objects with updated attributes"
+        get:
+          summary: "Retrieve a specific DynamicBrcode"
+          description:
+            - "Receive a single DynamicBrcode object previously created in the Stark Bank API by its uuid"
+          params:
+            - name: "uuid"
+              type: "string"
+              description: "object's unique uuid. ex: \"901e71f2447c43c886f58366a5432c4b\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "DynamicBrcode object with updated attributes"
+        query:
+          summary: "Retrieve DynamicBrcodes"
+          description:
+            - "Receive a generator of DynamicBrcode objects previously created by this user in the Stark Bank API"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "tags"
+              type: "list of strings, default None"
+              description: "tags to filter retrieved objects. ex: [\"tony\", \"stark\"]"
+              section: "optional"
+            - name: "uuids"
+              type: "list of strings, default None"
+              description: "list of uuids to filter retrieved objects. ex: [\"901e71f2447c43c886f58366a5432c4b\", \"4e2eab725ddd495f9c98ffd97440702d\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of DynamicBrcode objects with updated attributes"
+        page:
+          summary: "Retrieve paged DynamicBrcodes"
+          description:
+            - "Receive a list of up to 100 DynamicBrcode objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your brcodes."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created or updated only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "tags"
+              type: "list of strings, default None"
+              description: "tags to filter retrieved objects. ex: [\"tony\", \"stark\"]"
+              section: "optional"
+            - name: "uuids"
+              type: "list of strings, default None"
+              description: "list of uuids to filter retrieved objects. ex: [\"901e71f2447c43c886f58366a5432c4b\", \"4e2eab725ddd495f9c98ffd97440702d\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of DynamicBrcode objects with updated attributes"
+            - "cursor to retrieve the next page of DynamicBrcode objects"
 
     DynamicBrcodeCreate:
       type: object

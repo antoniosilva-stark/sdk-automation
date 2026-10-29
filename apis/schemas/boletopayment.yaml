@@ -57,6 +57,228 @@ components:
         - fee
         - transactionIds
         - created
+      x-sdk-docs:
+        create:
+          summary: "Create BoletoPayments"
+          description:
+            - "Send a list of BoletoPayment objects for creation in the Stark Bank API"
+          params:
+            - name: "payments"
+              type: "list of BoletoPayment objects"
+              description: "list of BoletoPayment objects to be created in the API"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of BoletoPayment objects with updated attributes"
+        get:
+          summary: "Retrieve a specific BoletoPayment"
+          description:
+            - "Receive a single BoletoPayment object previously created by the Stark Bank API by its id"
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "BoletoPayment object with updated attributes"
+        query:
+          summary: "Retrieve BoletoPayments"
+          description:
+            - "Receive a generator of BoletoPayment objects previously created in the Stark Bank API"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "tags"
+              type: "list of strings, default None"
+              description: "tags to filter retrieved objects. ex: [\"tony\", \"stark\"]"
+              section: "optional"
+            - name: "ids"
+              type: "list of strings, default None"
+              description: "list of ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+              section: "optional"
+            - name: "status"
+              type: "string, default None"
+              description: "filter for status of retrieved objects. ex: \"success\""
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of BoletoPayment objects with updated attributes"
+        page:
+          summary: "Retrieve paged BoletoPayments"
+          description:
+            - "Receive a list of up to 100 BoletoPayment objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your requests."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "tags"
+              type: "list of strings, default None"
+              description: "tags to filter retrieved objects. ex: [\"tony\", \"stark\"]"
+              section: "optional"
+            - name: "ids"
+              type: "list of strings, default None"
+              description: "list of ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+              section: "optional"
+            - name: "status"
+              type: "string, default None"
+              description: "filter for status of retrieved objects. ex: \"success\""
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of BoletoPayment objects with updated attributes"
+            - "cursor to retrieve the next page of BoletoPayment objects"
+        delete:
+          summary: "Delete a BoletoPayment entity"
+          description:
+            - "Cancel a BoletoPayment entity previously created in the Stark Bank API. This only cancels payments that have not yet started processing; payments already processed can still be deleted, but the payment itself is not reversed."
+          params:
+            - name: "id"
+              type: "string"
+              description: "BoletoPayment unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "deleted BoletoPayment object"
+        pdf:
+          summary: "Retrieve a specific BoletoPayment pdf file"
+          description:
+            - "Receive a single BoletoPayment pdf file generated in the Stark Bank API by its id."
+            - "Only valid for boleto payments with \"success\", \"processing\" or \"created\" status."
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "BoletoPayment pdf file"
+        log:
+          get:
+            summary: "Retrieve a specific boletopayment.Log"
+            description:
+              - "Receive a single boletopayment.Log object previously created by the Stark Bank API by its id"
+            params:
+              - name: "id"
+                type: "string"
+                description: "object unique id. ex: \"5656565656565656\""
+                section: "required"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "boletopayment.Log object with updated attributes"
+          query:
+            summary: "Retrieve boletopayment.Logs"
+            description:
+              - "Receive a generator of boletopayment.Log objects previously created in the Stark Bank API"
+            params:
+              - name: "limit"
+                type: "integer, default None"
+                description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "types"
+                type: "list of strings, default None"
+                description: "filter retrieved objects by event types. ex: \"processing\" or \"success\""
+                section: "optional"
+              - name: "paymentIds"
+                type: "list of strings, default None"
+                description: "list of BoletoPayment ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "generator of boletopayment.Log objects with updated attributes"
+          page:
+            summary: "Retrieve paged boletopayment.Logs"
+            description:
+              - "Receive a list of up to 100 boletopayment.Log objects previously created in the Stark Bank API and the cursor to the next page."
+              - "Use this function instead of query if you want to manually page your requests."
+            params:
+              - name: "cursor"
+                type: "string, default None"
+                description: "cursor returned on the previous page function call"
+                section: "optional"
+              - name: "limit"
+                type: "integer, default 100"
+                description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "types"
+                type: "list of strings, default None"
+                description: "filter retrieved objects by event types. ex: \"processing\" or \"success\""
+                section: "optional"
+              - name: "paymentIds"
+                type: "list of strings, default None"
+                description: "list of boletopayment.Log ids to filter retrieved objects. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "list of boletopayment.Log objects with updated attributes"
+              - "cursor to retrieve the next page of boletopayment.Log objects"
 
     BoletoPaymentCreate:
       type: object

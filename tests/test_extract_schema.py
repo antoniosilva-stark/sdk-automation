@@ -1,8 +1,9 @@
+import sys
 import yaml
 import pytest
 from pathlib import Path
 
-from conftest import PYTHON_SDK, REPO_ROOT, requiresPythonSdk, runTool
+from conftest import PYTHON_SDK, REPO_ROOT, WIDGET_OPERATIONS, requiresPythonSdk, runTool
 
 WIDGET_MODULE = '''
 from starkcore.utils.resource import Resource
@@ -649,3 +650,323 @@ def test_backslashInADescriptionSurvivesTheYamlRoundTrip(extractSchema):
     rendered = extractSchema.yamlScalar('regex \\d+ and a tab \\t, with "quotes"')
 
     assert yaml.safe_load(f"description: {rendered}")["description"] == 'regex \\d+ and a tab \\t, with "quotes"'
+
+
+def _documentedSdk(tmpPath: Path, exports: str = "get, query, page", operations: str = WIDGET_OPERATIONS) -> Path:
+    return _withInit(_fakeSdk(tmpPath, body=WIDGET_MODULE + operations), "widget", exports)
+
+
+def _extractedDocs(root: Path) -> dict:
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root))
+
+    assert code == 0, out
+    return yaml.safe_load(out)["components"]["schemas"]["Widget"]["x-sdk-docs"]
+
+
+def test_queryAndPageFiltersKeepTheOriginalTypeDescriptionAndSection(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath))
+    query, page = docs["query"], docs["page"]
+
+    assert query["summary"] == "Retrieve Widgets"
+    assert query["description"] == [
+        "Receive a generator of Widget objects previously created in the Stark Bank API.",
+        "Use this function instead of page if you want to stream Widgets without worrying about cursors and pagination.",
+    ]
+    assert [param["name"] for param in query["params"]] == ["limit", "after", "tags", "externalIds", "user"]
+    assert query["params"][3] == {
+        "name": "externalIds",
+        "type": "list of strings, default None",
+        "description": 'list of external ids to filter retrieved objects. ex: ["5656565656565656"]',
+        "section": "optional",
+    }
+    assert query["params"][1]["type"] == "datetime.date or string, default None"
+    assert query["returns"] == ["generator of Widget objects with updated attributes"]
+    assert [param["name"] for param in page["params"]][:2] == ["cursor", "limit"]
+    assert page["returns"] == [
+        "list of Widget objects with updated attributes",
+        "cursor to retrieve the next page of Widget objects",
+    ]
+
+
+def test_requiredSectionAndWrappedDescriptionAreKept(tmpPath):
+    params = _extractedDocs(_documentedSdk(tmpPath))["get"]["params"]
+
+    assert params[0]["name"] == "id"
+    assert params[0]["section"] == "required"
+    assert params[1]["description"] == (
+        "Organization or Project object. Not necessary if starkbank.user was set before function call"
+    )
+
+
+def test_docstringWithoutSectionsKeepsTitleAndDescriptionOnly(extractSchema):
+    parsed = extractSchema.parseOperationDocstring(
+        "# [DEPRECATED] Create Widgets\nThis function is deprecated and always raises a StarkError.",
+        "Widget.create",
+    )
+
+    assert parsed == {
+        "summary": "[DEPRECATED] Create Widgets",
+        "description": ["This function is deprecated and always raises a StarkError."],
+        "params": [],
+        "returns": [],
+    }
+
+
+def test_operationWithoutDocstringWarnsAndIsLeftOut(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS + "\n\ndef delete(id, user=None):\n    return rest.delete_id(id=id)\n"
+    root = _documentedSdk(tmpPath, "get, query, page, delete", operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.delete sem docstring" in captured.err
+    docs = yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]
+    assert "delete" not in docs
+    assert {"get", "query", "page"} <= set(docs)
+
+
+def test_exportWithoutFlagIsWarnedAndNotDocumented(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS + '\n\ndef parse(content):\n    """# Parse a Widget"""\n    return content\n'
+    root = _documentedSdk(tmpPath, "get, parse", operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.parse exportada sem flag" in captured.err
+    assert list(yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]) == ["get"]
+
+
+def test_resourceWithoutInitHasNoDocsKey(tmpPath):
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(_fakeSdk(tmpPath)))
+
+    assert code == 0, out
+    assert "x-sdk-docs" not in out
+
+
+def test_docsStayOutOfTheCreateSchema(tmpPath):
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(_documentedSdk(tmpPath)))
+
+    assert code == 0, out
+    assert "x-sdk-docs" not in yaml.safe_load(out)["components"]["schemas"]["WidgetCreate"]
+
+
+LOG_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve a specific widget.Log
+    Receive a single Widget.Log object previously created by the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Return:
+    - widget.Log object with updated attributes
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+'''
+
+
+def test_logDocsComeUnderTheirOwnKey(tmpPath):
+    root = _documentedSdk(tmpPath)
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import get\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_OPERATIONS, encoding="utf-8")
+
+    docs = _extractedDocs(root)
+
+    assert docs["log"]["get"]["summary"] == "Retrieve a specific widget.Log"
+    assert docs["log"]["get"]["returns"] == ["widget.Log object with updated attributes"]
+    assert docs["get"]["summary"] == "Retrieve a specific Widget"
+    assert set(docs["log"]) == {"get"}
+
+
+def test_twoExtractionsProduceTheSameBytesWhateverTheExportOrder(tmpPath):
+    first = _documentedSdk(tmpPath / "first", "get, query, page")
+    second = _documentedSdk(tmpPath / "second", "page, get, query")
+    runs = [runTool("extract-schema.py", "Widget", "--from", str(root)) for root in (first, first, second)]
+
+    assert [code for code, _ in runs] == [0, 0, 0]
+    assert runs[0][1] == runs[1][1]
+    assert runs[0][1].split("\n", 1)[1] == runs[2][1].split("\n", 1)[1]
+
+
+def _parsed(extractSchema, *lines: str) -> dict:
+    return extractSchema.parseOperationDocstring("\n".join(("# Retrieve Widgets", *lines)), "Widget.query")
+
+
+def test_typeIsReadWithBalancedBracketsWhateverTheDescriptionHolds(extractSchema):
+    parsed = _parsed(
+        extractSchema,
+        "## Parameters (optional):",
+        "- tags [list of strings, default []]: tags to filter. ex: [\"a\"]",
+        "- code [string]: see [the docs]: https://starkbank.com/docs",
+        "- rules [list of [Rule, dict], default None]: nested type",
+    )
+
+    assert [(param["name"], param["type"], param["description"]) for param in parsed["params"]] == [
+        ("tags", "list of strings, default []", 'tags to filter. ex: ["a"]'),
+        ("code", "string", "see [the docs]: https://starkbank.com/docs"),
+        ("rules", "list of [Rule, dict], default None", "nested type"),
+    ]
+
+
+def test_lineBeforeTheFirstReturnItemIsWarnedAndDiscarded(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Return:", "stray text", "- generator of Widgets")
+
+    assert parsed["returns"] == ["generator of Widgets"]
+    assert "[WARN] Widget.query: linha fora do formato: stray text" in capsys.readouterr().err
+
+
+def test_lineBeforeTheFirstParameterIsWarnedAndDiscarded(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (optional):", "stray text", "- limit [integer]: max")
+
+    assert [param["name"] for param in parsed["params"]] == ["limit"]
+    assert "[WARN] Widget.query: linha fora do formato: stray text" in capsys.readouterr().err
+
+
+def test_lineKeptByFallbackOnAnItemOfAnotherSectionIsWarned(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (required):", "- id [string]: unique id",
+                     "## Parameters (optional):", "orphan continuation")
+
+    assert parsed["params"][0]["description"] == "unique id orphan continuation"
+    assert "[WARN] Widget.query: linha fora do formato: orphan continuation" in capsys.readouterr().err
+
+
+def test_bulletThatIsNotATypedItemIsWarnedNotGluedToThePreviousOne(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Parameters (optional):", "- limit [integer]: max", "- broken item without type")
+
+    assert parsed["params"][0]["description"] == "max"
+    assert "linha fora do formato: - broken item without type" in capsys.readouterr().err
+
+
+def test_unrecognizedHeaderIsWarnedAndItsLinesNeverBecomeReturns(extractSchema, capsys):
+    parsed = _parsed(extractSchema, "## Return:", "- generator of Widgets", "## Raises:", "- StarkError: on failure")
+
+    assert parsed["returns"] == ["generator of Widgets"]
+    assert "[WARN] Widget.query: cabeçalho não reconhecido" in capsys.readouterr().err
+
+
+def test_unrecognizedHeaderDoesNotFailTheExtraction(extractSchema, tmpPath, monkeypatch, capsys):
+    operations = WIDGET_OPERATIONS.replace("    ## Return:\n    - Widget object", "    ## Raises:\n    - StarkError: boom\n"
+                                           "    ## Return:\n    - Widget object", 1)
+    root = _documentedSdk(tmpPath, operations=operations)
+    monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
+
+    code = extractSchema.main()
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "[WARN] Widget.get: cabeçalho não reconhecido" in captured.err
+    assert yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]["get"]["returns"] == [
+        "Widget object with updated attributes"
+    ]
+
+
+CONDITIONAL_OPERATIONS = '''
+
+def create(widgets, user=None):
+    """# Create Widgets
+    Send a list of Widget objects for creation in the Stark Bank API
+    ## Parameters (required):
+    - widgets [list of Widget objects]: list of Widget objects to be created in the API
+    ## Parameters (conditionally required):
+    - code [string, default None]: needed for some kinds. ex: "fastFood"
+    ## Return:
+    - list of Widget objects
+        with updated attributes
+    - cursor to the next page
+    """
+    return rest.post_multi(resource=_resource, entities=widgets, user=user)
+'''
+
+
+def test_conditionallyRequiredSectionAndWrappedReturnsAreKept(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath, "create", CONDITIONAL_OPERATIONS))["create"]
+
+    assert [(param["name"], param["section"]) for param in docs["params"]] == [
+        ("widgets", "required"),
+        ("code", "conditional"),
+    ]
+    assert docs["returns"] == ["list of Widget objects with updated attributes", "cursor to the next page"]
+
+
+ESCAPING_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve "quoted" widgets: a #1 case — ação
+    Matches 'single' quotes, key: value, # not a comment, ünïcödé ✓
+    ## Parameters (required):
+    - id [string, default "x: y"]: say "hi": it's # fine, c:/path — ação ✓
+    ## Return:
+    - Widget: "ok" # done
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+'''
+
+
+def test_yamlSpecialCharactersSurviveTheRoundTrip(tmpPath):
+    docs = _extractedDocs(_documentedSdk(tmpPath, "get", ESCAPING_OPERATIONS))["get"]
+
+    assert docs["summary"] == 'Retrieve "quoted" widgets: a #1 case — ação'
+    assert docs["description"] == ["Matches 'single' quotes, key: value, # not a comment, ünïcödé ✓"]
+    assert docs["params"] == [{
+        "name": "id",
+        "type": 'string, default "x: y"',
+        "description": 'say "hi": it\'s # fine, c:/path — ação ✓',
+        "section": "required",
+    }]
+    assert docs["returns"] == ['Widget: "ok" # done']
+
+
+LOG_QUERY_AND_PAGE = '''
+
+def query(limit=None, user=None):
+    """# Retrieve widget.Logs
+    Receive a generator of Widget.Log objects
+    ## Parameters (optional):
+    - limit [integer, default None]: maximum number of objects to be retrieved
+    ## Return:
+    - generator of widget.Log objects
+    """
+    return rest.get_stream(resource=_resource, limit=limit)
+
+
+def page(cursor=None, user=None):
+    """# Retrieve paged widget.Logs
+    Receive a list of widget.Log objects
+    ## Parameters (optional):
+    - cursor [string, default None]: cursor returned on the previous page function call
+    ## Return:
+    - list of widget.Log objects
+    """
+    return rest.get_page(resource=_resource, cursor=cursor)
+'''
+
+
+def test_logWithDifferentOperationsThanTheResourceKeepsOnlyItsOwn(tmpPath):
+    root = _documentedSdk(tmpPath, "get, query, page")
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import query, page\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_QUERY_AND_PAGE, encoding="utf-8")
+
+    docs = _extractedDocs(root)
+
+    assert set(docs["log"]) == {"query", "page"}
+    assert docs["log"]["query"]["summary"] == "Retrieve widget.Logs"
+    assert docs["query"]["summary"] == "Retrieve Widgets"
+
+
+def test_logDocsNeverAppearWithoutTheResourceInit(extractSchema, tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get")
+    (root / "starkbank" / "widget" / "__init__.py").unlink()
+    log = root / "starkbank" / "widget" / "log"
+    log.mkdir()
+    (log / "__init__.py").write_text("from .__log import get\n", encoding="utf-8")
+    (log / "__log.py").write_text(LOG_MODULE + LOG_OPERATIONS, encoding="utf-8")
+
+    assert extractSchema.declaredDocs(root, "Widget") == {}
+

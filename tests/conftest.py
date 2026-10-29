@@ -1,6 +1,8 @@
 import os
 import sys
 import shutil
+import tempfile
+import functools
 import pytest
 import subprocess
 import importlib.util
@@ -8,6 +10,57 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS_DIR = REPO_ROOT / "tools"
+
+
+WIDGET_OPERATIONS = '''
+
+def get(id, user=None):
+    """# Retrieve a specific Widget
+    Receive a single Widget object previously created in the Stark Bank API by its id
+    ## Parameters (required):
+    - id [string]: object unique id. ex: "5656565656565656"
+    ## Parameters (optional):
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user
+        was set before function call
+    ## Return:
+    - Widget object with updated attributes
+    """
+    return rest.get_id(resource=_resource, id=id, user=user)
+
+
+def query(limit=None, after=None, tags=None, external_ids=None, user=None):
+    """# Retrieve Widgets
+    Receive a generator of Widget objects previously created in the Stark Bank API.
+    Use this function instead of page if you want to stream Widgets without worrying about cursors and pagination.
+    ## Parameters (optional):
+    - limit [integer, default None]: maximum number of objects to be retrieved. Unlimited if None. ex: 35
+    - after [datetime.date or string, default None]: date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)
+    - tags [list of strings, default None]: tags to filter retrieved objects. ex: ["tony", "stark"]
+    - external_ids [list of strings, default None]: list of external ids to filter retrieved objects. ex: ["5656565656565656"]
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user was set before function call
+    ## Return:
+    - generator of Widget objects with updated attributes
+    """
+    return rest.get_stream(resource=_resource, limit=limit)
+
+
+def page(cursor=None, limit=None, after=None, tags=None, external_ids=None, user=None):
+    """# Retrieve paged Widgets
+    Receive a list of up to 100 Widget objects previously created in the Stark Bank API and the cursor to the next page.
+    Use this function instead of query if you want to manually page your requests.
+    ## Parameters (optional):
+    - cursor [string, default None]: cursor returned on the previous page function call
+    - limit [integer, default 100]: maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50
+    - after [datetime.date or string, default None]: date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)
+    - tags [list of strings, default None]: tags to filter retrieved objects. ex: ["tony", "stark"]
+    - external_ids [list of strings, default None]: list of external ids to filter retrieved objects. ex: ["5656565656565656"]
+    - user [Organization/Project object, default None]: Organization or Project object. Not necessary if starkbank.user was set before function call
+    ## Return:
+    - list of Widget objects with updated attributes
+    - cursor to retrieve the next page of Widget objects
+    """
+    return rest.get_page(resource=_resource, cursor=cursor)
+'''
 
 
 def commandWorks(*command: str) -> bool:
@@ -69,6 +122,37 @@ def resolvedNodeSdk() -> Path | None:
     return None
 
 
+@functools.cache
+def resolvedJavaRuntime() -> tuple[str, str | None]:
+    """Classpath das dependencias do pom do sdk-java de referencia, como o Maven as resolve, e a razao da falta.
+
+    `-o`: so le o cache; quem o popula e um passo do workflow. `-Dmaven.repo.local` porque o Maven ignora $HOME."""
+    pom = REPO_ROOT / "_references/sdk-java/pom.xml"
+    if not pom.is_file():
+        return "", "pom do sdk-java de referencia ausente"
+    if not shutil.which("mvn"):
+        return "", "mvn ausente"
+    with tempfile.TemporaryDirectory() as work:
+        output = Path(work) / "classpath.txt"
+        result = subprocess.run(
+            ["mvn", "-o", "-q", "-B", "--no-transfer-progress", "-f", str(pom),
+             f"-Dmaven.repo.local={Path.home() / '.m2/repository'}",
+             "dependency:build-classpath", f"-Dmdep.outputFile={output}"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0 or not output.is_file():
+            return "", "dependencias do pom do sdk-java ausentes em ~/.m2 (mvn -o dependency:build-classpath falhou)"
+        return output.read_text(encoding="utf-8").strip(), None
+
+
+@pytest.fixture(scope="session")
+def javaRuntimeClasspath():
+    classpath, reason = resolvedJavaRuntime()
+    if reason:
+        pytest.skip(reason)
+    return classpath
+
+
 PYTHON_SDK = resolvedPythonSdk()
 JAVA_SDK = resolvedJavaSdk()
 NODE_SDK = resolvedNodeSdk()
@@ -77,7 +161,6 @@ requiresPythonSdk = pytest.mark.skipif(PYTHON_SDK is None, reason="sdk-python do
 requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não resolvido")
 requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
 
-
 def missingDependencies() -> list[str]:
     reasons = [GENERATOR_SKIP, JAVAC_SKIP]
     reasons += [reason for reason, resolved in (
@@ -85,6 +168,7 @@ def missingDependencies() -> list[str]:
         ("sdk-java não resolvido", JAVA_SDK),
         ("sdk-node não resolvido", NODE_SDK),
     ) if resolved is None]
+    reasons.append(resolvedJavaRuntime()[1])
     return [reason for reason in reasons if reason]
 
 
@@ -152,12 +236,52 @@ def extractSchema():
 
 
 @pytest.fixture
+def javaDocs():
+    return _loadTool("java-docs.py")
+
+
+@pytest.fixture
+def javaCode():
+    return _loadTool("java-code.py")
+
+
+@pytest.fixture
 def coverageReport():
     return _loadTool("coverage-report.py")
 
 
+REFERENCES = {"java": REPO_ROOT / "_references/sdk-java", "node": REPO_ROOT / "_references/sdk-node"}
+
+
 @pytest.fixture(scope="session")
-def builtOnce(tmp_path_factory):
+def referenceWithout(tmp_path_factory):
+    """Referencia sem os arquivos do recurso, para exercitar o caminho de criacao.
+
+    A existencia e medida contra o SDK de referencia, nao contra `--into`; e os recursos
+    de teste ja existem nos pins. Arvore de symlinks: nenhum arquivo e copiado."""
+    placeGenerated = _loadTool("place-generated.py")
+    cache: dict[tuple, dict] = {}
+
+    def build(language: str, resource: str, keepRoles: tuple[str, ...] = ()) -> dict:
+        key = (language, resource, keepRoles)
+        if key in cache:
+            return cache[key]
+        root = tmp_path_factory.mktemp(f"ref-{language}-{resource}") / "sdk"
+        source = REFERENCES[language]
+        shutil.copytree(source, root, symlinks=True, copy_function=os.symlink,
+                        ignore=shutil.ignore_patterns(".git"))
+        (root / ".git").symlink_to(source / ".git")
+        for planned, target in placeGenerated.resolvePairs(language, resource):
+            if planned.split("/", 1)[0] not in keepRoles:
+                (root / target).unlink(missing_ok=True)
+        cache[key] = {f"SDK_{language.upper()}": str(root)}
+        return cache[key]
+
+    return build
+
+
+@pytest.fixture(scope="session")
+def builtOnce(tmp_path_factory, referenceWithout):
     cache: dict[tuple, tuple] = {}
 
     def build(resource: str, language: str, *extra: str):
@@ -165,7 +289,8 @@ def builtOnce(tmp_path_factory):
         if key not in cache:
             target = tmp_path_factory.mktemp(f"{resource}-{language}")
             code, out = runTool("build-resource.py", resource, "--lang", language,
-                                "--into", str(target), *extra)
+                                "--into", str(target), *extra,
+                                env=referenceWithout(language, resource))
             cache[key] = (code, out, target)
         return cache[key]
 

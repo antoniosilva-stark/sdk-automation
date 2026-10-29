@@ -260,3 +260,96 @@ def test_upToDateBranchLongerThanTheFetchDepthIsReusedNotRegenerated(remote):
 
     assert code == 0, log
     assert outputs == {"exists": "true", "old": ""}
+
+
+def _addToBase(remote: dict, name: str) -> None:
+    seed = remote["seed"]
+    _git(seed, "checkout", "-q", "master")
+    _commit(seed, name)
+    _git(seed, "push", "-q", "origin", "master")
+
+
+def _localBranches(target: Path) -> str:
+    return _git(target, "branch", "--list", BRANCH)
+
+
+def test_createOnlyWithAPathAbsentFromTheBaseCreatesTheBranch(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "Widget.java"), "--create-only")
+
+    assert code == 0, log
+    assert outputs == {"exists": "false", "old": ""}
+    assert _git(target, "rev-parse", "--abbrev-ref", "HEAD") == BRANCH
+
+
+def test_createOnlyFailsWhenADeclaredPathAlreadyExistsOnTheBase(remote):
+    target = _checkout(remote)
+    headBefore = _git(target, "symbolic-ref", "-q", "--short", "HEAD")
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "base-1"), "--create-only")
+
+    assert code == 4
+    assert outputs == {}
+    assert "base-1" in log
+    assert "create-only" in log
+    assert _localBranches(target) == ""
+    assert _git(target, "symbolic-ref", "-q", "--short", "HEAD") == headBefore
+
+
+def test_createOnlyFailsWhenTheBaseGainedTheFileAfterTheBotBranchWasPushed(remote):
+    branchTip = _pushBranch(remote)
+    _addToBase(remote, "Widget.java")
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "generated", "Widget.java"),
+                              "--create-only")
+
+    assert code == 4, log
+    assert outputs == {}
+    assert "Widget.java" in log
+    assert _localBranches(target) == ""
+    assert _git(remote["root"] / "remote.git", "rev-parse", f"refs/heads/{BRANCH}") == branchTip
+
+
+def test_createOnlyNamesOnlyTheDeclaredPathsThatExist(remote):
+    target = _checkout(remote)
+
+    code, _, log = _run(target, "--allowed-paths-file", _allowed(remote, "Missing.java", "base-1", "Other.java"),
+                        "--create-only")
+
+    assert code == 4
+    assert "base-1" in log
+    assert "Missing.java" not in log
+    assert "Other.java" not in log
+
+
+def test_withoutCreateOnlyAnExistingDeclaredPathDoesNotFail(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "base-1"))
+
+    assert code == 0, log
+    assert outputs == {"exists": "false", "old": ""}
+
+
+def test_createOnlyFailsClosedWhenTheBaseTreeCannotBeListed(remote):
+    target = _checkout(remote)
+
+    # caminho fora do repositorio faz o ls-tree falhar: erro de verdade nao pode ser lido como "ausente"
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "../escape"), "--create-only")
+
+    assert code == 2, log
+    assert outputs == {}
+    assert _localBranches(target) == ""
+
+
+def test_createOnlyWithoutAllowedPathsFileIsAnArgumentError(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--create-only")
+
+    assert code == 2
+    assert outputs == {}
+    assert "--allowed-paths-file" in log
+    assert _localBranches(target) == ""
