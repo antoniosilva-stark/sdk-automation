@@ -20,6 +20,10 @@ CODE_NO_OPERATION = "NO_OPERATION"
 CODE_NO_PROVENANCE = "NO_PROVENANCE"
 CODE_NO_ID = "NO_ID"
 CODE_RESERVED_NAME = "RESERVED_NAME"
+RESERVED_PROPERTY_NAMES = {
+    "data": "o ClassData estático que o template emite",
+    "dataCopy": "a cópia local que o construtor Map do template emite",
+}
 CODE_LOG_ENTITY = "LOG_ENTITY"
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
@@ -171,9 +175,9 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
     if readSchema.get("x-sdk-log") and not readSchema.get("x-sdk-log-entity"):
         reasons.append((CODE_LOG_ENTITY,
                         "x-sdk-log sem x-sdk-log-entity: o template emitiria o campo e o construtor do Log sem nome"))
-    if "data" in names:
-        reasons.append((CODE_RESERVED_NAME,
-                        "propriedade 'data' colide com o ClassData estático que o template emite"))
+    for reserved, collidesWith in RESERVED_PROPERTY_NAMES.items():
+        if reserved in names:
+            reasons.append((CODE_RESERVED_NAME, f"propriedade '{reserved}' colide com {collidesWith}"))
     if len(readProps) < MIN_READ_PROPS:
         reasons.append((CODE_SCAFFOLDING, f"schema de leitura tem {len(readProps)} propriedades (mínimo {MIN_READ_PROPS})"))
     if writes and len(createProps) < MIN_CREATE_PROPS:
