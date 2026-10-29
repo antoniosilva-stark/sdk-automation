@@ -134,3 +134,25 @@ def test_corruptTemplateAbortsBeforePlacing(tmpPath, referenceWithout):
     assert leaked == [], f"o diretorio temporario do build vazou no caminho de falha: {leaked}"
     assert list((repo / "src").rglob("*.java")) == []
     assert _git(repo, "status", "--porcelain", "-uall").strip() == ""
+
+
+@requiresGenerator
+def test_pythonResidueInTheJavadocAbortsTheBuildBeforePlacing(tmpPath, referenceWithout):
+    repo = _repo(tmpPath)
+    isolated = _isolatedCopyOfTheTooling(tmpPath)
+    template = isolated / "templates/java/model.mustache"
+
+    original = template.read_text(encoding="utf-8")
+    corrompido = original.replace("{{/vendorExtensions.x-sdk-java-docs.dataDoc}}     */",
+                                  "{{/vendorExtensions.x-sdk-java-docs.dataDoc}}     * ex: datetime.date(2020, 3, 10)\n     */", 1)
+    assert corrompido != original, "a corrupcao nao pegou: o teste passaria sem testar nada"
+    template.write_text(corrompido, encoding="utf-8")
+    result = subprocess.run([sys.executable, str(isolated / "tools/build-resource.py"), RESOURCE,
+                             "--lang", LANGUAGE, "--into", str(repo)], capture_output=True, text=True,
+                            env={**os.environ, **referenceWithout(LANGUAGE, RESOURCE)})
+
+    assert result.returncode == 1, result.stdout
+    assert "STYLE_PYTHON_RESIDUE" in result.stdout
+    assert "datetime.date(2020, 3, 10)" in result.stdout
+    assert list((repo / "src").rglob("*.java")) == []
+    assert _git(repo, "status", "--porcelain", "-uall").strip() == ""

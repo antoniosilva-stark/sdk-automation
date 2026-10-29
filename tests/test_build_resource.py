@@ -850,3 +850,51 @@ def test_generatedCreateOnlyResourceDocumentsItsCreate(builtOnce):
     assert "@param verifiedTransfers [list of VerifiedTransfer objects or HashMaps]: " \
            "list of VerifiedTransfer objects to be created in the API" in doc
     assert "Retrieve" not in source
+
+
+def _gateCommand(buildResource, monkeypatch, tmpPath, **options) -> list[str]:
+    commands = []
+    monkeypatch.setattr(buildResource, "runStep", lambda label, command, **kwargs: (commands.append(command), (0, ""))[1])
+    buildResource.assertGenerated(tmpPath / "Widget.java", "java", "main", None, True, False, **options)
+    return commands[0]
+
+
+def test_theGateCommandCarriesTheStyleFlagOnlyWhenAsked(buildResource, monkeypatch, tmpPath):
+    assert "--style" in _gateCommand(buildResource, monkeypatch, tmpPath, style=True)
+    assert "--style" not in _gateCommand(buildResource, monkeypatch, tmpPath)
+
+
+def _gateChecks(out: str) -> str:
+    return next(line for line in out.splitlines() if "verificações executadas" in line)
+
+
+@requiresGenerator
+def test_creationRunsTheStyleChecksInTheStrictGate(builtOnce):
+    code, out, _ = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    assert "estilo" in _gateChecks(out)
+
+
+@requiresGenerator
+def test_advisoryCreationDoesNotRunTheStyleChecks(builtOnce):
+    code, out, _ = builtOnce("Transfer", "java", "--advisory")
+    assert code == 0, out
+    assert "estilo" not in _gateChecks(out)
+
+
+@requiresGenerator
+def test_theParityReportOfAnExistingResourceDoesNotRunTheStyleChecks(tmpPath):
+    code, out = runTool("build-resource.py", "Invoice", "--lang", "java", "--into", str(_target(tmpPath)))
+
+    assert code == 4, out
+    assert "estilo" not in _gateChecks(out)
+
+
+@requiresGenerator
+def test_styleWarningsOfACreatedResourceAreCountedAndDoNotBlockTheBuild(builtOnce):
+    code, out, target = builtOnce("Transfer", "java")
+
+    assert code == 0, out
+    assert "STYLE_PYTHON_CTOR" in out
+    assert "aviso(s) de estilo que não bloqueiam" in out
+    assert (target / JAVA_SOURCES / "Transfer.java").is_file()

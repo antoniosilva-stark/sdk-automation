@@ -724,3 +724,210 @@ def test_explicitContractStillAppliesWhenTheMissingContractIsAllowed(tmpPath):
                         "--allow-missing-contract", "--contract", str(contract))
     assert code == 1
     assert "ausente" in out
+
+
+STYLE_JAVA = """package com.starkbank;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public final class Widget {
+    /**
+     * Widget object
+     * <p>
+     * Parameters:
+     * name [string]: widget name
+     * count [integer]: how many. ex: 3
+     */
+    static ClassData data = new ClassData(Widget.class, "Widget");
+
+    public String name;
+    public Integer count;
+
+    /**
+     * Widget object
+     * <p>
+     * Parameters:
+     * @param name [string]: widget name
+     * @param count [integer]: how many. ex: 3
+     */
+    public Widget(String name, Integer count) {
+        this.name = name;
+        this.count = count;
+    }
+
+    /**
+     * Widget object
+     * <p>
+     * Parameters:
+     * @param data map of properties for the creation of the Widget
+     * name [string]: widget name
+     * @throws Exception error in the request
+     */
+    public Widget(Map<String, Object> data) throws Exception {
+        HashMap<String, Object> dataCopy = new HashMap<>(data);
+        this.name = (String) dataCopy.remove("name");
+        Number count = (Number) dataCopy.remove("count");
+        this.count = count == null ? null : count.intValue();
+        if (!dataCopy.isEmpty()) {
+            throw new Exception("Unknown parameters used in constructor: " + dataCopy.keySet());
+        }
+    }
+
+    /**
+     * Retrieve a specific Widget
+     * <p>
+     * Parameters:
+     * @param id [string]: object unique id. ex: "5656565656565656"
+     * @param user [Organization/Project object, default null]: Organization or Project object.
+     * <p>
+     * Return:
+     * @return Widget object with updated attributes
+     * @throws Exception error in the request
+     */
+    @SuppressWarnings("unchecked")
+    public static Widget get(
+        String id,
+        User user
+    ) throws Exception {
+        for (String key : keys) {
+            if (key == null) {
+                continue;
+            }
+        }
+        if (id == null) {
+            return null;
+        } else if (user == null) {
+            return null;
+        }
+        return Rest.getId(data, id, user);
+    }
+}
+"""
+
+
+def _styleRun(tmpPath, source, *flags):
+    target = _write(tmpPath, "Widget.java", source)
+    return runTool("assert-generated.py", str(target), "--lang", "java", "--allow-missing-contract",
+                   "--strict", *flags)
+
+
+def _dirty(old: str, new: str) -> str:
+    assert old in STYLE_JAVA, f"o alvo da corrupcao nao existe na fixture: {old!r}"
+    return STYLE_JAVA.replace(old, new, 1)
+
+
+def _lineOf(source: str, snippet: str) -> int:
+    return next(number for number, line in enumerate(source.splitlines(), start=1) if snippet in line)
+
+
+def test_styleCleanFilePassesAndReportsTheCheck(tmpPath):
+    code, out = _styleRun(tmpPath, STYLE_JAVA, "--style")
+    assert code == 0, out
+    assert "estilo" in out
+
+
+BLOCKING_STYLE_CASES = [
+    ("STYLE_PYTHON_RESIDUE", "     * name [string]: widget name\n     * count",
+     "     * name [string]: widget name. ex: datetime.date(2020, 3, 10)\n     * count"),
+    ("STYLE_PYTHON_RESIDUE", "ex: 3\n     */\n    static", "ex: 3 and timedelta\n     */\n    static"),
+    ("STYLE_PYTHON_RESIDUE", "default null]: Organization", "default None]: Organization"),
+    ("STYLE_PYTHON_RESIDUE", "default null]: Organization", "default True]: Organization"),
+    ("STYLE_PYTHON_RESIDUE", "default null]: Organization", "default False]: Organization"),
+    ("STYLE_PYTHON_RESIDUE", "ex: \"5656565656565656\"", "ex: \\\"5656565656565656\\\""),
+    ("STYLE_PYTHON_RESIDUE", "Organization or Project object.\n", "Organization or Project object. Not necessary if starkbank.user was set\n"),
+    ("STYLE_PYTHON_RESIDUE", "Organization or Project object.\n", "Organization or Project object. See User.defaultUser\n"),
+    ("STYLE_EMPTY_DOC", "@param name [string]: widget name", "@param name [string]:"),
+    ("STYLE_EMPTY_DOC", "     * count [integer]: how many. ex: 3\n     */\n    static", "     * count [integer]:\n     */\n    static"),
+    ("STYLE_TRAILING_SPACE", "this.name = name;", "this.name = name; "),
+    ("STYLE_PARAM_ORPHAN", "@param count [integer]: how many. ex: 3\n     */\n    public Widget(",
+     "@param amount [integer]: how many. ex: 3\n     */\n    public Widget("),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Integer count = (Integer) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Long count = (Long) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Double count = ( Double ) dataCopy.remove(\"count\");"),
+    ("STYLE_UNBRACED", "if (id == null) {\n            return null;\n        } else if", "if (id == null) return null;\n        else if"),
+    ("STYLE_UNBRACED", "for (String key : keys) {\n            if (key == null) {\n                continue;\n            }\n        }",
+     "for (String key : keys)\n            continue;"),
+]
+
+
+@pytest.mark.parametrize("kind,old,new", BLOCKING_STYLE_CASES)
+def test_styleBlockingKindFailsWithFileLineAndSnippet(tmpPath, kind, old, new):
+    source = _dirty(old, new)
+    code, out = _styleRun(tmpPath, source, "--style")
+
+    assert code == 1, out
+    assert kind in out
+    changed = next(line for line in source.splitlines() if line not in STYLE_JAVA.splitlines())
+    assert f"Widget.java:{_lineOf(source, changed.strip())} {kind}" in out
+    assert changed.strip() in out or changed.strip()[:30] in out
+
+
+@pytest.mark.parametrize("kind,old,new", BLOCKING_STYLE_CASES)
+def test_styleDefectsAreIgnoredWithoutTheFlag(tmpPath, kind, old, new):
+    code, out = _styleRun(tmpPath, _dirty(old, new))
+    assert code == 0, out
+    assert "STYLE_" not in out
+
+
+def test_styleResidueInsideACodeStringLiteralIsNotAccused(tmpPath):
+    source = _dirty('throw new Exception("Unknown parameters used in constructor: " + dataCopy.keySet());',
+                    'throw new Exception("None of datetime.date \\"True\\" starkbank.user");')
+    code, out = _styleRun(tmpPath, source, "--style")
+    assert code == 0, out
+    assert "STYLE_PYTHON_RESIDUE" not in out
+
+
+def test_styleParamsMatchTheSignatureOfTheDeclarationThatFollows(tmpPath):
+    code, out = _styleRun(tmpPath, STYLE_JAVA, "--style")
+    assert code == 0, out
+    assert "STYLE_PARAM_ORPHAN" not in out
+
+
+def test_styleOrphanParamOnTheDataFieldIsBlocked(tmpPath):
+    source = _dirty("     * count [integer]: how many. ex: 3\n     */\n    static",
+                    "     * @param count [integer]: how many. ex: 3\n     */\n    static")
+    code, out = _styleRun(tmpPath, source, "--style")
+    assert code == 1
+    assert "STYLE_PARAM_ORPHAN" in out
+
+
+def test_styleCastOfAStringAndOfNumberIsNotAccused(tmpPath):
+    code, out = _styleRun(tmpPath, STYLE_JAVA, "--style")
+    assert "STYLE_NUMERIC_CAST" not in out
+
+
+def test_styleWarningsDoNotBlockAndAreCounted(tmpPath):
+    source = _dirty("     * name [string]: widget name\n     * count",
+                    "     * name [string]: widget name. ex: Widget.Rule(key=\"x\") and CardMethod(code=1)\n"
+                    "     * my_description [string]: unknown snake name\n     * count")
+    code, out = _styleRun(tmpPath, source, "--style")
+
+    assert code == 0, out
+    assert "[OK]" in out
+    assert f"Widget.java:{_lineOf(source, 'Widget.Rule(key=')} STYLE_PYTHON_CTOR" in out
+    assert f"Widget.java:{_lineOf(source, 'my_description')} STYLE_SNAKE_CASE" in out
+    assert "2 aviso(s) de estilo" in out
+    assert "[ERROR]" not in out
+
+
+def test_styleSnakeCaseInACodeStringIsNotAWarning(tmpPath):
+    source = _dirty('"Unknown parameters used in constructor: "', '"my_key_name "')
+    code, out = _styleRun(tmpPath, source, "--style")
+    assert code == 0, out
+    assert "STYLE_SNAKE_CASE" not in out
+
+
+def test_styleBlockingCountsAreReportedTogetherWithTheOtherBlockers(tmpPath):
+    source = _dirty("default null]: Organization", "default None]: Organization").replace("this.name = name;", "this.name = name; ")
+    code, out = _styleRun(tmpPath, source, "--style")
+    assert code == 1
+    assert "STYLE_PYTHON_RESIDUE" in out and "STYLE_TRAILING_SPACE" in out
+    assert "2 problema(s) bloqueante(s)" in out
+
+
+def test_styleIsOnlyForJava(tmpPath):
+    target = _write(tmpPath, "widget.js", "module.exports = { name: 'None ' };\n")
+    code, out = runTool("assert-generated.py", str(target), "--lang", "node", "--allow-missing-contract",
+                        "--strict", "--style")
+    assert "STYLE_" not in out

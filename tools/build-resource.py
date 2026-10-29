@@ -282,12 +282,13 @@ def referenceSha(language: str) -> str:
 
 
 def assertGenerated(artifact: Path, language: str, role: str, ruler: Path | None,
-                    strict: bool, substitution: bool) -> int:
+                    strict: bool, substitution: bool, style: bool = False) -> int:
     command = [sys.executable, str(TOOLS_DIR / "assert-generated.py"), str(artifact),
                "--lang", language, "--role", role]
     command += ["--contract", str(ruler)] if ruler else ["--allow-missing-contract"]
     command += ["--strict"] if strict else []
     command += ["--substitution"] if substitution else []
+    command += ["--style"] if style else []
     code, _ = runStep(f"assert-generated {role}", command)
     return code
 
@@ -390,7 +391,7 @@ def main() -> int:
 
         for run in runs:
             if assertGenerated(artifacts[run["role"]], args.lang, run["role"], rulers[run["role"]],
-                               not args.advisory, False) != 0:
+                               not args.advisory, False, style=not args.advisory) != 0:
                 return 1
 
         if place(args.resource, args.lang, generatedDir, targetDir) != 0:
