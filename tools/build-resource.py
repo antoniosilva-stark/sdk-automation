@@ -90,12 +90,14 @@ def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
 
 
 def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
-    """Copia `apis/` para `stagedDir` e injeta o Javadoc pre-renderizado na entrada do recurso da copia.
+    """Copia `apis/` para `stagedDir` e injeta o Javadoc e o corpo do Map-ctor pre-renderizados na entrada do
+    recurso da copia.
 
     O gerador descarta as extensoes `x-*` do arquivo apontado por `$ref` (so as irmas do `$ref` chegam a
-    `vendorExtensions`), entao o `x-sdk-java-docs` fica ao lado das flags `x-sdk-*` da spec copiada. O
-    `x-sdk-docs` original segue no schema copiado e a spec e os schemas do repo nao sao tocados."""
+    `vendorExtensions`), entao `x-sdk-java-docs` e `x-sdk-java-code` ficam ao lado das flags `x-sdk-*` da spec
+    copiada. O `x-sdk-docs` original segue no schema copiado e a spec e os schemas do repo nao sao tocados."""
     javaDocs = loadTool("java-docs")
+    javaCode = loadTool("java-code")
     apisDir = REPO_ROOT / "apis"
     specPath = REPO_ROOT / SPEC_FILE
     specText = specPath.read_text(encoding="utf-8")
@@ -105,12 +107,14 @@ def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
     rendered = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)
+    code = javaCode.renderMapConstructor(schema, entity)
 
     shutil.copytree(apisDir, stagedDir / "apis")
     entryLine = f"\n    {resource}:\n"
     if specText.count(entryLine) != 1:
         raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
-    docsLine = f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
+    docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
+                f"      x-sdk-java-code: {json.dumps(code)}\n")
     stagedSpec = stagedDir / SPEC_FILE
     stagedSpec.write_text(specText.replace(entryLine, f"{entryLine}{docsLine}", 1), encoding="utf-8")
     return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}

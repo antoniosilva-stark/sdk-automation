@@ -208,6 +208,11 @@ def javaDocs():
 
 
 @pytest.fixture
+def javaCode():
+    return _loadTool("java-code.py")
+
+
+@pytest.fixture
 def coverageReport():
     return _loadTool("coverage-report.py")
 
