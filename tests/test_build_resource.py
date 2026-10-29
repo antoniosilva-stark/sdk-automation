@@ -898,3 +898,61 @@ def test_styleWarningsOfACreatedResourceAreCountedAndDoNotBlockTheBuild(builtOnc
     assert "STYLE_PYTHON_CTOR" in out
     assert "aviso(s) de estilo que não bloqueiam" in out
     assert (target / JAVA_SOURCES / "Transfer.java").is_file()
+
+
+UNSUPPORTED_SHAPES = [
+    ("Webhook", "create de objeto unico (Webhook): o template emite create(List) com Rest.post"),
+    ("Balance", "get sem id (singleton) (Balance)"),
+    ("CorporateBalance", "get sem id (singleton) (CorporateBalance)"),
+    ("MerchantSession", "create de objeto unico (MerchantSession): o template emite create(List) com Rest.post"),
+]
+
+
+def _unsupportedResources(buildResource) -> list[str]:
+    spec = buildResource.loadFast((REPO_ROOT / buildResource.SPEC_FILE).read_text(encoding="utf-8"))
+    schemas = spec["components"]["schemas"]
+    return sorted(name for name in schemas if buildResource.unsupportedShape(name))
+
+
+def test_unsupportedShapeNamesExactlyTheResourcesTheTemplateCannotEmit(buildResource):
+    assert _unsupportedResources(buildResource) == sorted([
+        "Webhook", "MerchantSession", "MerchantPurchase", "CorporateCard", "CorporateWithdrawal",
+        "CorporateInvoice", "Workspace", "Balance", "CorporateBalance",
+    ])
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource,message", UNSUPPORTED_SHAPES)
+def test_creatingAnUnsupportedShapeFailsClosedAndPlacesNothing(builtOnce, resource, message):
+    code, out, target = builtOnce(resource, "java")
+
+    assert code == 1, out
+    assert f"[ERROR] formato nao suportado: {message}" in out
+    assert list(target.rglob("*")) == []
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource", ["Webhook", "Balance"])
+def test_anExistingResourceWithAnUnsupportedShapeIsStillTheParityReport(tmpPath, resource):
+    code, out = runTool("build-resource.py", resource, "--lang", "java", "--into", str(_target(tmpPath)))
+
+    assert code == 4, out
+    assert "formato nao suportado" not in out
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource", ["Webhook", "Balance"])
+def test_advisoryDoesNotRunTheShapeGuard(builtOnce, resource):
+    code, out, _ = builtOnce(resource, "java", "--advisory")
+
+    assert code == 0, out
+    assert "formato nao suportado" not in out
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource", ["SplitProfile", "Transfer", "VerifiedTransfer", "Transaction"])
+def test_supportedShapesAreStillCreated(builtOnce, resource):
+    code, out, target = builtOnce(resource, "java")
+
+    assert code == 0, out
+    assert (target / JAVA_SOURCES / f"{resource}.java").is_file()

@@ -384,3 +384,13 @@ def test_noResourceOfTheSpecCarriesPythonResidueNorAnEmptyDescription(javaDocs, 
             assert not any(re.search(pattern, line) for pattern in patterns), f"{resource}.{key}: {line}"
             assert not re.search(r"\]:\s*$", line), f"{resource}.{key}: descricao vazia em {line}"
             assert line == line.rstrip(), f"{resource}.{key}: espaco no fim de {line!r}"
+
+
+def test_aCreateWithoutReturnsOrReturningAListIsTheListForm(javaDocs):
+    assert javaDocs.returnsList({}) is True
+    assert javaDocs.returnsList({"returns": []}) is True
+    assert javaDocs.returnsList({"returns": ["list of Widget objects with updated attributes"]}) is True
+
+
+def test_aCreateReturningASingleObjectIsNotTheListForm(javaDocs):
+    assert javaDocs.returnsList({"returns": ["Widget object with updated attributes"]}) is False

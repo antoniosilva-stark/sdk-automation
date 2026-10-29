@@ -244,6 +244,23 @@ def gapBucket(resource: str) -> str | None:
     return None
 
 
+def unsupportedShape(resource: str) -> str | None:
+    """Formato que o template Java nao sabe emitir: create de objeto unico (sai create(List) com Rest.post) e get
+    sem id (singleton, sai get(String id)). Quem decide e o docstring, o mesmo predicado da documentacao."""
+    javaDocs = loadTool("java-docs")
+    spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
+    docs = resolveRef(spec, resource, REPO_ROOT / "apis").get("x-sdk-docs") or {}
+    flags = declaredFlags(resource)
+    for operation in ("create", "put"):
+        if f"x-sdk-{operation}" in flags and not javaDocs.returnsList(docs.get(operation) or {}):
+            return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
+    getDoc = docs.get("get")
+    # `uuid` (DynamicBrcode) tambem identifica: singleton e o get que so recebe `user`
+    if "x-sdk-get" in flags and getDoc and {param["name"] for param in getDoc.get("params") or []} <= {"user"}:
+        return f"get sem id (singleton) ({resource})"
+    return None
+
+
 def announceIntent(resource: str, language: str, absent: int, total: int) -> None:
     if absent == total:
         bucket = gapBucket(resource) if language == "java" else None
@@ -376,6 +393,11 @@ def main() -> int:
             rulers[run["role"]] = ruler
 
         announceIntent(args.resource, args.lang, absent, len(runs))
+
+        unsupported = unsupportedShape(args.resource) if args.lang == "java" and absent == len(runs) else None
+        if unsupported and not args.advisory:
+            emit(f"[ERROR] formato nao suportado: {unsupported}")
+            return 1
 
         artifacts = {}
         for run in runs:

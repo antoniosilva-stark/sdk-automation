@@ -43,9 +43,9 @@ def _membersOf(source: str, className: str, tool, assertGenerated) -> list[dict]
     uma classe. Corpo de metodo e inicializador ficam de fora."""
     cleaned = "\n".join(tool.withoutNoise(source))
     rawLines = source.split("\n")
-    stack, names, members = [], [], []
+    stack, names, bodies, members = [], [], [], []
     header, start, line = "", None, 0
-    for char in cleaned:
+    for index, char in enumerate(cleaned):
         if char == "\n":
             line += 1
         if char not in "{;}":
@@ -60,9 +60,13 @@ def _membersOf(source: str, className: str, tool, assertGenerated) -> list[dict]
             declared = CLASS_HEADER.search(text) if "(" not in text else None
             stack.append("class" if declared else "body")
             names.append(declared.group(1) if declared else "")
+            bodies.append((members[-1], index) if isMember and not declared else None)
         if char == "}":
             stack.pop()
             names.pop()
+            opened = bodies.pop()
+            if opened:
+                opened[0]["body"] = cleaned[opened[1] + 1:index]
         header, start = "", None
     return members
 
@@ -87,6 +91,7 @@ def _member(text: str, start: int, owner: str, className: str, rawLines: list[st
     label = f"{owner}.{words[-1]}({', '.join(types)})".lstrip(".")
     return {**base, "kind": "method", "label": f"{owner}.{ownerClass}(all-args)".lstrip(".") if isAllArgs else label,
             "isAllArgs": isAllArgs, "name": words[-1], "returns": " ".join(words[:-1]), "parameterTypes": types,
+            "throws": declaration[declaration.rfind(")") + 1:].strip(), "body": "",
             "parameterNames": [parameter.rsplit(" ", 1)[-1] for parameter in parameters]}
 
 
@@ -252,6 +257,8 @@ def _blockDivergences(real: dict, generated: dict) -> dict[str, str]:
         label = member["label"]
         if member["kind"] == "method" and member["returns"] != other["returns"]:
             grouped.setdefault(f"signature|returns {member['returns']} -> {other['returns']}", []).append(label)
+        if member["kind"] == "method" and member["throws"] != other["throws"]:
+            grouped.setdefault(f"signature|{member['throws'] or '(sem throws)'} -> {other['throws'] or '(sem throws)'}", []).append(label)
         if member["annotations"] != other["annotations"]:
             grouped.setdefault(f"annotations|{_seqDiff(member['annotations'], other['annotations'])}", []).append(label)
         if member["kind"] == "method" and member["isAllArgs"]:
@@ -260,6 +267,26 @@ def _blockDivergences(real: dict, generated: dict) -> dict[str, str]:
             grouped.setdefault(f"doc|{detail}", []).append(label)
     found.update({f"{detail}|{', '.join(labels)}": "bloco" for detail, labels in grouped.items()})
     return found
+
+
+def _restByOperation(structure: dict) -> dict[str, dict[str, int]]:
+    """Primitivos de Rest que os corpos de cada operacao chamam (post, postSingle, getId, getStream, getPage, put...),
+    contados por operacao e nao por overload: `create(Map)` do real e `create(List)` do gerador sao a mesma operacao."""
+    calls = {}
+    for member in structure["methods"]:
+        if member["kind"] != "method" or member["isAllArgs"]:
+            continue
+        operation = f"{member['owner']}.{member['name']}".lstrip(".")
+        for primitive in re.findall(r"\bRest\.(\w+)\(", member["body"]):
+            counts = calls.setdefault(operation, {})
+            counts[primitive] = counts.get(primitive, 0) + 1
+    return calls
+
+
+def _restDivergences(real: dict, generated: dict) -> dict[str, str]:
+    before, after = _restByOperation(real), _restByOperation(generated)
+    return {f"rest|{operation} real={before.get(operation, {})} gen={after.get(operation, {})}": "primitivo de Rest"
+            for operation in dict.fromkeys([*before, *after]) if before.get(operation) != after.get(operation)}
 
 
 def _allArgsDivergences(label: str, real: dict, generated: dict) -> dict[str, str]:
@@ -314,7 +341,7 @@ def _importDivergences(real: dict, generated: dict) -> dict[str, str]:
 
 def _divergences(real: dict, generated: dict) -> dict[str, str]:
     found = {}
-    for check in (_methodDivergences, _blockDivergences, _fieldDivergences, _assignmentDivergences, _importDivergences):
+    for check in (_methodDivergences, _restDivergences, _blockDivergences, _fieldDivergences, _assignmentDivergences, _importDivergences):
         found.update(check(real, generated))
     return found
 
@@ -326,14 +353,19 @@ def _compared(real: dict, generated: dict) -> tuple[int, int]:
     return (len([member for member in common if member["kind"] == "method"]), len(blocks))
 
 
-# Registro fechado das divergencias esperadas: recurso -> chave -> motivo. A chave e a divergencia exata; uma
-# entrada que parou de casar reprova o teste (como as dispensas versionadas de tests/waivers). Os motivos que
-# comecam com "FORA DA LISTA" nao cabem nos motivos combinados (docstring Python sem o conteudo, real na minoria do
-# proprio real, excecoes da 6b, primitivos do real): sao defeito ou limite do gerador, registrados para o lead decidir.
+# Dois registros fechados, recurso -> chave -> motivo. A chave e a divergencia exata; uma entrada que parou de casar
+# reprova o teste (como as dispensas versionadas de tests/waivers), nos dois registros.
+#   EXPECTED: divergencias legitimas (docstring Python sem o conteudo, real na minoria do proprio real, primitivos do
+#     real, excecoes da 6b). Nao ha o que corrigir no gerador.
+#   KNOWN_GENERATOR_LIMITS: defeitos ou limites do gerador, com severidade e a pendencia "Entrega 9" que os fecha. O
+#     golden nao fica verde escondendo isso: o relatorio imprime a contagem por severidade.
+SEVERITIES = ("runtime-errado", "tipo-perdido", "cosmetico")
+
 PRIMITIVE = "tipo primitivo do real (long/int, 15 de 55 arquivos); o gerador emite o boxed, porque o Python nao tem primitivo"
 PRIMITIVE_CAST = "o real le `amount` com cast direto (int), que trunca; o gerador le Number.longValue (RF9)"
 LIST_PARAM = "excecao da 6b: o nome do parametro de lista vem do plural do recurso; o real usa nome proprio"
-DEPRECATED = "excecao da 6b: @Deprecated do real nao vem do docstring Python (Transaction.create: v2.31.0 no Python, v2.24.0 no Java)"
+DEPRECATED = ("excecao da 6b: @Deprecated do real nao vem do docstring Python (Transaction.create: v2.31.0 no Python,"
+              " v2.24.0 no Java); o corpo do real so lanca, sem chamar Rest")
 LOG_ERRORS = "excecao da 6b: Log.errors sai List<ErrorElement> (7 de 24 Log); o real mais frequente usa String[] (14 de 24)"
 DOCSTRING_EXTRA = "o docstring Python tem conteudo que o Javadoc do real nao tem"
 DOCSTRING_MISSING = "conteudo ausente do docstring Python que o real tem"
@@ -350,23 +382,37 @@ PAGE_ORDER = "real na minoria do proprio real: ordem dos overloads de page; a do
 QUERY_ORDER = "real na minoria do proprio real: query em (Map)(User)()(Map,User), 12 de 33; a dominante e (Map,User)(Map)(User)(), 19 de 33"
 TRANSFER_ORDER = ("real na minoria do proprio real: query (Map)(User)()(Map,User), 12 de 33, e delete antes de query"
                   " (2 de 9 arquivos com os dois)")
+REST_DIRECT = ("real sem forma dominante: query(Map) chama Rest.getStream direto (20 de 37) ou delega para query(Map, User)"
+               " (17 de 37, a forma do gerador)")
 LOG_ATTRIBUTES = "real [SP] na minoria: `Attributes:` no Log (6 cabecalhos contra 46 `Attributes (return-only):`)"
 LOG_FIELD_ORDER = "real [SP] na minoria: campos do Log em outra ordem; a dominante e `created type errors X`, 16 de 24"
 IMPORT_ORDER = ("real na minoria do proprio real: Rest>Resource>Generator (11 de 42; dominante Generator>Resource>Rest, 20)"
                 " e java.util fora de ordem alfabetica (13 contra 21)")
 BALANCE_IMPORTS = "o real importa o que nao usa (Generator, List, HashMap, ArrayList); o gate DEAD_IMPORT reprova import morto"
-FREE_OBJECT = "FORA DA LISTA: objeto livre `metadata`: o real usa HashMap<String, Object>; o gerador emite Object"
-RULE = ("FORA DA LISTA: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
+
+FREE_OBJECT = ("tipo-perdido",
+               "Entrega 9: objeto livre `metadata`: o real usa HashMap<String, Object>; o gerador emite Object")
+RULE = ("tipo-perdido",
+        "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
         " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
-LOG_QUALIFIED = "FORA DA LISTA: o gerador qualifica `Transfer.Log` onde o real usa `Log` (13 de 23 `List<Log>` contra 10 `List<X.Log>`)"
-BALANCE_SHAPE = ("FORA DA LISTA: Balance e singleton sem id (`get()` e `get(User)`) e sem ctor Map no real;"
-                 " o gerador emite `get(String id)` e o ctor Map")
-SINGLE_CREATE = "FORA DA LISTA: o real tem um `create(Map)` unico; o gerador emite `create(List)`"
+LOG_QUALIFIED = ("cosmetico",
+                 "Entrega 9: o gerador qualifica `Transfer.Log` onde o real usa `Log` (13 de 23 `List<Log>` contra 10"
+                 " `List<X.Log>`)")
+BALANCE_GET = ("runtime-errado",
+               "Entrega 9: Balance e singleton: o real tem `get()` e `get(User)` com Rest.getStream; o gerador emite"
+               " `get(String id)` com Rest.getId. A guarda de build-resource bloqueia a criacao")
+BALANCE_MAP_CTOR = ("cosmetico",
+                    "Entrega 9: Balance nao tem ctor Map no real; o gerador emite o ctor (superficie publica a mais)")
+SINGLE_CREATE = ("runtime-errado",
+                 "Entrega 9: create de objeto unico: o real tem `create(Map)` com Rest.postSingle; o gerador emite"
+                 " `create(List)` com Rest.post. A guarda de build-resource bloqueia a criacao")
 
 EXPECTED: dict[str, dict[str, str]] = {
     "SplitProfile": {
         "methods|order|moved=[page(Map<String, Object>, User)]":
             PAGE_ORDER,
+        "rest|query real={'getStream': 4} gen={'getStream': 1}":
+            REST_DIRECT,
         "doc|sections -[Parameters (optional):] +[Parameters:]|SplitProfile(Map<String, Object>)":
             OPTIONAL_HEADER,
         "doc|tags -[] +[throws]|SplitProfile(Map<String, Object>)":
@@ -387,6 +433,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     "Transaction": {
         "methods|order|moved=[query(Map<String, Object>, User)]":
             QUERY_ORDER,
+        "rest|create real={} gen={'post': 1}":
+            DEPRECATED,
         "allArgs|Transaction(all-args)|order|moved=[senderId, fee, balance, created]":
             DOCSTRING_ORDER,
         "allArgs|Transaction(all-args)|type|amount real=long gen=Long":
@@ -409,6 +457,91 @@ EXPECTED: dict[str, dict[str, str]] = {
             PRIMITIVE_CAST,
     },
     "Transfer": {
+        "methods|order|moved=[query(Map<String, Object>, User), delete(String), delete(String, User)]":
+            TRANSFER_ORDER,
+        "allArgs|Transfer(all-args)|extra|displayDescription":
+            DOCSTRING_EXTRA,
+        "allArgs|Transfer(all-args)|order|moved=[id]":
+            ID_POSITION,
+        "allArgs|Transfer(all-args)|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "allArgs|Log.Log(all-args)|type|errors real=String[] gen=List<ErrorElement>":
+            LOG_ERRORS,
+        "doc|tags -[] +[param:displayDescription]|Transfer(all-args)":
+            DOCSTRING_EXTRA,
+        "doc|sections -[Parameters (optional):] +[]|Transfer(Map<String, Object>)":
+            OPTIONAL_HEADER,
+        "doc|filters -[id] +[displayDescription]|Transfer(Map<String, Object>)":
+            DOCSTRING_EXTRA,
+        "doc|filters -[] +[taxId]|query(Map<String, Object>, User)":
+            DOCSTRING_EXTRA,
+        "doc|filters -[transferIds] +[transactionIds, taxId]|page(Map<String, Object>), page(Map<String, Object>, User)":
+            DOCSTRING_EXTRA,
+        "fields|extra|displayDescription":
+            DOCSTRING_EXTRA,
+        "fields|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "fields|type|Log.errors real=String[] gen=List<ErrorElement>":
+            LOG_ERRORS,
+        "mapctor|displayDescription real=None gen=cast:String":
+            DOCSTRING_EXTRA,
+    },
+    "Balance": {
+        "allArgs|Balance(all-args)|order|moved=[id]":
+            ID_POSITION,
+        "allArgs|Balance(all-args)|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "fields|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
+            BALANCE_IMPORTS,
+    },
+    "Webhook": {
+        "methods|order|moved=[query(Map<String, Object>, User)]":
+            QUERY_ORDER,
+        "signature|(sem throws) -> throws Exception|Webhook(Map<String, Object>)":
+            NO_THROWS,
+        "doc|sections -[Attributes (return-only):] +[]|Webhook(Map<String, Object>)":
+            ID_RETURN_ONLY,
+        "doc|tags -[] +[throws]|Webhook(Map<String, Object>)":
+            NO_THROWS,
+        "doc|filters -[id] +[]|Webhook(Map<String, Object>)":
+            ID_RETURN_ONLY,
+    },
+    "VerifiedTransfer": {
+        "allArgs|VerifiedTransfer(all-args)|missing|accountType":
+            DOCSTRING_MISSING,
+        "allArgs|VerifiedTransfer(all-args)|order|moved=[id]":
+            ID_POSITION,
+        "allArgs|VerifiedTransfer(all-args)|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "doc|tags -[param:accountType] +[]|VerifiedTransfer(all-args)":
+            DOCSTRING_MISSING,
+        "doc|sections -[Parameters (optional):] +[]|VerifiedTransfer(Map<String, Object>)":
+            OPTIONAL_HEADER,
+        "doc|filters -[accountType, id] +[]|VerifiedTransfer(Map<String, Object>)":
+            DOCSTRING_MISSING,
+        "doc|tags -[param:transfers] +[param:verifiedTransfers]|create(List<?>), create(List<?>, User)":
+            LIST_PARAM,
+        "fields|missing|accountType":
+            DOCSTRING_MISSING,
+        "fields|type|amount real=long gen=Long":
+            PRIMITIVE,
+        "mapctor|accountType real=cast:String gen=None":
+            DOCSTRING_MISSING,
+        "imports|real=Rest,Resource | Map,List,HashMap,ArrayList gen=Resource,Rest | ArrayList,HashMap,List,Map":
+            IMPORT_ORDER,
+    },
+}
+
+KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
+    "SplitProfile": {
+
+    },
+    "Transaction": {
+
+    },
+    "Transfer": {
         "methods|missing|parseRules(List<Object>)":
             RULE,
         "methods|missing|class Rule":
@@ -423,34 +556,14 @@ EXPECTED: dict[str, dict[str, str]] = {
             RULE,
         "methods|missing|Rule.Deserializer.deserialize(JsonElement, Type, JsonDeserializationContext)":
             RULE,
-        "methods|order|moved=[query(Map<String, Object>, User), delete(String), delete(String, User)]":
-            TRANSFER_ORDER,
-        "allArgs|Transfer(all-args)|extra|displayDescription":
-            DOCSTRING_EXTRA,
-        "allArgs|Transfer(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "allArgs|Transfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
         "allArgs|Transfer(all-args)|type|rules real=List<Rule> gen=List<Object>":
             RULE,
         "allArgs|Transfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
             FREE_OBJECT,
-        "allArgs|Log.Log(all-args)|type|errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "allArgs|Log.Page.Page(all-args)|type|logs real=List<Log> gen=List<Transfer.Log>":
             LOG_QUALIFIED,
-        "doc|tags -[] +[param:displayDescription]|Transfer(all-args)":
-            DOCSTRING_EXTRA,
         "annotations|-[] +[SuppressWarnings]|Transfer(Map<String, Object>)":
             RULE,
-        "doc|sections -[Parameters (optional):] +[]|Transfer(Map<String, Object>)":
-            OPTIONAL_HEADER,
-        "doc|filters -[id] +[displayDescription]|Transfer(Map<String, Object>)":
-            DOCSTRING_EXTRA,
-        "doc|filters -[] +[taxId]|query(Map<String, Object>, User)":
-            DOCSTRING_EXTRA,
-        "doc|filters -[transferIds] +[transactionIds, taxId]|page(Map<String, Object>), page(Map<String, Object>, User)":
-            DOCSTRING_EXTRA,
         "signature|returns public static Log -> public static Transfer.Log|Log.get(String), Log.get(String, User)":
             LOG_QUALIFIED,
         "signature|returns public static Generator<Log> -> public static Generator<Transfer.Log>|Log.query(Map<String, Object>), Log.query(User), Log.query(), Log.query(Map<String, Object>, User)":
@@ -461,50 +574,36 @@ EXPECTED: dict[str, dict[str, str]] = {
             RULE,
         "fields|missing|Rule.value":
             RULE,
-        "fields|extra|displayDescription":
-            DOCSTRING_EXTRA,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "fields|type|rules real=List<Rule> gen=List<Object>":
             RULE,
         "fields|type|metadata real=HashMap<String, Object> gen=Object":
             FREE_OBJECT,
-        "fields|type|Log.errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "fields|type|Log.Page.logs real=List<Log> gen=List<Transfer.Log>":
             LOG_QUALIFIED,
         "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
             RULE,
-        "mapctor|displayDescription real=None gen=cast:String":
-            DOCSTRING_EXTRA,
         "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource,ErrorElement | InputStream,ArrayList,HashMap,List,Map":
             RULE,
     },
     "Balance": {
         "methods|missing|get(User)":
-            BALANCE_SHAPE,
+            BALANCE_GET,
         "methods|missing|get()":
-            BALANCE_SHAPE,
+            BALANCE_GET,
         "methods|extra|Balance(Map<String, Object>)":
-            BALANCE_SHAPE,
+            BALANCE_MAP_CTOR,
         "methods|extra|get(String)":
-            BALANCE_SHAPE,
+            BALANCE_GET,
         "methods|extra|get(String, User)":
-            BALANCE_SHAPE,
-        "allArgs|Balance(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "allArgs|Balance(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
+            BALANCE_GET,
+        "rest|get real={'getStream': 1} gen={'getId': 1}":
+            BALANCE_GET,
         "mapctor|amount real=None gen=null":
-            BALANCE_SHAPE,
+            BALANCE_MAP_CTOR,
         "mapctor|currency real=None gen=null":
-            BALANCE_SHAPE,
+            BALANCE_MAP_CTOR,
         "mapctor|updated real=None gen=null":
-            BALANCE_SHAPE,
-        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
-            BALANCE_IMPORTS,
+            BALANCE_MAP_CTOR,
     },
     "Webhook": {
         "methods|missing|create(Map<String, Object>)":
@@ -515,56 +614,34 @@ EXPECTED: dict[str, dict[str, str]] = {
             SINGLE_CREATE,
         "methods|extra|create(List<?>, User)":
             SINGLE_CREATE,
-        "methods|order|moved=[query(Map<String, Object>, User)]":
-            QUERY_ORDER,
-        "doc|sections -[Attributes (return-only):] +[]|Webhook(Map<String, Object>)":
-            ID_RETURN_ONLY,
-        "doc|tags -[] +[throws]|Webhook(Map<String, Object>)":
-            NO_THROWS,
-        "doc|filters -[id] +[]|Webhook(Map<String, Object>)":
-            ID_RETURN_ONLY,
+        "rest|create real={'postSingle': 1} gen={'post': 1}":
+            SINGLE_CREATE,
     },
     "VerifiedTransfer": {
         "methods|missing|parseRules(List<Object>)":
             RULE,
-        "allArgs|VerifiedTransfer(all-args)|missing|accountType":
-            DOCSTRING_MISSING,
-        "allArgs|VerifiedTransfer(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "allArgs|VerifiedTransfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
         "allArgs|VerifiedTransfer(all-args)|type|rules real=List<Transfer.Rule> gen=List<Object>":
             RULE,
         "allArgs|VerifiedTransfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
             FREE_OBJECT,
-        "doc|tags -[param:accountType] +[]|VerifiedTransfer(all-args)":
-            DOCSTRING_MISSING,
-        "doc|sections -[Parameters (optional):] +[]|VerifiedTransfer(Map<String, Object>)":
-            OPTIONAL_HEADER,
-        "doc|filters -[accountType, id] +[]|VerifiedTransfer(Map<String, Object>)":
-            DOCSTRING_MISSING,
-        "doc|tags -[param:transfers] +[param:verifiedTransfers]|create(List<?>), create(List<?>, User)":
-            LIST_PARAM,
-        "fields|missing|accountType":
-            DOCSTRING_MISSING,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "fields|type|rules real=List<Transfer.Rule> gen=List<Object>":
             RULE,
         "fields|type|metadata real=HashMap<String, Object> gen=Object":
             FREE_OBJECT,
-        "mapctor|accountType real=cast:String gen=None":
-            DOCSTRING_MISSING,
         "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
             RULE,
-        "imports|real=Rest,Resource | Map,List,HashMap,ArrayList gen=Resource,Rest | ArrayList,HashMap,List,Map":
-            IMPORT_ORDER,
     },
 }
 
 
+# A guarda de build-resource bloqueia a criacao de Webhook (create de objeto unico) e de Balance (singleton), entao o
+# golden os gera com --advisory, que nao a roda: aqui se mede a estrutura contra o real, e a guarda prova o bloqueio
+# (tests/test_build_resource.py). Os dois nao se sobrepoem de proposito.
+GOLDEN_FLAGS = {"Webhook": ("--advisory",), "Balance": ("--advisory",)}
+
+
 def _structures(builtOnce, assertGenerated, resource: str, generated: str | None = None) -> tuple[dict, dict, str]:
-    code, out, target = builtOnce(resource, "java")
+    code, out, target = builtOnce(resource, "java", *GOLDEN_FLAGS.get(resource, ()))
     assert code == 0, out
     tool = assertGenerated.loadTool("derive-contract")
     source = generated or (target / "src/main/java/com/starkbank" / f"{resource}.java").read_text(encoding="utf-8")
@@ -573,21 +650,29 @@ def _structures(builtOnce, assertGenerated, resource: str, generated: str | None
             _structure(source, resource, False, tool, assertGenerated), source)
 
 
-def _audit(found: dict[str, str], expected: dict[str, str]) -> tuple[list[str], list[str]]:
-    """Divergencia sem entrada e entrada que parou de casar: as duas reprovam."""
-    return ([key for key in found if key not in expected], [key for key in expected if key not in found])
+def _audit(found: dict[str, str], expected: dict[str, str],
+           limits: dict[str, tuple[str, str]] | None = None) -> tuple[list[str], list[str]]:
+    """Divergencia sem entrada e entrada que parou de casar, em qualquer dos dois registros: as duas reprovam."""
+    known = {**expected, **(limits or {})}
+    return ([key for key in found if key not in known], [key for key in known if key not in found])
+
+
+def _limitCounts(limits: dict[str, tuple[str, str]]) -> dict[str, int]:
+    return {severity: sum(1 for entry in limits.values() if entry[0] == severity) for severity in SEVERITIES}
 
 
 def _report(resource: str, real: dict, generated: dict, found: dict[str, str]) -> str:
     methods, blocks = _compared(real, generated)
-    expected = EXPECTED[resource]
+    expected, limits = EXPECTED[resource], KNOWN_GENERATOR_LIMITS[resource]
     byMotive = {}
     for key in found:
         if key in expected:
             byMotive.setdefault(expected[key], []).append(key)
-    lines = [f"=== {resource}: {methods} metodos e {blocks} blocos Javadoc comparados, {len(found)} divergencias,"
-             f" {sum(len(keys) for keys in byMotive.values())} esperadas"]
+    lines = [f"=== {resource}: {methods} metodos e {blocks} blocos Javadoc comparados, {len(found)} divergencias:"
+             f" {sum(len(keys) for keys in byMotive.values())} esperadas, {len(limits)} limites do gerador"]
     lines += [f"  {len(keys)} x {motive}" for motive, keys in byMotive.items()]
+    lines += [f"  limites por severidade: {_limitCounts(limits)}"]
+    lines += [f"  [{severity}] {key}" for key, (severity, _) in limits.items()]
     return "\n".join(lines)
 
 
@@ -597,11 +682,10 @@ def test_generatedJavaMatchesTheRealSdkOnStructure(builtOnce, assertGenerated, r
     real, generated, _ = _structures(builtOnce, assertGenerated, resource)
 
     found = _divergences(real, generated)
-    expected = EXPECTED[resource]
     sys.stdout.write(f"{_report(resource, real, generated, found)}\n")
-    unexpected, stale = _audit(found, expected)
+    unexpected, stale = _audit(found, EXPECTED[resource], KNOWN_GENERATOR_LIMITS[resource])
 
-    assert not unexpected, f"{resource}: divergencia sem entrada no registro:\n" + "\n".join(f"  {key}" for key in unexpected)
+    assert not unexpected, f"{resource}: divergencia sem entrada nos registros:\n" + "\n".join(f"  {key}" for key in unexpected)
     assert not stale, f"{resource}: entrada que parou de casar, remova do registro:\n" + "\n".join(f"  {key}" for key in stale)
 
 
@@ -611,6 +695,28 @@ def test_everyExpectedDivergenceCarriesAWrittenMotive():
         for key, motive in entries.items():
             assert len(motive.split()) >= 5, f"{resource}: motivo curto demais para {key}"
             assert "*" not in key, f"{resource}: curinga na chave {key}"
+            assert "Entrega 9" not in motive, f"{resource}: {key} e limite do gerador, nao divergencia esperada"
+
+
+def test_everyKnownGeneratorLimitCarriesASeverityAndTheEntrega9Reference():
+    assert set(KNOWN_GENERATOR_LIMITS) == set(GOLDEN_RESOURCES)
+    for resource, entries in KNOWN_GENERATOR_LIMITS.items():
+        for key, (severity, motive) in entries.items():
+            assert severity in SEVERITIES, f"{resource}: severidade invalida em {key}"
+            assert "Entrega 9" in motive, f"{resource}: {key} sem referencia a Entrega 9"
+            assert key not in EXPECTED[resource], f"{resource}: {key} esta nos dois registros"
+
+
+def test_theGeneratorLimitsAreCountedBySeverityInTheFinalReport():
+    totals = {severity: 0 for severity in SEVERITIES}
+    for entries in KNOWN_GENERATOR_LIMITS.values():
+        for severity, count in _limitCounts(entries).items():
+            totals[severity] += count
+
+    sys.stdout.write(f"=== limites do gerador no golden, por severidade (Entrega 9): {totals}\n")
+
+    assert sum(totals.values()) == sum(len(entries) for entries in KNOWN_GENERATOR_LIMITS.values())
+    assert totals["runtime-errado"] > 0, "o golden nao pode esconder o limite que muda o comportamento em runtime"
 
 
 def _swapBlocks(source: str, first: str, second: str) -> str:
@@ -636,6 +742,10 @@ MUTATIONS = {
     "filterRemoved": lambda source: _replaced(
         source, "     * limit [integer, default null]: maximum number of objects to be retrieved. Unlimited if null. ex: 35\n", ""),
     "returnOnlyReadFromTheMap": lambda source: _replaced(source, "this.status = null;", "this.status = (String) dataCopy.remove(\"status\");"),
+    "throwsRemoved": lambda source: _replaced(
+        source, "public static Page page(Map<String, Object> params, User user) throws Exception {",
+        "public static Page page(Map<String, Object> params, User user) {"),
+    "restPrimitive": lambda source: _replaced(source, "return Rest.getId(data, id, user);", "return Rest.getStream(data, id, user);"),
     "tagMissing": lambda source: _replaced(source, "     * @return list of SplitProfile objects with updated attributes\n", ""),
 }
 MUTATION_KEYS = {
@@ -644,6 +754,8 @@ MUTATION_KEYS = {
     "userLine": "doc|user real=",
     "filterRemoved": "doc|filters",
     "returnOnlyReadFromTheMap": "mapctor|status real=null gen=cast:String",
+    "throwsRemoved": "signature|throws Exception -> (sem throws)",
+    "restPrimitive": "rest|get real={'getId': 1} gen={'getStream': 1}",
     "tagMissing": "doc|tags -[param:profiles, return]",
 }
 
@@ -654,7 +766,7 @@ def test_theGoldenFailsWhenTheGeneratedSourceIsMutated(builtOnce, assertGenerate
     _, _, source = _structures(builtOnce, assertGenerated, "SplitProfile")
     real, generated, _ = _structures(builtOnce, assertGenerated, "SplitProfile", MUTATIONS[mutation](source))
 
-    unexpected = [key for key in _divergences(real, generated) if key not in EXPECTED["SplitProfile"]]
+    unexpected, _ = _audit(_divergences(real, generated), EXPECTED["SplitProfile"], KNOWN_GENERATOR_LIMITS["SplitProfile"])
 
     assert any(MUTATION_KEYS[mutation] in key for key in unexpected), unexpected
 
@@ -677,6 +789,15 @@ def test_movedItemsAreTheOnesOutsideTheLongestCommonOrder():
 
 def test_aDivergenceWithoutAnEntryAndAnEntryThatStoppedMatchingAreBothReported():
     unexpected, stale = _audit({"doc|new": "x", "doc|kept": "x"}, {"doc|kept": "motivo escrito aqui agora", "doc|gone": "motivo escrito aqui agora"})
+
+    assert unexpected == ["doc|new"]
+    assert stale == ["doc|gone"]
+
+
+def test_aKnownGeneratorLimitThatStoppedMatchingFailsLikeAnExpectedOne():
+    limits = {"rest|create": ("runtime-errado", "Entrega 9: motivo escrito aqui"), "doc|gone": ("cosmetico", "Entrega 9: x")}
+
+    unexpected, stale = _audit({"rest|create": "x", "doc|new": "x"}, {}, limits)
 
     assert unexpected == ["doc|new"]
     assert stale == ["doc|gone"]

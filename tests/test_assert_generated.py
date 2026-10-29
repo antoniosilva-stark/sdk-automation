@@ -845,6 +845,10 @@ BLOCKING_STYLE_CASES = [
     ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Integer count = (Integer) dataCopy.remove(\"count\");"),
     ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Long count = (Long) dataCopy.remove(\"count\");"),
     ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Double count = ( Double ) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "int count = (int) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "long count = ( long ) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "double count = (double) dataCopy.remove(\"count\");"),
+    ("STYLE_NUMERIC_CAST", "Number count = (Number) dataCopy.remove(\"count\");", "Long count = (java.lang.Long) dataCopy.remove(\"count\");"),
     ("STYLE_UNBRACED", "if (id == null) {\n            return null;\n        } else if", "if (id == null) return null;\n        else if"),
     ("STYLE_UNBRACED", "for (String key : keys) {\n            if (key == null) {\n                continue;\n            }\n        }",
      "for (String key : keys)\n            continue;"),
@@ -894,6 +898,7 @@ def test_styleOrphanParamOnTheDataFieldIsBlocked(tmpPath):
 
 def test_styleCastOfAStringAndOfNumberIsNotAccused(tmpPath):
     code, out = _styleRun(tmpPath, STYLE_JAVA, "--style")
+    assert code == 0, out
     assert "STYLE_NUMERIC_CAST" not in out
 
 
@@ -907,6 +912,8 @@ def test_styleWarningsDoNotBlockAndAreCounted(tmpPath):
     assert "[OK]" in out
     assert f"Widget.java:{_lineOf(source, 'Widget.Rule(key=')} STYLE_PYTHON_CTOR" in out
     assert f"Widget.java:{_lineOf(source, 'my_description')} STYLE_SNAKE_CASE" in out
+    assert "snake_case no texto do doc" in out
+    assert "nome conhecido" not in out
     assert "2 aviso(s) de estilo" in out
     assert "[ERROR]" not in out
 
@@ -930,4 +937,5 @@ def test_styleIsOnlyForJava(tmpPath):
     target = _write(tmpPath, "widget.js", "module.exports = { name: 'None ' };\n")
     code, out = runTool("assert-generated.py", str(target), "--lang", "node", "--allow-missing-contract",
                         "--strict", "--style")
+    assert code == 0, out
     assert "STYLE_" not in out

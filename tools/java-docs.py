@@ -233,10 +233,15 @@ def renderOperation(context: dict, operation: str, doc: dict) -> dict:
     return rendered
 
 
+def returnsList(doc: dict) -> bool:
+    """O create/put documentado devolve lista (ou nao diz): a forma que o template Java emite."""
+    returns = doc.get("returns") or []
+    return not returns or returns[0].startswith("list of")
+
+
 def listFormDoc(operation: str, className: str, doc: dict) -> dict:
     """O Java so recebe a lista; create de objeto unico no Python viraria texto que a assinatura contradiz."""
-    returns = doc.get("returns") or []
-    if not returns or returns[0].startswith("list of"):
+    if returnsList(doc):
         return doc
     generic = genericDoc(operation, className)["description"]
     return {**doc, "description": generic[:1] + (doc.get("description") or [])[1:], "returns": []}

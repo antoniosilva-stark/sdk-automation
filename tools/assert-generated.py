@@ -48,7 +48,8 @@ _FIELD_NAME = re.compile(r"(\w+)\s*;\s*$")
 _JAVADOC_RESIDUE = re.compile(r"datetime\.\w|timedelta|\bNone\b|\bTrue\b|\bFalse\b|\\\"|starkbank\.user\b|User\.defaultUser")
 _EMPTY_DOC_LINE = re.compile(r"\]\s*:\s*$")
 _PARAM_TAG = re.compile(r"^\s*\*\s*@param\s+(\w+)")
-_NUMERIC_REMOVE_CAST = re.compile(r"\(\s*(?:Integer|Long|Float|Double|Short|Byte)\s*\)\s*dataCopy\.remove\(")
+_NUMERIC_REMOVE_CAST = re.compile(
+    r"\(\s*(?:java\.lang\.)?(?:Integer|Long|Float|Double|Short|Byte|int|long|float|double|short|byte)\s*\)\s*dataCopy\.remove\(")
 _BRANCH_KEYWORD = re.compile(r"\b(?:if|for)\s*\(")
 _PYTHON_CTOR = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*\(\w+=")
 _SNAKE_CASE = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
@@ -259,7 +260,7 @@ def warnJavadocText(comments: list[tuple[int, str]], filePath: str) -> list[Issu
         snake = _SNAKE_CASE.search(text)
         if snake:
             warnings.append(Issue(filePath, number, snake.start(), CODE_STYLE_SNAKE_CASE,
-                                  f"snake_case que não é nome conhecido: {text.strip()}"))
+                                  f"snake_case no texto do doc: {text.strip()}"))
     return warnings
 
 
