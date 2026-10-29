@@ -1,3 +1,4 @@
+import os
 import ast
 import sys
 import yaml
@@ -331,3 +332,36 @@ def test_theCiWorkflowRequiresTheTestDependenciesAndInstallsJava():
     assert any("setup-java" in (step.get("uses") or "") for step in steps)
     runTests = next(step for step in steps if "make test" in (step.get("run") or ""))
     assert runTests["env"]["REQUIRE_TEST_DEPENDENCIES"] == "1"
+
+
+def _pytestWithEmptyHome(tmpPath: Path, requireDependencies: bool, *args: str) -> tuple[int, str]:
+    """Pytest num subprocesso cujo HOME nao tem ~/.m2: o Maven, que ignora $HOME, recebe o repositorio por -D."""
+    home = tmpPath / "home"
+    home.mkdir(exist_ok=True)
+    env = {**os.environ, "HOME": str(home)}
+    env.pop("REQUIRE_TEST_DEPENDENCIES", None)
+    if requireDependencies:
+        env["REQUIRE_TEST_DEPENDENCIES"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *args],
+        capture_output=True, text=True, cwd=REPO_ROOT, env=env,
+    )
+    return result.returncode, result.stdout + result.stderr
+
+
+def test_missingRuntimeDependenciesOfTheSdkFailTheRunWhenTheyAreRequired(tmpPath):
+    code, out = _pytestWithEmptyHome(tmpPath, True, "tests/test_java_conventions.py", "--collect-only", "-q")
+
+    assert code != 0
+    assert "dependência de teste ausente" in out
+    assert "dependencias do pom do sdk-java" in out
+
+
+def test_missingRuntimeDependenciesOfTheSdkSkipWithAReasonWhenNotRequired(tmpPath):
+    code, out = _pytestWithEmptyHome(
+        tmpPath, False, "tests/test_java_conventions.py", "-k", "theGeneratedConstructor", "-rs", "-q",
+    )
+
+    assert code == 0, out
+    assert "2 skipped" in out
+    assert "dependencias do pom do sdk-java" in out

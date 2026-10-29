@@ -313,10 +313,11 @@ def test_theFourSubResourcesAreBlockedInTheRealSpec():
         assert "NO_ID" in out
 
 
-def test_propertyNamedDataCollidesWithTheEmittedClassData(lintSpec, tmpPath):
+@pytest.mark.parametrize("reserved", ("data", "dataCopy"))
+def test_propertyNamedLikeAnIdentifierOfTheEmittedConstructorIsReserved(lintSpec, tmpPath, reserved):
     schemas = {
         "Widget": {"x-sdk-get": True,
-                   "properties": {"amount": {}, "data": {}, "id": {"x-sdk-id": True}}},
+                   "properties": {"amount": {}, reserved: {}, "id": {"x-sdk-id": True}}},
         "WidgetCreate": {"properties": {"amount": {}}},
     }
     specPath = _writeSpec(tmpPath, schemas)
@@ -324,6 +325,7 @@ def test_propertyNamedDataCollidesWithTheEmittedClassData(lintSpec, tmpPath):
 
     assert not report.generatable
     assert lintSpec.CODE_RESERVED_NAME in [code for code, _ in report.reasons]
+    assert any(reserved in message for code, message in report.reasons if code == lintSpec.CODE_RESERVED_NAME)
 
 
 def test_logWithoutAnEntityIsNotGeneratable(lintSpec, tmpPath):

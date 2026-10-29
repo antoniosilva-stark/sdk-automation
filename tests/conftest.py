@@ -1,6 +1,8 @@
 import os
 import sys
 import shutil
+import tempfile
+import functools
 import pytest
 import subprocess
 import importlib.util
@@ -120,31 +122,35 @@ def resolvedNodeSdk() -> Path | None:
     return None
 
 
-# Jars que o javac precisa para compilar e executar o arquivo gerado contra o sdk-java de referencia, sem rede.
-JAVA_RUNTIME_JARS = (
-    "com/starkinfra/core/starkcore/0.5.0/starkcore-0.5.0.jar",
-    "com/google/code/gson/gson/2.8.9/gson-2.8.9.jar",
-    "com/starkbank/ellipticcurve/starkbank-ecdsa/2.0.0/starkbank-ecdsa-2.0.0.jar",
-    "com/squareup/okhttp3/okhttp/4.9.2/okhttp-4.9.2.jar",
-    "com/squareup/okio/okio/2.8.0/okio-2.8.0.jar",
-    "org/jetbrains/kotlin/kotlin-stdlib/1.4.10/kotlin-stdlib-1.4.10.jar",
-    "com/squareup/retrofit2/retrofit/2.7.2/retrofit-2.7.2.jar",
-)
+@functools.cache
+def resolvedJavaRuntime() -> tuple[str, str | None]:
+    """Classpath das dependencias do pom do sdk-java de referencia, como o Maven as resolve, e a razao da falta.
+
+    `-o`: so le o cache; quem o popula e um passo do workflow. `-Dmaven.repo.local` porque o Maven ignora $HOME."""
+    pom = REPO_ROOT / "_references/sdk-java/pom.xml"
+    if not pom.is_file():
+        return "", "pom do sdk-java de referencia ausente"
+    if not shutil.which("mvn"):
+        return "", "mvn ausente"
+    with tempfile.TemporaryDirectory() as work:
+        output = Path(work) / "classpath.txt"
+        result = subprocess.run(
+            ["mvn", "-o", "-q", "-B", "--no-transfer-progress", "-f", str(pom),
+             f"-Dmaven.repo.local={Path.home() / '.m2/repository'}",
+             "dependency:build-classpath", f"-Dmdep.outputFile={output}"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0 or not output.is_file():
+            return "", "dependencias do pom do sdk-java ausentes em ~/.m2 (mvn -o dependency:build-classpath falhou)"
+        return output.read_text(encoding="utf-8").strip(), None
 
 
-def javaRuntimeClasspath() -> str:
-    repository = Path.home() / ".m2/repository"
-    return ":".join(str(repository / jar) for jar in JAVA_RUNTIME_JARS)
-
-
-def missingJavaRuntime() -> str | None:
-    repository = Path.home() / ".m2/repository"
-    missing = next((jar for jar in JAVA_RUNTIME_JARS if not (repository / jar).is_file()), None)
-    if missing:
-        return f"jar ausente em ~/.m2: {missing}"
-    if not (REPO_ROOT / "_references/sdk-java/src/main/java").is_dir():
-        return "sdk-java de referencia ausente: o javac precisa do -sourcepath"
-    return None
+@pytest.fixture(scope="session")
+def javaRuntimeClasspath():
+    classpath, reason = resolvedJavaRuntime()
+    if reason:
+        pytest.skip(reason)
+    return classpath
 
 
 PYTHON_SDK = resolvedPythonSdk()
@@ -155,12 +161,6 @@ requiresPythonSdk = pytest.mark.skipif(PYTHON_SDK is None, reason="sdk-python do
 requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não resolvido")
 requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
 
-# Fora de missingDependencies: sao jars de uma dependencia transitiva do SDK, nao do pipeline; sem eles o teste de
-# runtime do construtor pula com a razao dita (o javac e o SDK de referencia seguem exigidos por missingDependencies).
-JAVA_RUNTIME_SKIP = missingJavaRuntime()
-requiresJavaRuntime = pytest.mark.skipif(JAVA_RUNTIME_SKIP is not None, reason=JAVA_RUNTIME_SKIP or "")
-
-
 def missingDependencies() -> list[str]:
     reasons = [GENERATOR_SKIP, JAVAC_SKIP]
     reasons += [reason for reason, resolved in (
@@ -168,6 +168,7 @@ def missingDependencies() -> list[str]:
         ("sdk-java não resolvido", JAVA_SDK),
         ("sdk-node não resolvido", NODE_SDK),
     ) if resolved is None]
+    reasons.append(resolvedJavaRuntime()[1])
     return [reason for reason in reasons if reason]
 
 

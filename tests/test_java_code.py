@@ -128,3 +128,54 @@ def test_splitProfileFromTheRepositorySchema(javaCode, javaDocs):
         "this.created = null;",
         "this.updated = null;",
     ]
+
+
+@pytest.mark.parametrize("prop", [
+    {"type": "string", "format": "byte"},
+    {"type": "string", "format": "binary"},
+    {"type": "integer", "format": "int128"},
+    {"type": "number", "format": "decimal"},
+    {"type": "boolean", "format": "tristate"},
+    {"type": "array", "items": {"type": "integer"}},
+    {"type": "array", "items": {"type": "array"}},
+    {"type": "array"},
+    {"type": "null"},
+    {},
+])
+def test_aTypeTheProfileDoesNotCoverFailsClosedNamingTheField(javaCode, prop):
+    schema, entity = _entity({"widget": prop}, ("widget",))
+
+    with pytest.raises(ValueError, match="widget"):
+        javaCode.renderMapConstructor(schema, entity)
+
+
+def _everySchemaProperty() -> list:
+    found = []
+    for path in sorted(SCHEMAS.glob("*.yaml")):
+        schemas = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"]
+        for schemaName, schema in schemas.items():
+            for name, prop in (schema.get("properties") or {}).items():
+                found.append((f"{schemaName}.{name}", prop))
+    return found
+
+
+def test_everyPropertyOfEverySchemaFallsInACaseTheProfileCovers(javaCode):
+    properties = _everySchemaProperty()
+
+    assert len(properties) > 500
+    for label, prop in properties:
+        try:
+            javaCode.javaTypeOf(prop, javaCode.JAVA_CODE_PROFILE)
+        except ValueError as error:
+            pytest.fail(f"{label}: {error}")
+
+
+def test_theSweepNoticesACaseRemovedFromTheProfile(javaCode):
+    profile = {**javaCode.JAVA_CODE_PROFILE, "types": {
+        **javaCode.JAVA_CODE_PROFILE["types"],
+        "integer": {"default": "Integer"},
+    }}
+
+    with pytest.raises(ValueError, match="int64"):
+        for _, prop in _everySchemaProperty():
+            javaCode.javaTypeOf(prop, profile)

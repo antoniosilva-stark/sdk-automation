@@ -5,7 +5,7 @@ import subprocess
 import yaml
 import pytest
 
-from conftest import REFERENCES, REPO_ROOT, javaRuntimeClasspath, requiresGenerator, requiresJavaRuntime
+from conftest import REFERENCES, REPO_ROOT, requiresGenerator
 
 SCHEMAS = REPO_ROOT / "apis/schemas"
 JAVA_DIR = "src/main/java/com/starkbank"
@@ -358,8 +358,8 @@ public class Main {
 
 
 @pytest.fixture(scope="module")
-def constructorRun(tmp_path_factory, builtOnce):
-    classpath = javaRuntimeClasspath()
+def constructorRun(tmp_path_factory, builtOnce, javaRuntimeClasspath):
+    classpath = javaRuntimeClasspath
     work = tmp_path_factory.mktemp("constructor-runtime")
     sources = []
     for resource in ("SplitProfile", "Transaction"):
@@ -384,7 +384,6 @@ def constructorRun(tmp_path_factory, builtOnce):
 
 
 @requiresGenerator
-@requiresJavaRuntime
 def test_theGeneratedConstructorAcceptsAnyNumericTypeInTheMap(constructorRun):
     assert "delay Integer -> 604800 null" in constructorRun
     assert "delay Long -> 604800 null" in constructorRun
@@ -397,7 +396,6 @@ def test_theGeneratedConstructorAcceptsAnyNumericTypeInTheMap(constructorRun):
 
 
 @requiresGenerator
-@requiresJavaRuntime
 def test_theGeneratedConstructorRejectsAKeyThatOnlyTheReturnCarries(constructorRun):
     rejected = [line for line in constructorRun if line.startswith("rejected")]
 

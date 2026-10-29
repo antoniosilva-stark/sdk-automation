@@ -377,6 +377,29 @@ def test_whoeverRunsTestsResolvesTheReferenceFirst():
             assert cloneIndex < testIndex
 
 
+@pytest.mark.parametrize("path", [path for path in workflowFiles() if "make test" in path.read_text(encoding="utf-8")],
+                         ids=lambda path: path.name)
+def test_theMavenCacheIsPopulatedBeforeThePytestStepOfEveryJobThatRunsTheTests(path):
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    checked = 0
+    for jobName, job in (workflow.get("jobs") or {}).items():
+        steps = job.get("steps") or []
+        scripts = [step.get("run") or "" for step in steps]
+        testIndex = next((i for i, script in enumerate(scripts) if "make test" in script), None)
+        if testIndex is None:
+            continue
+        checked += 1
+
+        mavenIndex = next((i for i, script in enumerate(scripts) if "mvn " in script), None)
+        assert mavenIndex is not None, f"{path.name}:{jobName} roda teste sem popular o cache do Maven"
+        assert mavenIndex < testIndex
+        step = steps[mavenIndex]
+        assert "_references/sdk-java/pom.xml" in step["run"]
+        assert "uses" not in step and "secrets." not in step["run"]
+        assert (job.get("permissions") or {}) == {"contents": "read"}
+    assert checked
+
+
 def test_whoeverBuildsResolvesTheReferenceFirst():
     for path in workflowFiles():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))

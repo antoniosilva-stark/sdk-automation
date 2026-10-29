@@ -37,6 +37,10 @@ jobs:
       - name: Resolve the SDK references at the pinned commits
         run: make clone-sdk-ref-pinned
 
+      - name: Populate the Maven cache with the reference SDK dependencies
+        # os testes de runtime do construtor leem este cache com `mvn -o`; mesmo goal, para o cache bater
+        run: mvn -q -B --no-transfer-progress -f _references/sdk-java/pom.xml dependency:build-classpath -Dmdep.outputFile="$RUNNER_TEMP/classpath.txt"
+
       - name: Run tests
         env:
           # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o CI fica verde
