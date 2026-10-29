@@ -49,6 +49,57 @@ def _loadTool(fileName: str):
     return module
 
 
+def resolvedPythonSdk() -> Path | None:
+    extractSchema = _loadTool("extract-schema.py")
+    root = extractSchema.resolveRoot(None)
+    return None if extractSchema.rootIssue(root) else root
+
+
+def resolvedJavaSdk() -> Path | None:
+    return _loadTool("list-gaps.py").resolveJavaRoot()
+
+
+def resolvedNodeSdk() -> Path | None:
+    candidates = [Path(os.environ["SDK_NODE"])] if os.environ.get("SDK_NODE") else []
+    candidates += [REPO_ROOT / "_references/sdk-node"]
+
+    for candidate in candidates:
+        if (candidate / "sdk").is_dir():
+            return candidate / "sdk"
+    return None
+
+
+PYTHON_SDK = resolvedPythonSdk()
+JAVA_SDK = resolvedJavaSdk()
+NODE_SDK = resolvedNodeSdk()
+
+requiresPythonSdk = pytest.mark.skipif(PYTHON_SDK is None, reason="sdk-python do Stark Bank não resolvido")
+requiresJavaSdk = pytest.mark.skipif(JAVA_SDK is None, reason="sdk-java não resolvido")
+requiresNodeSdk = pytest.mark.skipif(NODE_SDK is None, reason="sdk-node não resolvido")
+
+
+def missingDependencies() -> list[str]:
+    reasons = [GENERATOR_SKIP, JAVAC_SKIP]
+    reasons += [reason for reason, resolved in (
+        ("sdk-python não resolvido", PYTHON_SDK),
+        ("sdk-java não resolvido", JAVA_SDK),
+        ("sdk-node não resolvido", NODE_SDK),
+    ) if resolved is None]
+    return [reason for reason in reasons if reason]
+
+
+# No CI um pre-requisito ausente pulava ~60 testes e a suite seguia verde: la ele reprova.
+if os.environ.get("REQUIRE_TEST_DEPENDENCIES") == "1" and missingDependencies():
+    raise pytest.UsageError("dependência de teste ausente: " + "; ".join(missingDependencies()))
+
+
+@pytest.fixture
+def conftest():
+    import conftest as module
+
+    return module
+
+
 def runTool(fileName: str, *args: str, env: dict | None = None) -> tuple[int, str]:
     result = subprocess.run(
         [sys.executable, str(TOOLS_DIR / fileName), *args],
@@ -68,6 +119,11 @@ def tmpPath(request):
 @pytest.fixture
 def lintSpec():
     return _loadTool("lint-spec.py")
+
+
+@pytest.fixture
+def applySchema():
+    return _loadTool("apply-schema.py")
 
 
 @pytest.fixture
@@ -93,3 +149,24 @@ def buildResource():
 @pytest.fixture
 def extractSchema():
     return _loadTool("extract-schema.py")
+
+
+@pytest.fixture
+def coverageReport():
+    return _loadTool("coverage-report.py")
+
+
+@pytest.fixture(scope="session")
+def builtOnce(tmp_path_factory):
+    cache: dict[tuple, tuple] = {}
+
+    def build(resource: str, language: str, *extra: str):
+        key = (resource, language, extra)
+        if key not in cache:
+            target = tmp_path_factory.mktemp(f"{resource}-{language}")
+            code, out = runTool("build-resource.py", resource, "--lang", language,
+                                "--into", str(target), *extra)
+            cache[key] = (code, out, target)
+        return cache[key]
+
+    return build

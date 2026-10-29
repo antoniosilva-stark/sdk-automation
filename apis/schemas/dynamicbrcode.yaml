@@ -1,0 +1,60 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/dynamicbrcode/__dynamicbrcode.py
+components:
+  schemas:
+    DynamicBrcode:
+      type: object
+      description: "When you initialize a DynamicBrcode, the entity will not be automatically sent to the Stark Bank API. The 'create' function sends the objects to the Stark Bank API and returns the list of created objects. When a Dynamic Brcode is paid, a Deposit is created with a tag containing \"dynamic-brcode/{uuid}\" for conciliation."
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "amount in cents to be received. ex: 100 (= R$ 1.00)"
+        expiration:
+          type: integer
+          description: "time interval in seconds counted from creation until the brcode expires. After expiration, the brcode cannot be paid anymore."
+        displayDescription:
+          type: string
+          description: "description shown in the payer's bank interface. ex: \"Payment for service #1234\""
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of DynamicBrcode.Rule objects for modifying brcode behavior."
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. All tags will be converted to lowercase."
+        pictureUrl:
+          type: string
+          description: "public QR Code image URL."
+      required:
+        - amount
+        - pictureUrl
+
+    DynamicBrcodeCreate:
+      type: object
+      description: "DynamicBrcode creation request"
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "amount in cents to be received. ex: 100 (= R$ 1.00)"
+        expiration:
+          type: integer
+          description: "time interval in seconds counted from creation until the brcode expires. After expiration, the brcode cannot be paid anymore."
+        displayDescription:
+          type: string
+          description: "description shown in the payer's bank interface. ex: \"Payment for service #1234\""
+        rules:
+          type: array
+          items:
+            type: object
+          description: "list of DynamicBrcode.Rule objects for modifying brcode behavior."
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging. All tags will be converted to lowercase."
+      required:
+        - amount

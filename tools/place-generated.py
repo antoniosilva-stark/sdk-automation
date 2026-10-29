@@ -20,7 +20,7 @@ TARGETS = {
     "node": "sdk-node",
 }
 
-_RESOURCE_NAME = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+_RESOURCE_NAME = re.compile(r"[A-Z][A-Za-z0-9]*")
 
 
 def emit(text: str) -> None:
@@ -71,13 +71,14 @@ def main() -> int:
     parser.add_argument("--slug", action="store_true", help="valida o nome do recurso e imprime o slug da branch")
     args = parser.parse_args()
 
+    if args.resource and not _RESOURCE_NAME.fullmatch(args.resource):
+        emit(f"[ERROR] nome de recurso inválido: {args.resource!r}")
+        emit("[INFO] esperado UpperCamelCase só com letras e dígitos, ex: SplitProfile")
+        return 2
+
     if args.slug:
         if not args.resource:
             emit("[ERROR] resource é obrigatório no modo --slug")
-            return 2
-        if not _RESOURCE_NAME.match(args.resource):
-            emit(f"[ERROR] nome de recurso inválido: {args.resource!r}")
-            emit("[INFO] esperado UpperCamelCase só com letras e dígitos, ex: SplitProfile")
             return 2
         emit(slugName(args.resource))
         return 0

@@ -1,0 +1,70 @@
+# fonte: starkbank/sdk-python@65fc3f8 · starkbank/merchantinstallment/__merchantinstallment.py
+components:
+  schemas:
+    MerchantInstallment:
+      type: object
+      description: "Represents one installment of a MerchantPurchase, generated automatically by the Stark Bank API when the purchase is split."
+      properties:
+        id:
+          type: string
+          description: "unique id returned when MerchantInstallment is created. ex: \"5656565656565656\""
+          x-sdk-id: true
+        amount:
+          type: integer
+          format: int64
+          description: "MerchantInstallment value in cents. ex: 1234 (= R$ 12.34)"
+        due:
+          type: string
+          format: date-time
+          description: "MerchantInstallment due date. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        fee:
+          type: integer
+          description: "fee charged when the MerchantInstallment is processed. ex: 200 (= R$ 2.00)"
+        fundingType:
+          type: string
+          description: "installment funding type. ex: \"credit\""
+        network:
+          type: string
+          description: "card network flag. ex: \"visa\", \"mastercard\""
+        purchaseId:
+          type: string
+          description: "unique id of the MerchantPurchase to which this installment belongs. ex: \"5656565656565656\""
+        status:
+          type: string
+          description: "current MerchantInstallment status. ex: \"created\", \"success\", \"failed\""
+        tags:
+          type: array
+          items:
+            type: string
+          description: "list of strings for tagging"
+        transactionIds:
+          type: array
+          items:
+            type: string
+          description: "ledger transaction ids linked to this MerchantInstallment"
+        created:
+          type: string
+          format: date-time
+          description: "creation datetime for the MerchantInstallment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+        updated:
+          type: string
+          format: date-time
+          description: "latest update datetime for the MerchantInstallment. ex: datetime.datetime(2020, 3, 10, 10, 30, 0, 0)"
+      required:
+        - id
+        - amount
+        - due
+        - fee
+        - fundingType
+        - network
+        - purchaseId
+        - status
+        - tags
+        - transactionIds
+        - created
+        - updated
+
+    MerchantInstallmentCreate:
+      type: object
+      description: "MerchantInstallment creation request"
+      properties: {}

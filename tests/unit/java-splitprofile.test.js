@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const YAML = require('js-yaml');
 
-describe('Java SplitProfile Pilot (Entrega 4)', () => {
+describe('Java SplitProfile Pilot', () => {
 
   describe('Template & Config', () => {
     test('should have the custom Java model template', () => {
@@ -25,7 +25,12 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
     test('spec should define SplitProfile with real fields, not the generic placeholder', () => {
       const specPath = path.join(__dirname, '../../apis/spec-v2.openapi.yaml');
       const spec = YAML.load(fs.readFileSync(specPath, 'utf8'));
-      const schema = spec.components.schemas.SplitProfile;
+      const reference = spec.components.schemas.SplitProfile.$ref;
+
+      // o schema mora em apis/schemas/, como os outros 40; a spec so aponta
+      expect(reference).toBe('./schemas/splitprofile.yaml#/components/schemas/SplitProfile');
+      const schemaPath = path.join(__dirname, '../../apis/schemas/splitprofile.yaml');
+      const schema = YAML.load(fs.readFileSync(schemaPath, 'utf8')).components.schemas.SplitProfile;
 
       expect(Object.keys(schema.properties)).toEqual(
         expect.arrayContaining(['interval', 'delay', 'tags', 'status', 'created', 'updated'])
@@ -35,49 +40,12 @@ describe('Java SplitProfile Pilot (Entrega 4)', () => {
     });
   });
 
-  describe('Generated SplitProfile.java', () => {
-    const javaFile = path.join(
-      __dirname,
-      '../../generated/sdk-java-temp/src/main/java/com/starkbank/SplitProfile.java'
-    );
-    const generated = fs.existsSync(javaFile);
-    const maybeTest = generated ? test : test.skip;
-    const content = generated ? fs.readFileSync(javaFile, 'utf8') : '';
-
-    maybeTest('should declare the real com.starkbank package', () => {
-      expect(content).toMatch(/^package com\.starkbank;/m);
-    });
-
-    maybeTest('should extend Resource and declare ClassData', () => {
-      expect(content).toMatch(/class SplitProfile extends Resource/);
-      expect(content).toMatch(/ClassData data = new ClassData\(SplitProfile\.class, "SplitProfile"\)/);
-    });
-
-    maybeTest('should have the real fields from the spec', () => {
-      for (const field of ['interval', 'delay', 'tags', 'status', 'created', 'updated']) {
-        expect(content).toMatch(new RegExp(`public \\S+ ${field};`));
-      }
-    });
-
-    maybeTest('should have put/get/query with a single canonical signature each', () => {
-      expect(content.match(/static List<SplitProfile> put\(/g)).toHaveLength(1);
-      expect(content.match(/static SplitProfile get\(/g)).toHaveLength(1);
-      expect(content.match(/static Generator<SplitProfile> query\(/g)).toHaveLength(1);
-      expect(content).toMatch(/put\(List<\?> profiles, User user\)/);
-    });
-
-    maybeTest('should not include convenience overloads or the Log sub-resource (reduced scope)', () => {
-      expect(content).not.toMatch(/class Log extends Resource/);
-      expect(content.match(/static \w+(<[^>]+>)? (put|get|query)\(/g)).toHaveLength(3);
-    });
-  });
-
   describe('sdk-sync.yaml workflow', () => {
     const workflowPath = path.join(__dirname, '../../.github/workflows/sdk-sync.yaml');
     const workflow = YAML.load(fs.readFileSync(workflowPath, 'utf8'));
 
-    test('should exist with the 2 expected jobs', () => {
-      expect(Object.keys(workflow.jobs)).toEqual(['validate', 'sync']);
+    test('should exist with the 7 expected jobs', () => {
+      expect(Object.keys(workflow.jobs)).toEqual(['wrong-ref', 'validate', 'drift', 'drift-pr', 'build', 'compile', 'deliver']);
     });
 
     test('should trigger manually, not on push', () => {

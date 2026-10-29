@@ -10,13 +10,29 @@ on:
       language:
         description: 'Linguagem do SDK — define o repositório alvo'
         type: choice
-        options: [java, node]
+        options: [java]
         default: java
 
 run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
+concurrency:
+  group: sdk-sync-${{ github.ref }}-${{ inputs.language }}-${{ inputs.resource }}
+  cancel-in-progress: false
+
 jobs:
+  # disparo fora da branch default: todos os outros jobs ficam pulados; este falha para o motivo aparecer
+  wrong-ref:
+    if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: |
+          echo "O SDK Sync so roda a partir da branch default do repositorio."
+          exit 1
+
   validate:
+    # o workflow da ref escolhida e o que roda; so a default passou por revisao
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,6 +40,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -33,23 +50,210 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - run: pip install -r requirements.txt
       - run: npm ci
 
       - name: Validate OpenAPI spec
         run: openapi-spec-validator apis/spec-v2.openapi.yaml
 
-      - name: Detect breaking changes
-        run: python3 tools/breaking-change-detector.py
+      - name: Resolve the SDK references at the pinned commits
+        run: make clone-sdk-ref-pinned
 
       - name: Run tests
+        env:
+          # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o gate fica verde
+          REQUIRE_TEST_DEPENDENCIES: '1'
         run: make test
 
-  sync:
+  drift:
     needs: validate
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      blocked: ${{ steps.compare.outputs.blocked }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Resolve the reference SDKs
+        run: make clone-sdk-ref
+
+      - name: Compare the versioned schema with the current sdk-python
+        id: compare
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          CODE=0
+          python3 tools/detect-drift.py "$RESOURCE" > drift.log 2>&1 || CODE=$?
+          cat drift.log
+          if [ "$CODE" = "1" ]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "Recurso defasado: esta execucao nao gera $RESOURCE, abre PR de spec."
+            exit 0
+          fi
+          if [ "$CODE" = "0" ]; then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # exit 3 = sem schema versionado: nao ha o que comparar, entao nao se gera
+          echo "Comparacao nao concluida (exit $CODE) — nao se gera sem saber se a spec esta atual."
+          exit 1
+
+      - name: Reapply the schema from the current sdk-python
+        if: steps.compare.outputs.blocked == 'true'
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: python3 tools/apply-schema.py "$RESOURCE"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.compare.outputs.blocked == 'true'
+        with:
+          name: drift-update
+          path: |
+            apis/spec-v2.openapi.yaml
+            apis/schemas
+            drift.log
+          if-no-files-found: error
+          retention-days: 1
+
+  # Tem o secret do App e por isso nao roda pip nem o detector: aplica so a lista fixa de
+  # arquivos do artefato do job drift e abre a PR de spec.
+  drift-pr:
+    needs: drift
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.drift.outputs.blocked == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: drift-update
+          path: incoming
+
+      - name: Validate resource name
+        id: resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          # nome ja validado acima: so o que o apply-schema pode ter reescrito
+          printf '%s\n' "apis/spec-v2.openapi.yaml" "apis/schemas/$(echo "$RESOURCE" | tr 'A-Z' 'a-z').yaml" > "$RUNNER_TEMP/paths.txt"
+
+      - name: Require GitHub App credentials
+        env:
+          HAS_APP_ID: ${{ secrets.SDK_APP_ID != '' }}
+          HAS_APP_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_APP_ID" != "true" ] || [ "$HAS_APP_KEY" != "true" ]; then
+            echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
+            exit 1
+          fi
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.SDK_APP_ID }}
+          private-key: ${{ secrets.SDK_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Apply only the declared files
+        run: python3 tools/apply-artifacts.py --staging incoming --target . --paths-file "$RUNNER_TEMP/paths.txt"
+
+      - name: Open the spec update pull request
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          BRANCH="spec/refresh-$(python3 tools/place-generated.py "$RESOURCE" --slug)"
+          git config user.name "sdk-automation[bot]"
+          git config user.email "sdk-automation[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY"
+          # exit 2 e "branch ausente"; qualquer outro codigo diferente de 0 e falha de acesso
+          git ls-remote --exit-code --heads "$REMOTE" "refs/heads/$BRANCH" >/dev/null 2>&1 && FOUND=0 || FOUND=$?
+          if [ "$FOUND" -ne 0 ] && [ "$FOUND" -ne 2 ]; then
+            echo "nao foi possivel consultar o remoto (codigo $FOUND)."
+            exit 1
+          fi
+          git checkout -B "$BRANCH"
+          if [ "$FOUND" -eq 0 ]; then
+            git fetch --depth 200 "$REMOTE" "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+            # a branch de refresh so pode ter mudado os arquivos desta execucao: commit alheio nela viraria PR do bot
+            # o diff roda sozinho: falha dele aborta o passo em vez de virar "nada estranho"
+            CHANGED=$(git diff --no-renames --name-only "origin/$BASE_BRANCH...origin/$BRANCH")
+            # grep -v sai 1 quando nao sobra linha; so 2 ou mais e erro
+            STRAY=$(printf '%s\n' "$CHANGED" | grep -vxFf "$RUNNER_TEMP/paths.txt") && STRAYCODE=0 || STRAYCODE=$?
+            if [ "$STRAYCODE" -gt 1 ]; then
+              echo "nao foi possivel comparar os arquivos de $BRANCH (codigo $STRAYCODE)."
+              exit 1
+            fi
+            if [ -n "$STRAY" ]; then
+              echo "$BRANCH muda arquivos fora dos declarados: $STRAY"
+              exit 1
+            fi
+            # a arvore ja tem o schema reaplicado: so o ponteiro vai para a ponta da branch aberta
+            git reset -q "origin/$BRANCH"
+          fi
+          test -s "$RUNNER_TEMP/paths.txt" || { echo "lista de caminhos ausente ou vazia."; exit 1; }
+          while IFS= read -r declared; do
+            git add -- "$declared"
+          done < "$RUNNER_TEMP/paths.txt"
+          if git diff --cached --quiet; then
+            echo "Nada novo a comitar: a branch ja tem o schema reaplicado."
+          else
+            git -c core.hooksPath=/dev/null commit -m "Refresh the $RESOURCE schema from the current sdk-python"
+            git -c core.hooksPath=/dev/null push "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          fi
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          # filtra pelo dono: um fork com a mesma branch nao pode contar como a PR do bot
+          OPEN=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=$OWNER:$BRANCH" --jq length)
+          if [ "$OPEN" -gt 0 ]; then
+            echo "PR de spec ja aberta para $BRANCH — o push atualizou."
+            exit 0
+          fi
+          # push que passou e PR que falhou deixa a branch a frente da base: a proxima execucao a abre
+          AHEAD=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH" --jq .ahead_by)
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "Defasagem acusada mas $BRANCH nao tem nada a frente de $BASE_BRANCH — investigar o detector."
+            exit 1
+          fi
+          # corpo fixo: o log do detector tem texto de fora (sdk-python, dependencias) e nao vai para a PR
+          gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
+            --title "Refresh the $RESOURCE schema from the current sdk-python" \
+            --body "Schema de $RESOURCE reaplicado do sdk-python atual porque o versionado divergiu. Detalhes da divergencia no log da execucao: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. O arquivo da spec vem inteiro do artefato do job drift: revisar o diff completo."
+
+  # Roda codigo de terceiros (gerador, pip, npm, maven do alvo) e por isso nao tem acesso a
+  # nenhum secret nem a token de escrita: o que sai daqui e so um artefato.
+  build:
+    needs: [validate, drift]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.drift.outputs.blocked != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      digest: ${{ steps.fingerprint.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -90,6 +294,9 @@ jobs:
           echo "repo=$REPO" >> "$GITHUB_OUTPUT"
           echo "Alvo: $OWNER/$REPO"
 
+      - name: Resolve the reference SDKs
+        run: make clone-sdk-ref
+
       - name: Build and verify resource
         env:
           RESOURCE: ${{ inputs.resource }}
@@ -98,9 +305,145 @@ jobs:
           mkdir -p staging
           python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging
 
-      - name: Require GitHub App credentials
+      # o resumo e calculado aqui, logo antes do upload: o job com o token confere o que baixa
+      - name: Fingerprint the verified artifact
+        id: fingerprint
+        run: echo "digest=$(python3 tools/artifact-digest.py staging)" >> "$GITHUB_OUTPUT"
+
+      # o artefato sai daqui, antes de existir qualquer codigo do alvo neste job
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: staging
+          path: staging
+          if-no-files-found: error
+          retention-days: 1
+
+  # Codigo do repositorio alvo (pom.xml, plugins) roda aqui, sem secret e sem poder de escrita
+  # sobre o artefato: este job so le o que o build verificou.
+  compile:
+    needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: staging
+          path: staging
+
+      - name: Validate resource name
+        id: resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
         run: |
-          if [ -z "${{ secrets.SDK_APP_ID }}" ] || [ -z "${{ secrets.SDK_APP_PRIVATE_KEY }}" ]; then
+          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve target repository
+        id: target
+        env:
+          LANGUAGE: ${{ inputs.language }}
+        run: |
+          REPO=$(python3 tools/place-generated.py --lang "$LANGUAGE" --repo)
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+
+      - name: Declare the paths this run may touch
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          LANGUAGE: ${{ inputs.language }}
+        run: python3 tools/place-generated.py "$RESOURCE" --lang "$LANGUAGE" --targets > "$RUNNER_TEMP/paths.txt"
+
+      # os SDKs alvo sao publicos; o checkout usa o github.token deste repositorio (so leitura)
+      - name: Checkout target SDK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
+          persist-credentials: false
+          path: target
+
+      - name: Position the working branch
+        working-directory: target
+        env:
+          SLUG: ${{ steps.resource.outputs.slug }}
+        run: |
+          BASE=$(git rev-parse --abbrev-ref HEAD)
+          git config user.name "sdk-automation-bot"
+          git config user.email "sdk-automation@starkbank.com"
+          python3 ../tools/prepare-branch.py "sdk-automation/$SLUG" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" > /dev/null
+
+      - name: Copy verified artifacts into the target
+        run: cp -R staging/. target/
+
+      - name: Compile the target against the real SDK
+        if: inputs.language == 'java'
+        working-directory: target
+        run: mvn -q -B --no-transfer-progress test-compile
+
+  # Tem o secret do App e por isso so roda codigo deste repositorio (stdlib) sobre o artefato:
+  # nenhum pip, npm ou maven. Copia apenas os caminhos declarados, nunca a arvore inteira.
+  deliver:
+    needs: [build, compile]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: staging
+          path: staging
+
+      # o job compile roda codigo do alvo e pode ter trocado o artefato depois do upload: so vale o que
+      # tem o resumo que o build calculou
+      - name: Verify the artifact is the one the build produced
+        env:
+          EXPECTED_DIGEST: ${{ needs.build.outputs.digest }}
+        run: python3 tools/artifact-digest.py staging --expect "$EXPECTED_DIGEST"
+
+      - name: Validate resource name
+        id: resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      # recalculado aqui: nada que o job build produziu escolhe o repositorio nem o escopo do token
+      - name: Resolve target repository
+        id: target
+        env:
+          LANGUAGE: ${{ inputs.language }}
+        run: |
+          REPO=$(python3 tools/place-generated.py --lang "$LANGUAGE" --repo)
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+
+      # lista fixada antes de qualquer arquivo do alvo existir no workspace
+      - name: Declare the paths this run may touch
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          LANGUAGE: ${{ inputs.language }}
+        run: python3 tools/place-generated.py "$RESOURCE" --lang "$LANGUAGE" --targets > "$RUNNER_TEMP/paths.txt"
+
+      - name: Require GitHub App credentials
+        env:
+          HAS_APP_ID: ${{ secrets.SDK_APP_ID != '' }}
+          HAS_APP_KEY: ${{ secrets.SDK_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_APP_ID" != "true" ] || [ "$HAS_APP_KEY" != "true" ]; then
             echo "SDK_APP_ID e SDK_APP_PRIVATE_KEY precisam estar cadastrados."
             echo "Sem credencial este job reprova — nao passa verde sem fazer nada."
             exit 1
@@ -117,10 +460,11 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout target SDK
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ github.repository_owner }}/${{ steps.target.outputs.repo }}
           token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
           path: target
 
       - name: Resolve base branch
@@ -149,6 +493,7 @@ jobs:
         working-directory: target
         env:
           SLUG: ${{ steps.resource.outputs.slug }}
+          BASE: ${{ steps.base.outputs.base }}
         run: |
           BRANCH="sdk-automation/$SLUG"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
@@ -156,30 +501,40 @@ jobs:
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
 
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            git fetch --depth 1 origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            echo "Branch $BRANCH ja existe — comparando contra o que ja foi entregue."
-          else
-            git checkout -b "$BRANCH"
-            echo "Branch $BRANCH e nova."
-          fi
+          # a branch existente so e reaproveitada se contem a base atual; senao e regerada sobre ela
+          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" >> "$GITHUB_OUTPUT"
 
+      - name: Copy only the declared paths into the target
+        run: python3 tools/apply-artifacts.py --staging staging --target target --paths-file "$RUNNER_TEMP/paths.txt"
 
-      - name: Copy verified artifacts into the target
-        run: cp -R staging/. target/
+      - name: Name the change
+        id: verb
+        working-directory: target
+        env:
+          BASE: ${{ steps.base.outputs.base }}
+        run: |
+          # sem a ref, o cat-file falharia para todo caminho e o titulo viraria "Add" em silencio
+          git rev-parse --verify --quiet "origin/$BASE^{commit}" >/dev/null || { echo "origin/$BASE ausente."; exit 1; }
+          # decide pela arvore da base e nao pelo commit: a reexecucao sobre a mesma branch tem de dar o mesmo titulo
+          VERB=Add
+          while IFS= read -r declared; do
+            if git cat-file -e "origin/$BASE:$declared" 2>/dev/null; then
+              VERB=Update
+            fi
+          done < "$RUNNER_TEMP/paths.txt"
+          echo "verb=$VERB" >> "$GITHUB_OUTPUT"
 
       - name: Commit when the generated output differs
         id: commit
         working-directory: target
         env:
           RESOURCE: ${{ inputs.resource }}
-          LANGUAGE: ${{ inputs.language }}
+          VERB: ${{ steps.verb.outputs.verb }}
         run: |
-          PATHS=$(python3 ../tools/place-generated.py "$RESOURCE" --lang "$LANGUAGE" --targets)
-          while IFS= read -r target; do
-            git add -- "$target"
-          done <<< "$PATHS"
+          test -s "$RUNNER_TEMP/paths.txt" || { echo "lista de caminhos ausente ou vazia."; exit 1; }
+          while IFS= read -r declared; do
+            git add -- "$declared"
+          done < "$RUNNER_TEMP/paths.txt"
 
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -188,35 +543,57 @@ jobs:
           fi
 
           git diff --cached --name-only
-          git commit -m "Add $RESOURCE resource"
+          git -c core.hooksPath=/dev/null commit -m "$VERB $RESOURCE resource"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push branch
         if: steps.commit.outputs.changed == 'true'
         working-directory: target
-        run: git push -u origin "${{ steps.branch.outputs.branch }}"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          PREVIOUS: ${{ steps.branch.outputs.old }}
+          OWNER: ${{ github.repository_owner }}
+          TARGET_REPO: ${{ steps.target.outputs.repo }}
+        run: |
+          REMOTE="https://x-access-token:$GH_TOKEN@github.com/$OWNER/$TARGET_REPO"
+          if [ -n "$PREVIOUS" ]; then
+            # branch regerada sobre a base nova: so sobrescreve se ninguem mexeu nela desde a leitura
+            git -c core.hooksPath=/dev/null push --force-with-lease="refs/heads/$BRANCH:$PREVIOUS" "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          else
+            git -c core.hooksPath=/dev/null push "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          fi
 
       - name: Open pull request
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
         working-directory: target
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RESOURCE: ${{ inputs.resource }}
+          VERB: ${{ steps.verb.outputs.verb }}
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
           BRANCH: ${{ steps.branch.outputs.branch }}
           BASE: ${{ steps.base.outputs.base }}
         run: |
           TARGET="$OWNER/$TARGET_REPO"
-          OPEN=$(gh pr list --repo "$TARGET" --head "$BRANCH" --state open --json number --jq 'length')
+          # filtra pelo dono: um fork com a mesma branch nao pode contar como a PR do bot
+          OPEN=$(gh api "repos/$TARGET/pulls?state=open&head=$OWNER:$BRANCH" --jq length)
           if [ "$OPEN" -gt 0 ]; then
             echo "PR ja aberta para $BRANCH — o push atualizou."
             exit 0
           fi
 
+          # push que passou e PR que falhou deixa a branch a frente da base: a proxima execucao a abre
+          AHEAD=$(gh api "repos/$TARGET/compare/$BASE...$BRANCH" --jq .ahead_by)
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "$BRANCH nao tem nada a frente de $BASE — nenhuma PR a abrir."
+            exit 0
+          fi
+
           gh pr create \
             --repo "$TARGET" \
-            --title "Add $RESOURCE resource" \
+            --title "$VERB $RESOURCE resource" \
             --body "$RESOURCE gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Verificado por lint-spec e assert-generated antes do commit. Revisar antes de merge." \
             --base "$BASE" \
             --head "$BRANCH"
