@@ -22,6 +22,34 @@ components:
         - name
         - spiCode
         - strCode
+      x-sdk-docs:
+        query:
+          summary: "Retrieve Bacen Institutions"
+          description:
+            - "Receive a list of Institution objects that are recognized by the Brazilian Central bank for Pix and TED transactions"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "search"
+              type: "string, default None"
+              description: "part of the institution name to be searched. ex: \"stark\""
+              section: "optional"
+            - name: "spiCodes"
+              type: "list of strings, default None"
+              description: "list of SPI (Pix) codes to be searched. ex: [\"20018183\"]"
+              section: "optional"
+            - name: "strCodes"
+              type: "list of strings, default None"
+              description: "list of STR (TED) codes to be searched. ex: [\"260\"]"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of Institution objects with updated attributes"
 
     InstitutionCreate:
       type: object

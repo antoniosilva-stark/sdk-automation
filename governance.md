@@ -48,7 +48,7 @@ Formalizado em 2026-09-01. A automação usa as duas linguagens, cada uma pelo s
 5. Push & create PR
 6. CI validates automatically (validate-spec.yaml)
 7. Spec Owner reviews
-8. Merge → run `SDK Sync` (manual dispatch from the default branch): it opens a PR in the target SDK repo, a human reviews it, and that repo's own pipeline publishes
+8. Merge → run `SDK Sync` (manual dispatch from the default branch): for a resource absent from the target SDK it opens an "Add <resource> resource" PR in that repo, a human reviews it, and that repo's own pipeline publishes; for a resource that already exists it only reports parity and opens nothing
 
 ## Escalation
 

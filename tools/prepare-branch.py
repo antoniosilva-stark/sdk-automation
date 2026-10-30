@@ -6,6 +6,7 @@ from pathlib import Path
 EXIT_OK = 0
 EXIT_UNREACHABLE = 2
 EXIT_FOREIGN_COMMITS = 3
+EXIT_ALREADY_EXISTS = 4
 
 BOT_EMAIL = "sdk-automation@starkbank.com"
 
@@ -95,7 +96,18 @@ def foreignAuthors(baseRef: str, branchRef: str, botEmail: str) -> list[str]:
     return sorted({email for email in result.stdout.split() if email != botEmail})
 
 
-def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: set[str] | None = None) -> int:
+def existingPaths(baseRef: str, allowedPaths: set[str]) -> list[str] | None:
+    """Caminhos declarados que ja estao na arvore da base; None quando nao foi possivel listar a arvore.
+
+    `ls-tree` sai 0 tambem para caminho ausente, entao so erro de verdade vira None (fail-closed)."""
+    result = git("ls-tree", "--full-tree", "--name-only", "-z", baseRef, "--", *sorted(allowedPaths))
+    if result.returncode != 0:
+        return None
+    return sorted({name for name in result.stdout.split("\0") if name} & allowedPaths)
+
+
+def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: set[str] | None = None,
+            createOnly: bool = False) -> int:
     present = remoteHasBranch(remote, branch)
     if present is None:
         log(f"nao foi possivel consultar o remoto {remote}.")
@@ -105,6 +117,16 @@ def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: se
         log(f"nao foi possivel atualizar a base {base} de {remote}.")
         return EXIT_UNREACHABLE
     baseRef = f"{remote}/{base}"
+
+    if createOnly:
+        # antes de qualquer checkout: a branch reaproveitada nao pode mascarar um recurso criado a mao na base
+        existing = existingPaths(baseRef, allowedPaths)
+        if existing is None:
+            log(f"nao foi possivel listar a arvore de {baseRef}.")
+            return EXIT_UNREACHABLE
+        if existing:
+            log(f"{', '.join(existing)} ja existe em {baseRef}; a politica e create-only, nada foi alterado.")
+            return EXIT_ALREADY_EXISTS
 
     if not present:
         if not checkout(branch, baseRef):
@@ -169,12 +191,16 @@ def main() -> int:
     parser.add_argument("--allowed-paths-file", default=None,
                         help="um caminho por linha; a branch reaproveitada so pode mudar estes")
     parser.add_argument("--bot-email", default=BOT_EMAIL, help="autor dos commits que podem ser regerados")
+    parser.add_argument("--create-only", action="store_true",
+                        help="falha se algum caminho declarado ja existe na base; exige --allowed-paths-file")
     args = parser.parse_args()
+    if args.create_only and not args.allowed_paths_file:
+        parser.error("--create-only exige --allowed-paths-file")
     allowed = None
     if args.allowed_paths_file:
         lines = Path(args.allowed_paths_file).read_text(encoding="utf-8").splitlines()
         allowed = {line.strip() for line in lines if line.strip()}
-    return prepare(args.remote, args.branch, args.base, args.bot_email, allowed)
+    return prepare(args.remote, args.branch, args.base, args.bot_email, allowed, args.create_only)
 
 
 if __name__ == "__main__":

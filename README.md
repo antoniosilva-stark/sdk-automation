@@ -28,12 +28,15 @@ SDK Sync (sdk-sync.yaml) — manual dispatch from the default branch only, two i
     │     └─ drifted? drift-pr (holds the App token, runs no pip) opens a spec-update PR here
     │        and the sync is skipped for this resource only
     ├─ build (no secrets): validate the name, derive the ruler from the real target SDK, generate
-    │     into staging/ and gate it against that ruler, then upload staging/ as an artifact
+    │     into staging/ and gate it against that ruler. Create-only: if the resource is already in
+    │     the target SDK the build only measures parity, exits 4, the run reports it and compile and
+    │     deliver are skipped (nothing is delivered). Otherwise upload staging/ as an artifact
     ├─ compile (no secrets): check out the public target SDK, put the generated file in, run
     │     mvn test-compile — the only place the target repo's own code runs
     └─ deliver (holds the App token, runs only this repo's stdlib tools): recompute the target repo,
+          refuse if a declared path already exists on the base (prepare-branch --create-only),
           copy ONLY the declared paths from the artifact (symlink-safe, apply-artifacts.py), commit,
-          push with --force-with-lease and open a PR in starkbank/sdk-<lang>
+          push with --force-with-lease and open an "Add <resource> resource" PR in starkbank/sdk-<lang>
     ↓
 Human reviews and merges → that repo's existing publishing pipeline takes over
 ```
@@ -126,13 +129,14 @@ workflows agree on the Node major, every job of `sdk-sync.yaml` runs only from t
 the jobs that run third-party code carry no secret, and the jobs that hold the token only run
 this repo's tools and SHA-pinned actions.
 
-In CI, `REQUIRE_TEST_DEPENDENCIES=1` turns a missing JDK, generator or SDK reference into a failure
-instead of a silent skip.
+In CI, `REQUIRE_TEST_DEPENDENCIES=1` turns a missing JDK, generator, SDK reference or the Maven
+dependencies of the reference `sdk-java` (the runtime test of the generated constructor reads them
+from the Maven cache) into a failure instead of a silent skip.
 
 ## Generation gates
 
 Generating from an under-specified schema **does not fail** — it emits a plausible, compiling
-class with correct CRUD methods and a single field. Four gates exist because of that:
+class with correct CRUD methods and a single field. Five gates exist because of that:
 
 1. **`lint-spec.py`** — splits the spec into generatable resources and scaffolding; `--require`
    fails when a named resource is not generatable
@@ -145,16 +149,40 @@ class with correct CRUD methods and a single field. Four gates exist because of 
    unless `--advisory` is given, which exists for template development and is forbidden in the
    workflow
 4. **`detect-drift.py`** — a resource whose versioned schema no longer matches the Python SDK
-   is not generated; the run opens a spec-update PR instead, and the other resources proceed
+   is not generated; the run opens a spec-update PR instead, and the other resources proceed. It
+   also compares the per-operation docstrings kept in each schema as `x-sdk-docs`
+5. **`--style`** (`assert-generated.py`, Java, creation only) — blocks Python residue inside the
+   Javadoc (`datetime.`, `None`, `True`, escaped quotes, `starkbank.user`), empty descriptions,
+   trailing spaces, an orphan `@param`, a direct numeric cast in the Map constructor and a
+   brace-less `if`/`for`; Python constructors in doc examples and unknown snake_case only warn
 
 Divergence the generator cannot reach lives in `tests/waivers/<language>.waivers`: exact string,
 mandatory reason, no wildcards. A waiver that stops matching is reported so it cannot rot
 silently. Waivers apply when **filling a gap**; when the file already exists in the target SDK,
 `--substitution` disables them all — losing an item there is a regression, not a pending item.
 
-Measured on 2026-10-15 with the derived ruler: of 42 resources, 1 passes (`SplitProfile`, the
-only one absent from `sdk-java`) and 41 fail (35 on parity with 630 gaps in total, 5 without an
-`id`, 1 with a reserved property name). That is the parity debt the gate makes visible.
+## Create-only
+
+The pipeline only **creates** a resource that is absent from the target SDK. When the resource is
+already there (all 42 are in `sdk-java` at the pinned commit), `build-resource.py` measures parity
+with the strict gate in substitution mode, prints it, exits 4 and writes nothing; the workflow
+records `intent=exists` and delivers nothing. Overwriting a hand-written file was removed because the
+gate compares signatures, not bodies or docs: the first real dispatch produced a pull request that
+kept every signature and still dropped documentation and changed constructor behaviour.
+
+A generated file follows the dominant conventions measured in the real `sdk-java` (Javadoc on the
+`data` field, constructor with return-only fields set to `null` and numerics read through `Number`,
+method and overload order, imports). `tests/test_java_golden.py` compares the structure with the real
+files for six resources and keeps a closed registry of divergences.
+
+### Shapes the template cannot emit
+
+Creating these is refused with `formato nao suportado` instead of emitting code that compiles and
+calls the API wrongly: a `create` that returns a single object (Webhook, MerchantSession,
+MerchantPurchase, CorporateCard, CorporateWithdrawal, CorporateInvoice, Workspace) and a singleton
+`get` without an id (Balance, CorporateBalance). Sub-objects such as `Transfer.Rule`, untyped
+`metadata` and a qualified `Transfer.Log` are known limits reported by the golden by severity.
+All of this is the scope of the next phase (full-Java parity).
 
 ## Spec status — read this before trusting resource counts
 
@@ -222,6 +250,6 @@ registry credentials are stored in this repo.
 See `governance.md` for the versioning rules, breaking-change policy and escalation path.
 
 ---
-**Status**: POC — pilot (`SplitProfile` / Java) generated, verified and proven end to end;
-waiting on review to reach `development`
+**Status**: POC — `SDK Sync` is merged into `development` and the first real dispatch ran; the
+pipeline is create-only (see the Create-only section)
 **Last updated**: 2026-10-16

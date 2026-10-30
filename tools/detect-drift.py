@@ -14,6 +14,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 SCHEMAS_DIR = "apis/schemas"
 SPEC_FILE = "apis/spec-v2.openapi.yaml"
+DOCS_KEY = "x-sdk-docs"
 
 EXIT_IN_SYNC = 0
 EXIT_DRIFTED = 1
@@ -78,6 +79,36 @@ def schemasOf(document: dict) -> dict:
     return ((document or {}).get("components") or {}).get("schemas") or {}
 
 
+def flattenDocs(docs: dict | None) -> dict:
+    """`log` aninha as operacoes do Log: `log.get` e `get` sao docstrings diferentes."""
+    flat = {}
+    for name, entry in (docs or {}).items():
+        if name != "log":
+            flat[name] = entry
+            continue
+        flat.update({f"log.{inner}": value for inner, value in flattenDocs(entry).items()})
+    return flat
+
+
+def compareDocs(resource: str, fromPython: dict | None, fromSpec: dict | None) -> list[str]:
+    """Um docstring que muda no sdk-python muda o Javadoc que o gerador emite."""
+    differences = []
+    expected, declared = flattenDocs(fromPython), flattenDocs(fromSpec)
+    for operation in sorted(set(expected) | set(declared)):
+        prefix = f"{resource}.x-sdk-docs.{operation}"
+        if operation not in declared:
+            differences.append(f"{prefix}: o sdk-python documenta, o schema versionado nao tem")
+            continue
+        if operation not in expected:
+            differences.append(f"{prefix}: o schema versionado documenta, o sdk-python nao documenta mais")
+            continue
+        changed = [key for key in sorted(set(expected[operation]) | set(declared[operation]))
+                   if expected[operation].get(key) != declared[operation].get(key)]
+        if changed:
+            differences.append(f"{prefix}: docstring mudou ({', '.join(changed)})")
+    return differences
+
+
 def compare(extracted: dict, applied: dict) -> list[str]:
     """Diferenças por schema e por campo, em linha, para caber no corpo de uma PR."""
     differences = []
@@ -104,11 +135,14 @@ def compare(extracted: dict, applied: dict) -> list[str]:
                 differences.append(f"{name}.{field}: {specProps[field]} → {pythonProps[field]}")
 
         for key in sorted(set(fromPython[name] or {}) | set(fromSpec[name] or {})):
-            if key == "properties":
+            if key in ("properties", DOCS_KEY):
                 continue
             if (fromPython[name] or {}).get(key) != (fromSpec[name] or {}).get(key):
                 differences.append(f"{name}.{key}: "
                                    f"{(fromSpec[name] or {}).get(key)} → {(fromPython[name] or {}).get(key)}")
+
+        differences += compareDocs(name, (fromPython[name] or {}).get(DOCS_KEY),
+                                  (fromSpec[name] or {}).get(DOCS_KEY))
 
     return differences
 

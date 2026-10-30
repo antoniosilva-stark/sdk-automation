@@ -32,6 +32,117 @@ components:
         - isDelivered
         - subscription
         - workspaceId
+      x-sdk-docs:
+        get:
+          summary: "Retrieve a specific notification Event"
+          description:
+            - "Receive a single notification Event object previously created in the Stark Bank API by its id"
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Event object with updated attributes"
+        query:
+          summary: "Retrieve notification Events"
+          description:
+            - "Receive a generator of notification Event objects previously created in the Stark Bank API"
+          params:
+            - name: "limit"
+              type: "integer, default None"
+              description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "isDelivered"
+              type: "bool, default None"
+              description: "bool to filter successfully delivered events. ex: True or False"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "generator of Event objects with updated attributes"
+        page:
+          summary: "Retrieve paged Events"
+          description:
+            - "Receive a list of up to 100 Event objects previously created in the Stark Bank API and the cursor to the next page."
+            - "Use this function instead of query if you want to manually page your requests."
+          params:
+            - name: "cursor"
+              type: "string, default None"
+              description: "cursor returned on the previous page function call"
+              section: "optional"
+            - name: "limit"
+              type: "integer, default 100"
+              description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+              section: "optional"
+            - name: "after"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "before"
+              type: "datetime.date or string, default None"
+              description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+              section: "optional"
+            - name: "isDelivered"
+              type: "bool, default None"
+              description: "bool to filter successfully delivered events. ex: True or False"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "list of Event objects with updated attributes"
+            - "cursor to retrieve the next page of Event objects"
+        delete:
+          summary: "Delete a webhook Event entity"
+          description:
+            - "Delete a notification Event entity previously created in the Stark Bank API by its ID. This action cannot be undone."
+          params:
+            - name: "id"
+              type: "string"
+              description: "Event unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "deleted Event object"
+        update:
+          summary: "Update notification Event entity"
+          description:
+            - "Update notification Event by passing id."
+            - "If is_delivered is True, the event will no longer be returned on queries with is_delivered=False."
+          params:
+            - name: "id"
+              type: "string"
+              description: "Event unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "isDelivered"
+              type: "bool"
+              description: "If True and event hasn't been delivered already, event will be set as delivered. ex: True"
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "target Event with updated attributes"
 
     EventCreate:
       type: object
