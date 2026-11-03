@@ -722,6 +722,60 @@ def test_interruptDuringTheCompileRemovesTheCopiedFilesAndRaises(tmpPath):
     assert (out / MAIN / "Balance.java").read_text() == "old"
 
 
+def failingUnlinkOf(monkeypatch, blocked):
+    realUnlink = Path.unlink
+
+    def unlink(self, missing_ok=False):
+        if self == blocked:
+            raise PermissionError("negado")
+        return realUnlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+
+
+def test_removeAllTriesEveryPathAndReturnsTheFailuresWithoutRaising(tmpPath, monkeypatch):
+    paths = [tmpPath / name for name in ("a", "b", "c")]
+    for path in paths:
+        path.write_text("x")
+    failingUnlinkOf(monkeypatch, paths[0])
+    assert replicate.removeAll(paths) == [f"{paths[0]}: negado"]
+    assert [path.exists() for path in paths] == [True, False, False]
+
+
+def test_compileFailureWithIncompleteRollbackIsErrorNamingWhatWasLeftAndTheCause(tmpPath, monkeypatch, capsys):
+    staging, out = twoFileStaging(tmpPath)
+    left = out / MAIN / "Alpha.java"
+    failingUnlinkOf(monkeypatch, left)
+
+    def broken(command, cwd, timeout, env=None):
+        return (1, f"{MAVEN_HEADER}[ERROR] /tmp/x/{MAIN}/Beta.java:[1,1] BROKEN\n")
+
+    config = {"out": out, "skipCompile": False, "mavenArguments": [], "runner": broken}
+    state = replicate.placeAndCompile(staging, [], config)
+    assert state["state"] == "erro"
+    assert state["compiled"] is False
+    assert state["detail"].splitlines()[0] == f"rollback incompleto: {left}: negado"
+    assert "erro de compilação" in state["detail"]
+    assert "BROKEN" in state["detail"]
+    assert filesIn(out) == [left]
+    assert f"[ERROR] falha ao remover do alvo o arquivo copiado {left}: negado" in capsys.readouterr().out
+
+
+def test_interruptWithIncompleteRollbackStillRaisesTheInterruptAndWarnsOnTheConsole(tmpPath, monkeypatch, capsys):
+    staging, out = twoFileStaging(tmpPath)
+    left = out / MAIN / "Alpha.java"
+    failingUnlinkOf(monkeypatch, left)
+
+    def interrupting(command, cwd, timeout, env=None):
+        raise KeyboardInterrupt
+
+    config = {"out": out, "skipCompile": False, "mavenArguments": [], "runner": interrupting}
+    with pytest.raises(KeyboardInterrupt):
+        replicate.placeAndCompile(staging, [], config)
+    assert filesIn(out) == [left]
+    assert f"[ERROR] falha ao remover do alvo o arquivo copiado {left}: negado" in capsys.readouterr().out
+
+
 def test_unexpectedErrorInOneResourceBecomesErrorStateAndTheNextOnesAreMeasured(sdk, tmpPath):
     runner, _ = fakeRunner(allGenerated())
 
@@ -1074,6 +1128,25 @@ def test_integrationRestoreFailureReachesTheDetailInTheTextAndTheJson(sdk, tmpPa
     assert f"    {warning}" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("interruptedIn", ["write", "compile"])
+def test_integrationInterruptWithAFailingRestoreRaisesTheInterruptAndWarnsOnTheConsole(sdk, tmpPath, monkeypatch, capsys,
+                                                                                        interruptedIn):
+    out = tmpPath / "out"
+    runner, _ = fakeRunner(allGenerated())
+
+    def interrupting(command, cwd, timeout, env=None):
+        if command[0] == "mvn" and (Path(cwd) / MAIN / "utils/GsonAdapters.java").read_text() == GSON_REAL:
+            raise KeyboardInterrupt
+        return runner(command, cwd, timeout, env)
+
+    if interruptedIn == "write":
+        failingWriteOf(monkeypatch, GSON_REAL.encode("utf-8"), KeyboardInterrupt())
+    failingRestoreOf(monkeypatch, out, [adaptedGsonAdapters().encode("utf-8")])
+    with pytest.raises(KeyboardInterrupt):
+        runMain(sdk, out, runner=interrupting)
+    assert "[ERROR] falha ao restaurar o GsonAdapters adaptado" in capsys.readouterr().out
+
+
 @pytest.fixture
 def originalTerminationHandler():
     original = signal.getsignal(signal.SIGTERM)
@@ -1081,12 +1154,31 @@ def originalTerminationHandler():
     signal.signal(signal.SIGTERM, original)
 
 
-def test_installTerminationHandlerTurnsSigtermIntoKeyboardInterrupt(originalTerminationHandler):
+def test_installTerminationHandlerTurnsSigtermIntoItsOwnKeyboardInterrupt(originalTerminationHandler):
     replicate.installTerminationHandler()
     handler = signal.getsignal(signal.SIGTERM)
     assert handler is not originalTerminationHandler
-    with pytest.raises(KeyboardInterrupt):
+    assert issubclass(replicate.TerminatedBySignal, KeyboardInterrupt)
+    with pytest.raises(replicate.TerminatedBySignal):
         handler(signal.SIGTERM, None)
+
+
+def test_runAsProgramExitsWith143WhenTheTerminationReachesTheTop(monkeypatch):
+    def terminated():
+        raise replicate.TerminatedBySignal
+
+    monkeypatch.setattr(replicate, "main", terminated)
+    assert replicate.runAsProgram() == 143
+
+
+def test_runAsProgramLetsARealCtrlCPropagate(monkeypatch):
+    def interrupted():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(replicate, "main", interrupted)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        replicate.runAsProgram()
+    assert type(raised.value) is KeyboardInterrupt
 
 
 def test_realSigtermDuringTheCompileRemovesTheCopiedFilesAndRaises(tmpPath, originalTerminationHandler):

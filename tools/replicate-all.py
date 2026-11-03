@@ -19,6 +19,7 @@ REPO_ROOT = TOOLS_DIR.parent
 LANGUAGE = "java"
 BUILD_TIMEOUT_SECONDS = 600
 EXIT_EXISTS = 4
+EXIT_TERMINATED = 128 + signal.SIGTERM
 MAVEN_ERROR_LINES = 5
 GATE_GAP_LINES = 3
 DETAIL_WIDTH = 100
@@ -32,7 +33,6 @@ STATE_COMPILE = "erro de compilação"
 STATE_DEPENDENCY = "dependência ausente"
 
 SKIPPED_COMPILE = "(--skip-compile)"
-NO_OUTPUT = "sem saída"
 
 _BUILT_LINE = re.compile(r"^\[OK\] \S+ construído e verificado em ", re.MULTILINE)
 _COMPILATION_HEADER = re.compile(r"^\[ERROR\]\s*COMPILATION ERROR\s*:?\s*$")
@@ -123,7 +123,7 @@ def classifyBuild(code: int, output: str) -> dict:
 def errorDetail(parsedDetail: str, output: str) -> str:
     # filho que morre com traceback não escreve [ERROR]: a causa é a última linha, não "sem saída"
     lines = [line.strip() for line in output.splitlines() if line.strip()]
-    if parsedDetail != NO_OUTPUT or not lines:
+    if parsedDetail != loadTool("parity-report").NO_OUTPUT or not lines:
         return parsedDetail
     return lines[-1]
 
@@ -148,9 +148,15 @@ def copyStaging(staging: Path, out: Path, copied: list[Path]) -> str | None:
     return None
 
 
-def removeAll(paths: list[Path]) -> None:
+def removeAll(paths: list[Path]) -> list[str]:
+    # chamado num finally: levantar aqui trocaria um Ctrl-C/SIGTERM em curso, e parar deixaria o resto no alvo
+    failures = []
     for path in paths:
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as error:
+            failures.append(f"{path}: {error}")
+    return failures
 
 
 def mavenErrors(output: str, out: Path) -> list[str]:
@@ -180,21 +186,34 @@ def buildResource(resource: str, staging: Path, advisory: bool, config: dict) ->
 
 
 def placeAndCompile(staging: Path, dependencies: list[str], config: dict) -> dict:
-    out = config["out"]
     copied = []
     kept = False
+    problem, errors = None, []
     # cópia e compilação no mesmo try: qualquer saída antes de a árvore compilar devolve o alvo ao que era
     try:
-        problem = copyStaging(staging=staging, out=out, copied=copied)
-        if problem:
-            return outcome(STATE_ERROR, problem)
-        if config["skipCompile"]:
-            kept = True
-            return outcome(STATE_GENERATED)
-        kept, errors = compileTree(config)
+        problem = copyStaging(staging=staging, out=config["out"], copied=copied)
+        kept = problem is None and config["skipCompile"]
+        if problem is None and not kept:
+            kept, errors = compileTree(config)
     finally:
-        if not kept:
-            removeAll(copied)
+        failures = [] if kept else removeAll(copied)
+        for failure in failures:
+            # numa interrupção a exceção original segue subindo e o console é o único canal
+            emit(f"[ERROR] falha ao remover do alvo o arquivo copiado {failure}")
+    # só no fluxo normal: numa exceção nada daqui roda
+    result = placedOutcome(problem=problem, kept=kept, errors=errors, dependencies=dependencies, config=config)
+    if not failures:
+        return result
+    detail = "\n".join([f"rollback incompleto: {'; '.join(failures)}", f"{result['state']}: {result['detail']}"])
+    return {**result, "state": STATE_ERROR, "detail": detail}
+
+
+def placedOutcome(problem: str | None, kept: bool, errors: list[str], dependencies: list[str], config: dict) -> dict:
+    out = config["out"]
+    if problem:
+        return outcome(STATE_ERROR, problem)
+    if config["skipCompile"]:
+        return outcome(STATE_GENERATED)
     if kept:
         return {**outcome(STATE_GENERATED), "compiled": True}
     missing = [dependency for dependency in dependencies if not (out / loadTool("make-replica").MAIN_PACKAGE / f"{dependency}.java").is_file()]
@@ -469,14 +488,26 @@ def main(argv: list[str] | None = None, runner=None, source: Path | None = None,
     return writeJson(report, jsonPath)
 
 
+class TerminatedBySignal(KeyboardInterrupt):
+    pass
+
+
 def installTerminationHandler() -> None:
     # SIGTERM (CI cancelado, timeout) encerra sem rodar os finally; como KeyboardInterrupt, o alvo volta ao que era
     def interrupt(signalNumber, frame):
-        raise KeyboardInterrupt
+        raise TerminatedBySignal
 
     signal.signal(signal.SIGTERM, interrupt)
 
 
+def runAsProgram() -> int:
+    try:
+        return main()
+    except TerminatedBySignal:
+        # capturado depois dos finally: o CI lê 128 + SIGTERM como "terminado", não um traceback de Ctrl-C
+        return EXIT_TERMINATED
+
+
 if __name__ == "__main__":
     installTerminationHandler()
-    sys.exit(main())
+    sys.exit(runAsProgram())
