@@ -162,6 +162,7 @@ def runCommand(command: list[str], cwd: Path, timeout: int, env: dict | None = N
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            errors="replace",
             start_new_session=True,
         )
     except OSError as error:

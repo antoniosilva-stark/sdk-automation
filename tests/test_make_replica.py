@@ -412,6 +412,12 @@ def test_runCommandReturnsExitCodeAndOutput(tmpPath):
     assert "oi" in output
 
 
+def test_runCommandInvalidUtf8OutputDoesNotRaise(tmpPath):
+    code, output = replica.runCommand(command=["sh", "-c", "printf '\\377'"], cwd=tmpPath, timeout=10)
+    assert code == 0
+    assert output
+
+
 def test_runCommandPassesEnvOnlyToTheChild(tmpPath, monkeypatch):
     monkeypatch.delenv("REPLICA_ENV_PROBE", raising=False)
     code, output = replica.runCommand(

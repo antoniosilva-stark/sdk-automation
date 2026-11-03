@@ -1,5 +1,7 @@
 import os
+import sys
 import json
+import signal
 import hashlib
 import subprocess
 import importlib.util
@@ -59,6 +61,7 @@ GATE_FAILS = """\
 NO_ARTIFACT = "[OK] lint-spec (exit 0)\n[ERROR] gerador main retornou 0 mas não produziu o artefato: Beta.java\n"
 ALREADY_EXISTS = "[INFO] Beta já existe no sdk-java — relatório de paridade, nada será entregue\n"
 TIMED_OUT = "[ERROR] /usr/bin/python3 excedeu 600s"
+MAVEN_HEADER = "[ERROR] COMPILATION ERROR : \n"
 
 
 def writeFile(root, relative, content):
@@ -94,17 +97,21 @@ def allGenerated():
 
 def fakeCompile(out):
     """Imita o javac: símbolo ausente ou o token BROKEN reprovam, como no Maven real."""
-    pattern = replicate.referencePattern(FAKE_RESOURCES)
+    replica = replicate.loadTool("make-replica")
+    pattern = replica.referencePattern(FAKE_RESOURCES)
     for path in sorted((out / "src").rglob("*.java")):
         text = path.read_text(encoding="utf-8")
         if "BROKEN" in text:
-            return (1, f"[ERROR] {path.name}:[1,1] BROKEN\n[ERROR] COMPILATION ERROR")
+            return (1, f"{MAVEN_HEADER}[ERROR] /tmp/x/{MAIN}/{path.name}:[1,1] BROKEN\n[ERROR] -> [Help 1]")
         missing = [
-            name for name in replicate.referencedNames(text, pattern)
+            name for name in replica.referencedNames(text, pattern)
             if name != path.stem and not (out / MAIN / f"{name}.java").is_file()
         ]
         if missing:
-            return (1, f"[ERROR] {path.name}:[1,1] cannot find symbol {missing[0]}")
+            return (1, (
+                f"{MAVEN_HEADER}[ERROR] /tmp/x/{MAIN}/{path.name}:[1,1] cannot find symbol\n"
+                f"[ERROR]   symbol:   class {missing[0]}\n[ERROR] -> [Help 1]"
+            ))
     return (0, "")
 
 
@@ -192,7 +199,7 @@ def test_dependenciesOfKeepsOnlyCodeReferencesToOtherResources(sdk):
     (4, ALREADY_EXISTS, "existe", ""),
     (1, NO_ARTIFACT, "erro", "não produziu o artefato"),
     (124, TIMED_OUT, "erro", "excedeu 600s"),
-    (2, "", "erro", ""),
+    (2, "", "erro", "sem saída"),
 ])
 def test_classifyBuildReadsExitCodeAndText(code, output, state, detailPart):
     result = replicate.classifyBuild(code=code, output=output)
@@ -206,6 +213,23 @@ def test_classifyBuildGateDetailKeepsOnlyTheFirstGaps():
     assert result["detail"].count("field ausente") == 3
 
 
+def test_classifyBuildChildThatDiesWithATracebackShowsItsLastLineAsTheCause():
+    traceback = (
+        "Traceback (most recent call last):\n"
+        '  File "tools/build-resource.py", line 9, in <module>\n'
+        "    raise ValueError(\"boom\")\n"
+        "ValueError: boom\n\n"
+    )
+    result = replicate.classifyBuild(code=1, output=traceback)
+    assert result["state"] == "erro"
+    assert result["detail"] == "ValueError: boom"
+
+
+def test_classifyBuildKeepsTheLastErrorLineWhenThereAreErrorLines():
+    result = replicate.classifyBuild(code=1, output="[ERROR] primeira\n[ERROR] ultima\ncauda\n")
+    assert result["detail"] == "[ERROR] ultima"
+
+
 def test_classifyBuildZeroWithoutBuiltLineIsAnError():
     assert replicate.classifyBuild(code=0, output="")["state"] == "erro"
 
@@ -214,8 +238,8 @@ def test_copyStagingCopiesTheTreeIntoTheTarget(tmpPath):
     staging, out = tmpPath / "staging", tmpPath / "out"
     writeFile(staging, f"{MAIN}/Alpha.java", "a")
     out.mkdir()
-    copied, conflict = replicate.copyStaging(staging=staging, out=out)
-    assert conflict is None
+    copied = []
+    assert replicate.copyStaging(staging=staging, out=out, copied=copied) is None
     assert copied == [out / MAIN / "Alpha.java"]
     assert (out / MAIN / "Alpha.java").read_text() == "a"
 
@@ -225,7 +249,8 @@ def test_copyStagingRefusesToOverwriteAndCopiesNothing(tmpPath):
     writeFile(staging, f"{MAIN}/Alpha.java", "new")
     writeFile(staging, f"{MAIN}/Beta.java", "new")
     writeFile(out, f"{MAIN}/Beta.java", "old")
-    copied, conflict = replicate.copyStaging(staging=staging, out=out)
+    copied = []
+    conflict = replicate.copyStaging(staging=staging, out=out, copied=copied)
     assert copied == []
     assert "Beta.java" in conflict
     assert (out / MAIN / "Beta.java").read_text() == "old"
@@ -321,7 +346,8 @@ def test_compilationFailureRemovesTheNewFilesAndTheNextResourcesKeepGoing(sdk, t
     _, byName = entries(target)
     assert byName["Beta"]["strict"]["state"] == "erro de compilação"
     assert byName["Beta"]["strict"]["compiled"] is False
-    assert "BROKEN" in byName["Beta"]["strict"]["detail"]
+    assert "Beta.java:[1,1] BROKEN" in byName["Beta"]["strict"]["detail"]
+    assert "COMPILATION ERROR" not in byName["Beta"]["strict"]["detail"]
     assert not (out / MAIN / "Beta.java").exists()
     assert byName["Delta"]["strict"]["state"] == "gerado"
     assert (out / MAIN / "Delta.java").is_file()
@@ -335,7 +361,10 @@ def test_compilationFailureWithAbsentDependencyIsDependencyMissingNotCompileErro
     runMain(sdk, out, "--json", str(target), runner=runner)
     _, byName = entries(target)
     assert byName["Gamma"]["strict"]["state"] == "dependência ausente"
-    assert byName["Gamma"]["strict"]["detail"] == "Beta; mvn: [ERROR] Gamma.java:[1,1] cannot find symbol Beta"
+    detail = byName["Gamma"]["strict"]["detail"]
+    assert detail.startswith("Beta; mvn: ")
+    assert "Gamma.java:[1,1] cannot find symbol" in detail
+    assert "COMPILATION ERROR" not in detail
     assert byName["Gamma"]["strict"]["compiled"] is False
     assert not (out / MAIN / "Gamma.java").exists()
     assert byName["Alpha"]["strict"]["state"] == "gerado"
@@ -343,8 +372,25 @@ def test_compilationFailureWithAbsentDependencyIsDependencyMissingNotCompileErro
 
 def test_compileErrorDetailKeepsAtMostFiveMavenErrorLines(sdk, tmpPath):
     noisy = "\n".join(f"[ERROR] linha {number}" for number in range(9))
-    errors = replicate.mavenErrors(noisy)
+    errors = replicate.mavenErrors(noisy, Path("/tmp/x"))
     assert errors == [f"[ERROR] linha {number}" for number in range(5)]
+
+
+def test_mavenErrorsDropsTheCompilationHeaderSoTheCauseComesFirst():
+    output = (
+        "[ERROR] COMPILATION ERROR : \n"
+        "[ERROR] /tmp/x/src/main/java/com/starkbank/Gamma.java:[1,1] cannot find symbol\n"
+        "[ERROR]   symbol:   class Beta\n"
+        "[ERROR] -> [Help 1]\n"
+    )
+    errors = replicate.mavenErrors(output, Path("/tmp/x"))
+    assert errors[0].endswith("Gamma.java:[1,1] cannot find symbol")
+    assert len(errors) == 3
+
+
+def test_mavenErrorsKeepsFiveLinesAfterTheHeader():
+    noisy = MAVEN_HEADER + "\n".join(f"[ERROR] linha {number}" for number in range(9))
+    assert replicate.mavenErrors(noisy, Path("/tmp/x")) == [f"[ERROR] linha {number}" for number in range(5)]
 
 
 def test_advisoryPassRunsOnlyForUnsupportedFormatAndKeepsTheFileInTheTarget(sdk, tmpPath):
@@ -581,11 +627,20 @@ def test_relativeJsonIsResolvedBeforeTheWorkEvenIfTheCwdChanges(sdk, tmpPath, mo
     assert not (elsewhere / "r.json").exists()
 
 
-def test_copyStagingFailureMidwayRemovesWhatWasCopiedAndReportsAnError(sdk, tmpPath, monkeypatch):
+def twoFileStaging(tmpPath):
     staging, out = tmpPath / "staging", tmpPath / "out"
     writeFile(staging, f"{MAIN}/Alpha.java", "a")
     writeFile(staging, f"{MAIN}/Beta.java", "b")
     out.mkdir()
+    return staging, out
+
+
+def filesIn(root):
+    return [path for path in root.rglob("*") if path.is_file()]
+
+
+def test_copyStagingFailureMidwayRemovesWhatWasCopiedAndReportsAnError(tmpPath, monkeypatch):
+    staging, out = twoFileStaging(tmpPath)
     realCopy = replicate.shutil.copyfile
     count = []
 
@@ -596,13 +651,148 @@ def test_copyStagingFailureMidwayRemovesWhatWasCopiedAndReportsAnError(sdk, tmpP
         return realCopy(source, target)
 
     monkeypatch.setattr(replicate.shutil, "copyfile", flaky)
-    copied, problem = replicate.copyStaging(staging=staging, out=out)
-    assert copied == []
-    assert "disco cheio" in problem
-    assert not any(path.is_file() for path in out.rglob("*"))
-    count.clear()
     state = replicate.placeAndCompile(staging, [], {"out": out, "skipCompile": True})
     assert state["state"] == "erro"
+    assert "disco cheio" in state["detail"]
+    assert filesIn(out) == []
+
+
+def test_copyStagingFailureLeavesNoPartialFileInTheTarget(tmpPath, monkeypatch):
+    staging, out = tmpPath / "staging", tmpPath / "out"
+    writeFile(staging, f"{MAIN}/Alpha.java", "abcdef")
+    out.mkdir()
+
+    def halfThenFail(source, target):
+        Path(target).write_text("abc")
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(replicate.shutil, "copyfile", halfThenFail)
+    state = replicate.placeAndCompile(staging, [], {"out": out, "skipCompile": True})
+    assert "disco cheio" in state["detail"]
+    assert filesIn(out) == []
+
+
+@pytest.mark.parametrize("skipCompile", [True, False])
+def test_interruptBetweenTwoCopiesLeavesNothingInTheTargetAndRaises(tmpPath, monkeypatch, skipCompile):
+    staging, out = twoFileStaging(tmpPath)
+    writeFile(out, f"{MAIN}/Balance.java", "old")
+    realCopy = replicate.shutil.copyfile
+    count = []
+
+    def interruptedOnSecond(source, target):
+        count.append(source)
+        if len(count) == 2:
+            raise KeyboardInterrupt
+        return realCopy(source, target)
+
+    monkeypatch.setattr(replicate.shutil, "copyfile", interruptedOnSecond)
+    config = {"out": out, "skipCompile": skipCompile, "mavenArguments": [], "runner": fakeRunner(allGenerated())[0]}
+    with pytest.raises(KeyboardInterrupt):
+        replicate.placeAndCompile(staging, [], config)
+    assert filesIn(out) == [out / MAIN / "Balance.java"]
+
+
+def test_interruptRightAfterTheCopyReturnsLeavesNothingInTheTargetAndRaises(tmpPath, monkeypatch):
+    staging, out = twoFileStaging(tmpPath)
+    realCopyStaging = replicate.copyStaging
+
+    def interruptedAfterReturn(staging, out, copied):
+        realCopyStaging(staging=staging, out=out, copied=copied)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(replicate, "copyStaging", interruptedAfterReturn)
+    config = {"out": out, "skipCompile": False, "mavenArguments": [], "runner": fakeRunner(allGenerated())[0]}
+    with pytest.raises(KeyboardInterrupt):
+        replicate.placeAndCompile(staging, [], config)
+    assert filesIn(out) == []
+
+
+def test_interruptDuringTheCompileRemovesTheCopiedFilesAndRaises(tmpPath):
+    staging, out = tmpPath / "staging", tmpPath / "out"
+    writeFile(staging, f"{MAIN}/Alpha.java", "a")
+    writeFile(out, f"{MAIN}/Balance.java", "old")
+
+    def interrupting(command, cwd, timeout, env=None):
+        raise KeyboardInterrupt
+
+    config = {"out": out, "skipCompile": False, "mavenArguments": [], "runner": interrupting}
+    with pytest.raises(KeyboardInterrupt):
+        replicate.placeAndCompile(staging, [], config)
+    assert not (out / MAIN / "Alpha.java").exists()
+    assert (out / MAIN / "Balance.java").read_text() == "old"
+
+
+def test_unexpectedErrorInOneResourceBecomesErrorStateAndTheNextOnesAreMeasured(sdk, tmpPath):
+    runner, _ = fakeRunner(allGenerated())
+
+    def flaky(command, cwd, timeout, env=None):
+        if command[0] != "mvn" and command[2] == "Beta":
+            raise OSError("sem processo")
+        return runner(command, cwd, timeout, env)
+
+    target = tmpPath / "replica.json"
+    assert runMain(sdk, tmpPath / "out", "--json", str(target), runner=flaky) == 0
+    _, byName = entries(target)
+    assert byName["Beta"]["strict"]["state"] == "erro"
+    assert "sem processo" in byName["Beta"]["strict"]["detail"]
+    assert byName["Delta"]["strict"]["state"] == "gerado"
+
+
+def test_interruptInABuildIsNotSwallowedByThePerResourceHandling(sdk, tmpPath):
+    def interrupting(command, cwd, timeout, env=None):
+        if command[0] != "mvn" and command[2] == "Beta":
+            raise KeyboardInterrupt
+        return fakeRunner(allGenerated())[0](command, cwd, timeout, env)
+
+    with pytest.raises(KeyboardInterrupt):
+        runMain(sdk, tmpPath / "out", runner=interrupting)
+
+
+def test_timeoutOfOneResourceBecomesErrorWithTheMessage(sdk, tmpPath):
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner({**allGenerated(), "Alpha": (124, TIMED_OUT, {})})
+    assert runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner) == 0
+    _, byName = entries(target)
+    assert byName["Alpha"]["strict"]["state"] == "erro"
+    assert "excedeu 600s" in byName["Alpha"]["strict"]["detail"]
+
+
+def test_invalidFromIsUsageError(tmpPath, capsys):
+    (tmpPath / "vazio").mkdir()
+    runner, calls = fakeRunner(allGenerated())
+    code = replicate.main(
+        ["--out", str(tmpPath / "out"), "--from", str(tmpPath / "vazio")],
+        runner=runner,
+        resources=FAKE_RESOURCES,
+        sha="abc1234",
+    )
+    assert code == 2
+    assert "[ERROR]" in capsys.readouterr().out
+    assert calls == []
+
+
+@pytest.mark.parametrize("place", ["insideOut", "insideSource"])
+def test_jsonInsideOutOrSourceIsUsageErrorBeforeAnyWork(sdk, tmpPath, capsys, place):
+    out = tmpPath / "out"
+    target = out / "r.json" if place == "insideOut" else sdk / "r.json"
+    runner, calls = fakeRunner(allGenerated())
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 2
+    text = capsys.readouterr().out
+    assert "--json" in text and "dentro" in text
+    assert calls == []
+    assert not out.exists()
+    assert not (sdk / "r.json").exists()
+
+
+def test_jsonThatExistsAndIsNotWritableIsUsageErrorBeforeAnyWork(sdk, tmpPath, capsys, monkeypatch):
+    target = tmpPath / "r.json"
+    target.write_text("{}")
+    realAccess = replicate.os.access
+    monkeypatch.setattr(replicate.os, "access", lambda path, mode: Path(path) != target and realAccess(path, mode))
+    runner, calls = fakeRunner(allGenerated())
+    assert runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner) == 2
+    assert "--json" in capsys.readouterr().out
+    assert calls == []
 
 
 def test_jsonPointingToADirectoryIsUsageErrorBeforeAnyWork(sdk, tmpPath, capsys):
@@ -651,6 +841,309 @@ def test_integrationRestoresTheAdaptedGsonAdaptersWhenTheCompileIsInterrupted(sd
     assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adapted
 
 
+def relativizingMaven(runner):
+    """O Maven real imprime o caminho absoluto do arquivo, que contém o --out."""
+    def run(command, cwd, timeout, env=None):
+        code, output = runner(command, cwd, timeout, env)
+        return (code, output.replace("/tmp/x", str(cwd)) if command[0] == "mvn" else output)
+
+    return run
+
+
+def longOut(tmpPath):
+    parent = tmpPath / ("d" * 110)
+    parent.mkdir()
+    return parent / "out"
+
+
+def test_compileDetailRelativizesTheMavenPathsToOutSoTheCauseSurvivesTheTableWidth(sdk, tmpPath, capsys):
+    strict = {**allGenerated(), "Beta": generated("Beta", "public class Beta { Alpha alpha; BROKEN }\n")}
+    out, target = longOut(tmpPath), tmpPath / "replica.json"
+    runner, _ = fakeRunner(strict)
+    assert runMain(sdk, out, "--json", str(target), runner=relativizingMaven(runner)) == 0
+    _, byName = entries(target)
+    entry = byName["Beta"]
+    assert len(str(out)) > replicate.DETAIL_WIDTH
+    assert entry["strict"]["detail"].splitlines()[0] == f"[ERROR] {MAIN}/Beta.java:[1,1] BROKEN"
+    assert str(out) not in entry["strict"]["detail"]
+    assert "BROKEN" in replicate.shortDetail(entry)
+    assert f"{MAIN}/Beta.java:[1,1] BROKEN" in capsys.readouterr().out
+
+
+def test_dependencyMissingDetailKeepsTheCauseInTheTableWithALongOut(sdk, tmpPath, capsys):
+    strict = {**allGenerated(), "Beta": (1, LINT_BLOCKED, {}), "Gamma": generated("Gamma", "class Gamma { Beta beta; }\n")}
+    out, target = longOut(tmpPath), tmpPath / "replica.json"
+    runner, _ = fakeRunner(strict)
+    runMain(sdk, out, "--json", str(target), runner=relativizingMaven(runner))
+    _, byName = entries(target)
+    entry = byName["Gamma"]
+    assert entry["strict"]["state"] == "dependência ausente"
+    assert entry["strict"]["detail"].startswith(f"Beta; mvn: [ERROR] {MAIN}/Gamma.java:[1,1] cannot find symbol")
+    assert str(out) not in entry["strict"]["detail"]
+    assert "cannot find symbol" in replicate.shortDetail(entry)
+    assert "cannot find symbol" in capsys.readouterr().out
+
+
+def test_mavenErrorsStripsTheOutPrefixFromEveryLineIncludingTheFallback():
+    out = Path("/work/replica")
+    assert replicate.mavenErrors("[ERROR] /work/replica/src/A.java:[1,2] x\n", out) == ["[ERROR] src/A.java:[1,2] x"]
+    assert replicate.mavenErrors("falhou em /work/replica/pom.xml\n", out) == ["falhou em pom.xml"]
+
+
+def test_mavenErrorsNeverCutsAnOutThatOnlyAppearsInsideAnotherPath():
+    out = Path("/work/replica")
+    line = "[ERROR] /home/u/work/replica/src/A.java:[1,2] x"
+    assert replicate.mavenErrors(f"{line}\n", out) == [line]
+    fallback = "falhou em /home/u/work/replica/pom.xml"
+    assert replicate.mavenErrors(f"{fallback}\n", out) == [fallback]
+
+
+@pytest.mark.parametrize("place", ["intoSource", "intoOut"])
+def test_jsonSymlinkIntoOutOrSourceIsUsageErrorAndNothingIsWrittenThroughIt(sdk, tmpPath, capsys, place):
+    out = tmpPath / "out"
+    out.mkdir()
+    destination = sdk / "r.json" if place == "intoSource" else out / "r.json"
+    link = tmpPath / "link.json"
+    link.symlink_to(destination)
+    runner, calls = fakeRunner(allGenerated())
+    assert runMain(sdk, out, "--json", str(link), runner=runner) == 2
+    assert "--json" in capsys.readouterr().out
+    assert calls == []
+    assert not destination.exists()
+    assert list(out.iterdir()) == []
+
+
+def test_jsonSymlinkLeafToAnywhereElseIsAlsoRejected(sdk, tmpPath, capsys):
+    (tmpPath / "elsewhere.json").write_text("{}")
+    link = tmpPath / "link.json"
+    link.symlink_to(tmpPath / "elsewhere.json")
+    runner, calls = fakeRunner(allGenerated())
+    assert runMain(sdk, tmpPath / "out", "--json", str(link), runner=runner) == 2
+    text = capsys.readouterr().out
+    assert "--json" in text and "symlink" in text
+    assert calls == []
+    assert (tmpPath / "elsewhere.json").read_text() == "{}"
+
+
+def adaptedGsonAdapters():
+    return replicate.loadTool("make-replica").adaptGsonAdapters(source=GSON_REAL, resources=FAKE_RESOURCES)
+
+
+def failingWriteOf(monkeypatch, content, error):
+    """Falha a escrita de um conteúdo específico, depois de truncar o arquivo como o open('wb') faria."""
+    realWrite = Path.write_bytes
+
+    def write(self, data):
+        if data != content:
+            return realWrite(self, data)
+        realWrite(self, data[:5])
+        raise error
+
+    monkeypatch.setattr(Path, "write_bytes", write)
+
+
+def test_integrationWriteFailureOfTheRealGsonAdaptersIsFalhouAndRestoresTheAdapted(sdk, tmpPath, monkeypatch):
+    out, target = tmpPath / "out", tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    failingWriteOf(monkeypatch, GSON_REAL.encode("utf-8"), OSError("disco cheio"))
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    assert report["integration"]["state"] == "falhou"
+    assert "disco cheio" in report["integration"]["detail"]
+    assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adaptedGsonAdapters()
+
+
+def test_integrationInterruptRightAfterTheRealWriteRestoresTheAdaptedAndRaises(sdk, tmpPath, monkeypatch):
+    out = tmpPath / "out"
+    runner, _ = fakeRunner(allGenerated())
+    realWrite = Path.write_bytes
+
+    def interruptedAfterWrite(self, data):
+        realWrite(self, data)
+        if data == GSON_REAL.encode("utf-8"):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(Path, "write_bytes", interruptedAfterWrite)
+    with pytest.raises(KeyboardInterrupt):
+        runMain(sdk, out, runner=runner)
+    assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adaptedGsonAdapters()
+
+
+def test_integrationReadFailureOfTheRealSourceBeforeTheSwapIsFalhouNotATraceback(sdk, tmpPath, monkeypatch):
+    out, target = tmpPath / "out", tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    realRead = Path.read_bytes
+    real = sdk / MAIN / "utils/GsonAdapters.java"
+
+    def read(self):
+        if self == real and (out / MAIN / "Alpha.java").exists():
+            raise OSError("leitura negada")
+        return realRead(self)
+
+    monkeypatch.setattr(Path, "read_bytes", read)
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    assert report["integration"]["state"] == "falhou"
+    assert "leitura negada" in report["integration"]["detail"]
+    assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adaptedGsonAdapters()
+
+
+def test_integrationRestoreFailureIsReportedOnTheConsoleInsteadOfATraceback(sdk, tmpPath, monkeypatch, capsys):
+    out, target = tmpPath / "out", tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    realWrite = Path.write_bytes
+
+    def write(self, data):
+        if self.name == "GsonAdapters.java" and (out / MAIN / "Alpha.java").exists():
+            raise OSError("disco cheio")
+        return realWrite(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", write)
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    assert report["integration"]["state"] == "falhou"
+    assert "[ERROR] falha ao restaurar o GsonAdapters adaptado" in capsys.readouterr().out
+
+
+def failingSwapRead(monkeypatch, out, sdk, failing):
+    """Falha só a leitura feita na troca: a do adaptado no alvo, ou a do real depois dela (o readText vem antes)."""
+    realRead = Path.read_bytes
+    adaptedPath, realPath = out / MAIN / "utils/GsonAdapters.java", sdk / MAIN / "utils/GsonAdapters.java"
+    reads = []
+
+    def read(self):
+        if (out / MAIN / "Alpha.java").exists() and self == adaptedPath:
+            reads.append(self)
+        if self == {"adapted": adaptedPath, "real": realPath}[failing] and reads:
+            raise OSError("leitura negada")
+        return realRead(self)
+
+    monkeypatch.setattr(Path, "read_bytes", read)
+    return reads
+
+
+@pytest.mark.parametrize("failing", ["adapted", "real"])
+def test_integrationReadFailureInsideTheSwapIsFalhouAndKeepsTheAdapted(sdk, tmpPath, monkeypatch, capsys, failing):
+    out, target = tmpPath / "out", tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    reads = failingSwapRead(monkeypatch, out, sdk, failing)
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    assert reads == [out / MAIN / "utils/GsonAdapters.java"]
+    assert report["integration"] == {"state": "falhou", "detail": "OSError: leitura negada"}
+    assert "Traceback" not in capsys.readouterr().out
+    assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adaptedGsonAdapters()
+
+
+def test_integrationInterruptInTheMiddleOfTheRealWriteRestoresTheAdaptedAndRaises(sdk, tmpPath, monkeypatch):
+    out = tmpPath / "out"
+    runner, _ = fakeRunner(allGenerated())
+    failingWriteOf(monkeypatch, GSON_REAL.encode("utf-8"), KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        runMain(sdk, out, runner=runner)
+    assert (out / MAIN / "utils/GsonAdapters.java").read_text() == adaptedGsonAdapters()
+
+
+def failingRestoreOf(monkeypatch, out, blocked):
+    """Recusa as escritas listadas no GsonAdapters do alvo depois que a base já foi montada (Alpha copiado)."""
+    realWrite = Path.write_bytes
+
+    def write(self, data):
+        if self.name == "GsonAdapters.java" and (out / MAIN / "Alpha.java").exists() and data in blocked:
+            raise OSError("disco cheio")
+        return realWrite(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", write)
+
+
+@pytest.mark.parametrize("cause", ["compileFails", "writeFails"])
+def test_integrationRestoreFailureReachesTheDetailInTheTextAndTheJson(sdk, tmpPath, monkeypatch, capsys, cause):
+    real = GSON_BROKEN if cause == "compileFails" else GSON_REAL
+    writeFile(sdk, f"{MAIN}/utils/GsonAdapters.java", real)
+    adapted = replicate.loadTool("make-replica").adaptGsonAdapters(source=real, resources=FAKE_RESOURCES)
+    blocked = [adapted.encode("utf-8")] + ([] if cause == "compileFails" else [real.encode("utf-8")])
+    out, target = tmpPath / "out", tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    failingRestoreOf(monkeypatch, out, blocked)
+    assert runMain(sdk, out, "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    warning = "ATENÇÃO: falha ao restaurar o GsonAdapters adaptado: disco cheio"
+    assert report["integration"]["state"] == "falhou"
+    assert report["integration"]["detail"].splitlines()[-1].startswith(warning)
+    assert ("BROKEN" if cause == "compileFails" else "OSError: disco cheio") in report["integration"]["detail"]
+    assert f"    {warning}" in capsys.readouterr().out
+
+
+@pytest.fixture
+def originalTerminationHandler():
+    original = signal.getsignal(signal.SIGTERM)
+    yield original
+    signal.signal(signal.SIGTERM, original)
+
+
+def test_installTerminationHandlerTurnsSigtermIntoKeyboardInterrupt(originalTerminationHandler):
+    replicate.installTerminationHandler()
+    handler = signal.getsignal(signal.SIGTERM)
+    assert handler is not originalTerminationHandler
+    with pytest.raises(KeyboardInterrupt):
+        handler(signal.SIGTERM, None)
+
+
+def test_realSigtermDuringTheCompileRemovesTheCopiedFilesAndRaises(tmpPath, originalTerminationHandler):
+    staging, out = tmpPath / "staging", tmpPath / "out"
+    writeFile(staging, f"{MAIN}/Alpha.java", "a")
+    writeFile(out, f"{MAIN}/Balance.java", "old")
+
+    def terminated(command, cwd, timeout, env=None):
+        os.kill(os.getpid(), signal.SIGTERM)
+        return (0, "")
+
+    replicate.installTerminationHandler()
+    config = {"out": out, "skipCompile": False, "mavenArguments": [], "runner": terminated}
+    with pytest.raises(KeyboardInterrupt):
+        replicate.placeAndCompile(staging, [], config)
+    assert filesIn(out) == [out / MAIN / "Balance.java"]
+
+
+def test_onlyRunningAsAProgramInstallsTheTerminationHandler():
+    # subprocesso: o bloco __main__ não pode tocar o handler do processo do pytest
+    script = "\n".join([
+        "import sys, runpy, signal",
+        f"path = {str(TOOLS_DIR / 'replicate-all.py')!r}",
+        "runpy.run_path(path, run_name='replicate_all')",
+        "imported = signal.getsignal(signal.SIGTERM) is signal.SIG_DFL",
+        "sys.argv = [path, '--help']",
+        "try:",
+        "    runpy.run_path(path, run_name='__main__')",
+        "except SystemExit:",
+        "    pass",
+        "print(f'imported={imported} program={signal.getsignal(signal.SIGTERM) is signal.SIG_DFL}')",
+    ])
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO_ROOT, timeout=60)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[-1] == "imported=True program=False"
+
+
+def test_stagingCreationFailureOfOneResourceBecomesErrorAndTheNextOnesAreMeasured(sdk, tmpPath, monkeypatch):
+    realMkdtemp = replicate.tempfile.mkdtemp
+    attempts = []
+
+    def flaky(suffix=None, prefix=None, dir=None):
+        attempts.append(prefix)
+        if len(attempts) == 1:
+            raise OSError("disco cheio")
+        return realMkdtemp(suffix, prefix, dir)
+
+    monkeypatch.setattr(replicate.tempfile, "mkdtemp", flaky)
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    assert runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner) == 0
+    _, byName = entries(target)
+    assert byName["Alpha"]["strict"]["state"] == "erro"
+    assert "disco cheio" in byName["Alpha"]["strict"]["detail"]
+    assert byName["Delta"]["strict"]["state"] == "gerado"
+
+
 JAVA_REPO = REPO_ROOT / "_references/sdk-java"
 M2 = Path.home() / ".m2/repository"
 
@@ -662,7 +1155,7 @@ def gitStatus(path):
 @requiresJavaSdk
 @requiresPythonSdk
 def test_realTopologicalOrderPutsEveryResourceAfterAllItsDependencies():
-    names = replicate.schemaResources()
+    names = replicate.loadTool("parity-report").schemaResources()
     dependencies = replicate.dependenciesOf(source=JAVA_REPO, resources=names)
     order, stuck = replicate.topologicalOrder(dependencies=dependencies, requested=names)
     assert stuck == []
