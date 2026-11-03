@@ -1,4 +1,4 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
+.PHONY: help setup install validate check-bc generate clean test test-node test-python parity clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
 BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
 SDK_PYTHON ?=
@@ -147,6 +147,10 @@ check-bc: ## Detect breaking changes (Python)
 	@echo "$(BLUE)Checking for breaking changes...$(NC)"
 	python3 tools/breaking-change-detector.py --base "$(BC_BASE)"
 	@echo "$(GREEN)✅ Breaking change check passed$(NC)"
+
+parity: ## Mede a paridade do Java gerado contra o sdk-java (N de 42)
+	@echo "$(BLUE)Medindo paridade contra o sdk-java...$(NC)"
+	python3 tools/parity-report.py $(ARGS)
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)
 	@echo ""
