@@ -426,8 +426,10 @@ def realReplica(tmp_path_factory, request):
     request.getfixturevalue("javaRuntimeClasspath")
     out = tmp_path_factory.mktemp("replica") / "sdk"
     before = gitStatus(JAVA_REPO)
+    # sem `-o`: o cache que o CI popula (dependency:build-classpath) tem as dependências mas não os plugins
+    # do Maven, e o test-compile offline falha lá por falta de maven-source-plugin
     code = replica.main(
-        ["--out", str(out), "--maven-arg=-o", f"--maven-arg=-Dmaven.repo.local={M2}"],
+        ["--out", str(out), f"--maven-arg=-Dmaven.repo.local={M2}"],
     )
     return {"code": code, "out": out, "before": before}
 
