@@ -61,6 +61,7 @@ the App secret: the jobs that hold the token only run this repo's tools and pinn
 - `tools/coverage-report.py` — how far each resource is from full parity
 - `tools/parity-report.py` — scoreboard: how many generated Java resources pass the strict gate against sdk-java (`make parity`)
 - `tools/make-replica.py` — base de replicação: sdk-java sem os 42 recursos, `make replica`
+- `tools/replicate-all.py` — replica os recursos Java da spec num alvo sem eles e mede o que o pipeline gera, `make replicate`
 
 **Node.js 18+ locally, 22 in CI** — generation engine and JS tests
 - OpenAPI Generator CLI: npm wrapper `^2.41.0`, core JAR pinned to `7.0.1` in
@@ -110,6 +111,7 @@ make test             # jest + pytest
 make check            # validate + check-bc + test                  — alias: make check-all
 make parity           # N of 42 Java resources pass the strict gate (ARGS="--json out.json --jobs 2 Event")
 make replica          # replication base: sdk-java without the 42 resources, compiled (REPLICA_DIR=..., ARGS="--skip-compile"); `--out` must be empty or nonexistent.
+make replicate        # regenerate the 42 resources into a replica target and report what generates and compiles (REPLICATED_DIR=..., ARGS="--json out.json"); `--out` must be empty or nonexistent; takes ~4 min
 make generate         # generate with the paused Node config (needs Java 11+ JRE) — alias: make gen
 make generate-all     # generate all 7 configured languages, sequentially
 make status           # prerequisites, spec presence, generated count

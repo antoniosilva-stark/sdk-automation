@@ -412,6 +412,25 @@ def test_runCommandReturnsExitCodeAndOutput(tmpPath):
     assert "oi" in output
 
 
+def test_runCommandPassesEnvOnlyToTheChild(tmpPath, monkeypatch):
+    monkeypatch.delenv("REPLICA_ENV_PROBE", raising=False)
+    code, output = replica.runCommand(
+        command=["sh", "-c", "echo $REPLICA_ENV_PROBE"],
+        cwd=tmpPath,
+        timeout=10,
+        env={"REPLICA_ENV_PROBE": "so-no-filho"},
+    )
+    assert code == 0
+    assert output.strip() == "so-no-filho"
+    assert "REPLICA_ENV_PROBE" not in os.environ
+
+
+def test_runCommandWithoutEnvInheritsTheProcessEnvironment(tmpPath, monkeypatch):
+    monkeypatch.setenv("REPLICA_ENV_PROBE", "herdado")
+    code, output = replica.runCommand(command=["sh", "-c", "echo $REPLICA_ENV_PROBE"], cwd=tmpPath, timeout=10)
+    assert output.strip() == "herdado"
+
+
 JAVA_REPO = REPO_ROOT / "_references/sdk-java"
 EXPECTED_DEPENDENTS = {"TestTypeAdapter.java", "utils/MerchantPurchase.java", "utils/MerchantSession.java"}
 

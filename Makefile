@@ -1,10 +1,11 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python parity replica clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
+.PHONY: help setup install validate check-bc generate clean test test-node test-python parity replica replicate clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
 BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
 SDK_PYTHON ?=
 SDK_JAVA ?=
 SDK_NODE ?=
 REPLICA_DIR ?= generated/replica-sdk-java
+REPLICATED_DIR ?= generated/replicated-sdk-java
 SDK_REMOTE ?= https://github.com/starkbank
 
 # Commits que os testes comparam com os schemas versionados. Subir um pin e reextrair os
@@ -156,6 +157,10 @@ parity: ## Mede a paridade do Java gerado contra o sdk-java (N de 42)
 replica: ## Monta a base de replicacao: sdk-java sem os 42 recursos gerados, compilando (ARGS="--skip-compile")
 	@echo "$(BLUE)Montando a base de replicacao em $(REPLICA_DIR)...$(NC)"
 	python3 tools/make-replica.py --out $(REPLICA_DIR) $(ARGS)
+
+replicate: ## Replica os recursos Java num alvo sem eles e mede o que o pipeline gera (~4 min; --out vazio ou inexistente)
+	@echo "$(BLUE)Replicando os recursos em $(REPLICATED_DIR)...$(NC)"
+	python3 tools/replicate-all.py --out $(REPLICATED_DIR) $(ARGS)
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)
 	@echo ""
