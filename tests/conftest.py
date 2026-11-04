@@ -10,6 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS_DIR = REPO_ROOT / "tools"
+# o Maven ignora $HOME, então o cache local é apontado por aqui; o guarda barra Path.home() fora deste arquivo
+M2_REPOSITORY = Path.home() / ".m2/repository"
 
 
 WIDGET_OPERATIONS = '''
@@ -136,7 +138,7 @@ def resolvedJavaRuntime() -> tuple[str, str | None]:
         output = Path(work) / "classpath.txt"
         result = subprocess.run(
             ["mvn", "-o", "-q", "-B", "--no-transfer-progress", "-f", str(pom),
-             f"-Dmaven.repo.local={Path.home() / '.m2/repository'}",
+             f"-Dmaven.repo.local={M2_REPOSITORY}",
              "dependency:build-classpath", f"-Dmdep.outputFile={output}"],
             capture_output=True, text=True,
         )

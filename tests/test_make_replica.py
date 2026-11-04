@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import TOOLS_DIR, REPO_ROOT, requiresJavaSdk, requiresPythonSdk
+from conftest import TOOLS_DIR, REPO_ROOT, M2_REPOSITORY, requiresJavaSdk, requiresPythonSdk
 
 
 def loadMakeReplica():
@@ -413,7 +413,6 @@ def test_runCommandReturnsExitCodeAndOutput(tmpPath):
 
 
 JAVA_REPO = REPO_ROOT / "_references/sdk-java"
-M2 = Path.home() / ".m2/repository"
 EXPECTED_DEPENDENTS = {"TestTypeAdapter.java", "utils/MerchantPurchase.java", "utils/MerchantSession.java"}
 
 
@@ -429,7 +428,7 @@ def realReplica(tmp_path_factory, request):
     # sem `-o`: o cache que o CI popula (dependency:build-classpath) tem as dependências mas não os plugins
     # do Maven, e o test-compile offline falha lá por falta de maven-source-plugin
     code = replica.main(
-        ["--out", str(out), f"--maven-arg=-Dmaven.repo.local={M2}"],
+        ["--out", str(out), f"--maven-arg=-Dmaven.repo.local={M2_REPOSITORY}"],
     )
     return {"code": code, "out": out, "before": before}
 
