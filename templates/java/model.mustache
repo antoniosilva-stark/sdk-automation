@@ -1,8 +1,8 @@
 package {{package}};
 {{#models}}{{#model}}
 {{#usesGenerator}}import com.starkbank.utils.Generator;
-{{/usesGenerator}}import com.starkbank.utils.Resource;
-{{#usesRest}}import com.starkbank.utils.Rest;
+{{/usesGenerator}}{{^vendorExtensions.x-sdk-subresource}}import com.starkbank.utils.Resource;
+{{/vendorExtensions.x-sdk-subresource}}{{#usesRest}}import com.starkbank.utils.Rest;
 {{/usesRest}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
 {{/usesSubResource}}{{#vendorExtensions.x-sdk-log}}import com.starkbank.error.ErrorElement;
 {{/vendorExtensions.x-sdk-log}}
@@ -15,11 +15,11 @@ package {{package}};
 {{/usesObjectList}}{{/usesList}}import java.util.Map;
 
 
-public final class {{classname}} extends Resource {
+public final class {{classname}} extends {{#vendorExtensions.x-sdk-subresource}}SubResource{{/vendorExtensions.x-sdk-subresource}}{{^vendorExtensions.x-sdk-subresource}}Resource{{/vendorExtensions.x-sdk-subresource}} {
     /**
 {{#vendorExtensions.x-sdk-java-docs.dataDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.dataDoc}}     */
-    static ClassData data = new ClassData({{classname}}.class, "{{classname}}");
+    static {{#vendorExtensions.x-sdk-subresource}}SubResource.{{/vendorExtensions.x-sdk-subresource}}ClassData {{classDataName}} = new {{#vendorExtensions.x-sdk-subresource}}SubResource.{{/vendorExtensions.x-sdk-subresource}}ClassData({{classname}}.class, "{{classname}}");
 
 {{#vars}}{{^vendorExtensions.x-sdk-id}}    public {{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}};
 {{/vendorExtensions.x-sdk-id}}{{/vars}}
@@ -28,17 +28,17 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     */
     public {{classname}}({{#vars}}{{#vendorExtensions.x-sdk-id}}String id{{/vendorExtensions.x-sdk-id}}{{^vendorExtensions.x-sdk-id}}{{#isArray}}{{#items.isString}}String[]{{/items.isString}}{{^items.isString}}{{{dataType}}}{{/items.isString}}{{/isArray}}{{^isArray}}{{{dataType}}}{{/isArray}} {{name}}{{/vendorExtensions.x-sdk-id}}{{^-last}}, {{/-last}}{{/vars}}) {
-        super(id);
-{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = {{name}};
+{{^vendorExtensions.x-sdk-subresource}}        super(id);
+{{/vendorExtensions.x-sdk-subresource}}{{#vars}}{{^vendorExtensions.x-sdk-id}}        this.{{name}} = {{name}};
 {{/vendorExtensions.x-sdk-id}}{{/vars}}    }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     */
 {{#vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    @SuppressWarnings("unchecked")
-{{/vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    public {{classname}}(Map<String, Object> data) throws Exception {
-        super(null);
-        HashMap<String, Object> dataCopy = new HashMap<>(data);
+{{/vendorExtensions.x-sdk-java-code.ctorMapSuppress}}    public {{classname}}(Map<String, Object> {{classDataName}}) throws Exception {
+{{^vendorExtensions.x-sdk-subresource}}        super(null);
+{{/vendorExtensions.x-sdk-subresource}}        HashMap<String, Object> dataCopy = new HashMap<>({{classDataName}});
 {{#vendorExtensions.x-sdk-java-code.ctorMapBody}}        {{{.}}}
 {{/vendorExtensions.x-sdk-java-code.ctorMapBody}}
 
@@ -48,8 +48,8 @@ public final class {{classname}} extends Resource {
     }
 
     public {{classname}}() {
-        super(null);
-    }
+{{^vendorExtensions.x-sdk-subresource}}        super(null);
+{{/vendorExtensions.x-sdk-subresource}}    }
 {{#vendorExtensions.x-sdk-put}}
 
     /**
@@ -76,7 +76,7 @@ public final class {{classname}} extends Resource {
             }
             throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
         }
-        return Rest.put(data, {{classVarName}}List, user);
+        return Rest.put({{classDataName}}, {{classVarName}}List, user);
     }
 {{/vendorExtensions.x-sdk-put}}
 {{#vendorExtensions.x-sdk-get}}
@@ -92,7 +92,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.getUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.getUser}}     */
     public static {{classname}} get(String id, User user) throws Exception {
-        return Rest.getId(data, id, user);
+        return Rest.getId({{classDataName}}, id, user);
     }
 {{/vendorExtensions.x-sdk-get}}
 {{#vendorExtensions.x-sdk-query}}
@@ -101,7 +101,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.queryParamsUser}}     */
     public static Generator<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
-        return Rest.getStream(data, params, user);
+        return Rest.getStream({{classDataName}}, params, user);
     }
 
     /**
@@ -162,7 +162,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.pageParamsUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pageParamsUser}}     */
     public static Page page(Map<String, Object> params, User user) throws Exception {
-        com.starkcore.utils.Page page = Rest.getPage(data, params, user);
+        com.starkcore.utils.Page page = Rest.getPage({{classDataName}}, params, user);
         List<{{classname}}> {{classVarName}}s = new ArrayList<>();
         for (SubResource {{classVarName}}: page.entities) {
             {{classVarName}}s.add(({{classname}}) {{classVarName}});
@@ -196,7 +196,7 @@ public final class {{classname}} extends Resource {
             }
             throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
         }
-        return Rest.post(data, {{classVarName}}List, user);
+        return Rest.post({{classDataName}}, {{classVarName}}List, user);
     }
 {{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-update}}
@@ -212,7 +212,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.updateUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.updateUser}}     */
     public static {{classname}} update(String id, Map<String, Object> patchData, User user) throws Exception {
-        return Rest.patch(data, id, patchData, user);
+        return Rest.patch({{classDataName}}, id, patchData, user);
     }
 {{/vendorExtensions.x-sdk-update}}
 {{#vendorExtensions.x-sdk-pdf}}
@@ -228,7 +228,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.pdfUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pdfUser}}     */
     public static InputStream pdf(String id, User user) throws Exception {
-        return Rest.getContent(data, id, "pdf", user, new HashMap<>());
+        return Rest.getContent({{classDataName}}, id, "pdf", user, new HashMap<>());
     }
 {{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-delete}}
@@ -244,7 +244,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.deleteUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.deleteUser}}     */
     public static {{classname}} delete(String id, User user) throws Exception {
-        return Rest.delete(data, id, user);
+        return Rest.delete({{classDataName}}, id, user);
     }
 {{/vendorExtensions.x-sdk-delete}}
 {{#vendorExtensions.x-sdk-cancel}}
@@ -260,7 +260,7 @@ public final class {{classname}} extends Resource {
 {{#vendorExtensions.x-sdk-java-docs.cancelUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.cancelUser}}     */
     public static {{classname}} cancel(String id, User user) throws Exception {
-        return Rest.delete(data, id, user);
+        return Rest.delete({{classDataName}}, id, user);
     }
 {{/vendorExtensions.x-sdk-cancel}}
 {{#vendorExtensions.x-sdk-log}}

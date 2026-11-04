@@ -21,10 +21,12 @@ CODE_NO_PROVENANCE = "NO_PROVENANCE"
 CODE_NO_ID = "NO_ID"
 CODE_RESERVED_NAME = "RESERVED_NAME"
 RESERVED_PROPERTY_NAMES = {
-    "data": "o ClassData estático que o template emite",
     "dataCopy": "a cópia local que o construtor Map do template emite",
 }
 CODE_LOG_ENTITY = "LOG_ENTITY"
+CODE_SUBRESOURCE_UNSUPPORTED = "SUBRESOURCE_UNSUPPORTED"
+SUBRESOURCE_UNSUPPORTED_FLAGS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-update", "x-sdk-delete",
+                                 "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
@@ -150,6 +152,17 @@ def schemaLines(specPath: Path) -> dict[str, int]:
     return lines
 
 
+def subResourceReasons(readSchema: dict, readProps: dict) -> list[tuple[str, str]]:
+    """O ramo SubResource do template so tem query e page, sem id: o resto emitiria Java que nao compila."""
+    unsupported = [flag for flag in SUBRESOURCE_UNSUPPORTED_FLAGS if readSchema.get(flag)]
+    unsupported += ["propriedade com x-sdk-id"] if any(
+        isinstance(prop, dict) and prop.get("x-sdk-id") for prop in readProps.values()) else []
+    if not unsupported:
+        return []
+    return [(CODE_SUBRESOURCE_UNSUPPORTED,
+             f"x-sdk-subresource não suporta {', '.join(unsupported)}: o template só emite query e page, sem id")]
+
+
 def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, int]) -> ResourceReport:
     readSchema = resolveSchema(schemas.get(name), specPath)
     readProps = readSchema.get("properties") or {}
@@ -165,16 +178,18 @@ def inspectResource(name: str, schemas: dict, specPath: Path, lines: dict[str, i
                         f"{schemaFile.name} não declara de qual commit do sdk-python veio"))
     if not operations:
         reasons.append((CODE_NO_OPERATION, f"nenhuma operação declarada — use uma de {', '.join(OPERATION_FLAGS)}"))
-    if names and "id" not in names:
+    if names and "id" not in names and not readSchema.get("x-sdk-subresource"):
         reasons.append((CODE_NO_ID,
                         "schema sem 'id': o template emite 'extends Resource' com 'super(null)'"
-                        " e nao declara a primeira propriedade — no SDK real esses recursos sao"
-                        " SubResource, que ainda nao tem template"))
+                        " e nao declara a primeira propriedade — recursos SubResource (sem id no"
+                        " SDK real) devem declarar x-sdk-subresource"))
     if "id" in names and not (readProps["id"] or {}).get("x-sdk-id"):
         reasons.append((CODE_ID_MARKER, "'id' sem x-sdk-id: o construtor emitido não saberia onde ele cai"))
     if readSchema.get("x-sdk-log") and not readSchema.get("x-sdk-log-entity"):
         reasons.append((CODE_LOG_ENTITY,
                         "x-sdk-log sem x-sdk-log-entity: o template emitiria o campo e o construtor do Log sem nome"))
+    if readSchema.get("x-sdk-subresource"):
+        reasons.extend(subResourceReasons(readSchema, readProps))
     for reserved, collidesWith in RESERVED_PROPERTY_NAMES.items():
         if reserved in names:
             reasons.append((CODE_RESERVED_NAME, f"propriedade '{reserved}' colide com {collidesWith}"))

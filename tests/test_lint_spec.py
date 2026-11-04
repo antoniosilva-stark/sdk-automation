@@ -306,14 +306,14 @@ def test_schemaWithoutIdIsNotGeneratable(lintSpec, tmpPath):
     assert report.reasons[0][0] == lintSpec.CODE_NO_ID
 
 
-def test_theFourSubResourcesAreBlockedInTheRealSpec():
+def test_theFourSubResourcesPassTheLintInTheRealSpec():
     for resource in ("CardMethod", "Institution", "MerchantCategory", "MerchantCountry"):
         code, out = runTool("lint-spec.py", "--quiet", "--require", resource)
-        assert code == 1, f"{resource} passou no lint sem ter id"
-        assert "NO_ID" in out
+        assert code == 0, f"{resource} barrado: {out}"
+        assert "NO_ID" not in out
 
 
-@pytest.mark.parametrize("reserved", ("data", "dataCopy"))
+@pytest.mark.parametrize("reserved", ("dataCopy",))
 def test_propertyNamedLikeAnIdentifierOfTheEmittedConstructorIsReserved(lintSpec, tmpPath, reserved):
     schemas = {
         "Widget": {"x-sdk-get": True,
@@ -343,3 +343,70 @@ def test_logWithoutAnEntityIsNotGeneratable(lintSpec, tmpPath):
     schemas["Widget"]["x-sdk-log-entity"] = "widget"
     assert lintSpec.inspectResource("Widget", schemas, specPath, {}).generatable
 
+
+def test_subResourceWithoutIdIsGeneratableWhenFlagged(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"x-sdk-query": True, "x-sdk-subresource": True,
+                   "properties": {"code": {}, "name": {}, "number": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert report.generatable, report.reasons
+    assert report.operations == ["x-sdk-query"]
+
+
+def test_noIdMessageAsksSubResourcesToDeclareTheFlag(lintSpec, tmpPath):
+    schemas = {"Widget": {"x-sdk-query": True, "properties": {"code": {}, "name": {}, "number": {}}}}
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    message = dict(report.reasons)[lintSpec.CODE_NO_ID]
+    assert "x-sdk-subresource" in message
+    assert "ainda nao tem template" not in message
+
+
+def test_propertyNamedDataIsAllowedBecauseTheClassDataIsRenamed(lintSpec, tmpPath):
+    schemas = {
+        "Widget": {"x-sdk-get": True,
+                   "properties": {"amount": {}, "data": {}, "id": {"x-sdk-id": True}}},
+        "WidgetCreate": {"properties": {"amount": {}}},
+    }
+    specPath = _writeSpec(tmpPath, schemas)
+    report = lintSpec.inspectResource("Widget", schemas, specPath, {})
+
+    assert report.generatable, report.reasons
+
+
+UNSUPPORTED_ON_SUBRESOURCE = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-update", "x-sdk-delete",
+                              "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
+
+
+def _subResourceReport(lintSpec, tmpPath, flags: dict, properties: dict | None = None):
+    schemas = {
+        "Widget": {"x-sdk-query": True, "x-sdk-subresource": True, **flags,
+                   "properties": properties or {"code": {}, "name": {}, "number": {}}},
+    }
+    return lintSpec.inspectResource("Widget", schemas, _writeSpec(tmpPath, schemas), {})
+
+
+@pytest.mark.parametrize("flag", UNSUPPORTED_ON_SUBRESOURCE)
+def test_subResourceWithAnUnsupportedOperationIsBlocked(lintSpec, tmpPath, flag):
+    report = _subResourceReport(lintSpec, tmpPath, {flag: True, "x-sdk-log-entity": "widget"})
+
+    assert not report.generatable
+    messages = [message for code, message in report.reasons if code == lintSpec.CODE_SUBRESOURCE_UNSUPPORTED]
+    assert messages and flag in messages[0]
+    assert "query" in messages[0] and "page" in messages[0]
+
+
+def test_subResourceWithAnIdPropertyIsBlocked(lintSpec, tmpPath):
+    report = _subResourceReport(lintSpec, tmpPath, {}, {"id": {"x-sdk-id": True}, "name": {}, "number": {}})
+
+    assert lintSpec.CODE_SUBRESOURCE_UNSUPPORTED in [code for code, _ in report.reasons]
+
+
+def test_subResourceWithQueryAndPageIsGeneratable(lintSpec, tmpPath):
+    report = _subResourceReport(lintSpec, tmpPath, {"x-sdk-page": True})
+
+    assert report.generatable, report.reasons

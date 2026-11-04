@@ -347,6 +347,11 @@ def fieldLine(context: dict, field: dict, prefix: str = "") -> str:
     return f"{head}: {description}" if description else head
 
 
+def classDataName(propertyNames) -> str:
+    """O SDK real renomeia o ClassData estatico quando a classe tem uma propriedade `data`."""
+    return "classData" if "data" in propertyNames else "data"
+
+
 def ctorMapLines(context: dict, entity: dict) -> list:
     """`X(Map)`: parametros criaveis, depois os somente de retorno (que o construtor deixa null)."""
     className, profile = context["className"], context["profile"]
@@ -354,7 +359,13 @@ def ctorMapLines(context: dict, entity: dict) -> list:
     creatable = [fieldLine(context, field) for field in fields if not field["returnOnly"]]
     returnOnly = [fieldLine(context, field) for field in fields if field["returnOnly"]]
     dataText = profile["ctorMapText"].replace("{X}", className)
-    lines = entityHeader(context, entity) + ["<p>", profile["parametersTitle"], f"@param data {dataText}", *creatable]
+    paramName = classDataName(field["name"] for field in entity["fields"])
+    lines = entityHeader(context, entity) + [
+        "<p>",
+        profile["parametersTitle"],
+        f"@param {paramName} {dataText}",
+        *creatable,
+    ]
     lines += ["<p>", profile["attributesTitle"], *returnOnly] if returnOnly else []
     return lines + [profile["throwsLine"]]
 

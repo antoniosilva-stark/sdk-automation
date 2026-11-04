@@ -394,3 +394,17 @@ def test_aCreateWithoutReturnsOrReturningAListIsTheListForm(javaDocs):
 
 def test_aCreateReturningASingleObjectIsNotTheListForm(javaDocs):
     assert javaDocs.returnsList({"returns": ["Widget object with updated attributes"]}) is False
+
+
+def test_constructorMapDocParamFollowsTheClassDataName(javaDocs):
+    entity = {"fields": [{"name": "data", "type": "Map of String: Object", "description": "extra", "isId": False,
+                          "returnOnly": False}], "summary": "", "description": ""}
+    plain = {"fields": [{"name": "amount", "type": "integer", "description": "x", "isId": False,
+                         "returnOnly": False}], "summary": "", "description": ""}
+
+    assert javaDocs.classDataName(["amount", "data"]) == "classData"
+    assert javaDocs.classDataName(["amount"]) == "data"
+    renamed = javaDocs.renderDocs("Widget", {}, set(), entity)["lines"]["ctorMapDoc"]
+    kept = javaDocs.renderDocs("Widget", {}, set(), plain)["lines"]["ctorMapDoc"]
+    assert "@param classData map of properties for the creation of the Widget" in renamed
+    assert "@param data map of properties for the creation of the Widget" in kept

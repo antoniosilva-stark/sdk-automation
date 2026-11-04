@@ -970,3 +970,82 @@ def test_logDocsNeverAppearWithoutTheResourceInit(extractSchema, tmpPath):
 
     assert extractSchema.declaredDocs(root, "Widget") == {}
 
+
+def test_joinedNamesBecomeOneFieldEachWithTheSameType(extractSchema):
+    doc = "## Attributes (return-only):\n- updated / created [datetime.datetime]: update/creation datetimes."
+    _, fields = extractSchema.parseDocstring(doc)
+
+    assert [f["name"] for f in fields] == ["updated", "created"]
+    assert [f["schema"] for f in fields] == [{"type": "string", "format": "date-time"}] * 2
+    assert {f["description"] for f in fields} == {"update/creation datetimes."}
+    assert {f["section"] for f in fields} == {extractSchema.SECTION_READONLY}
+
+
+def test_joinedIdAndUuidKeepTheIdMarker(extractSchema, tmpPath):
+    body = WIDGET_MODULE.replace(
+        '- id [string]: unique id returned when Widget is created. ex: "5656"',
+        "- id / uuid [string]: unique ids returned when Widget is created.",
+    ).replace("created=None):", "created=None, uuid=None):")
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(_fakeSdk(tmpPath, body=body)))
+    assert code == 0, out
+
+    properties = yaml.safe_load(out)["components"]["schemas"]["Widget"]["properties"]
+
+    assert properties["id"]["x-sdk-id"] is True
+    assert properties["uuid"]["type"] == "string"
+    assert "x-sdk-id" not in properties["uuid"]
+
+
+def test_joinedNamesApplyTheSameFormatAndEnumRules(extractSchema):
+    doc = '## Parameters (optional):\n- kind / mode [string]: how it runs. Options: "fast", "slow"'
+    _, fields = extractSchema.parseDocstring(doc)
+
+    assert [f["schema"]["enum"] for f in fields] == [["fast", "slow"]] * 2
+
+
+def test_singleNameLineIsUnchanged(extractSchema):
+    _, fields = extractSchema.parseDocstring("## Parameters (required):\n- amount [integer]: amount in cents")
+
+    assert [(f["name"], f["pythonName"]) for f in fields] == [("amount", "amount")]
+
+
+def test_dynamicBrcodeSchemaCarriesIdUuidCreatedUpdated():
+    path = REPO_ROOT / "apis/schemas/dynamicbrcode.yaml"
+    schemas = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]["schemas"]
+    properties = schemas["DynamicBrcode"]["properties"]
+
+    assert {"id", "uuid", "created", "updated"} <= set(properties)
+    assert properties["id"]["x-sdk-id"] is True
+
+
+def test_subResourceClassEmitsTheSubresourceFlag(tmpPath):
+    body = WIDGET_MODULE.replace("class Widget(Resource):", "class Widget(SubResource):")
+    root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "query")
+
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
+
+    assert code == 0, out
+    assert yaml.safe_load(out) == {"x-sdk-query": True, "x-sdk-subresource": True}
+
+
+def test_subResourceImportedAsAttributeIsRecognised(extractSchema, tmpPath):
+    body = WIDGET_MODULE.replace("class Widget(Resource):", "class Widget(utils.SubResource):")
+    root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "query")
+
+    assert extractSchema.declaredOperations(root, "Widget")["subResource"] is True
+
+
+def test_resourceClassEmitsNoSubresourceFlag(tmpPath):
+    root = _withInit(_fakeSdk(tmpPath), "widget", "query")
+
+    code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
+
+    assert code == 0, out
+    assert yaml.safe_load(out) == {"x-sdk-query": True}
+
+
+def test_subresourceFlagDoesNotCountAsAnOperation(extractSchema, tmpPath):
+    body = WIDGET_MODULE.replace("class Widget(Resource):", "class Widget(SubResource):")
+    root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "parse")
+
+    assert extractSchema.declaredOperations(root, "Widget")["flags"] == ["x-sdk-data-only"]

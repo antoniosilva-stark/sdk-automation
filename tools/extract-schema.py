@@ -43,8 +43,10 @@ _OPERATION_SECTIONS = {
 _RETURN_SECTION = "## Return:"
 
 _ITEM_HEAD = re.compile(r"^-\s+(\w+)\s+\[")
-_FIELD = re.compile(r"^-\s+(\w+)\s+\[(.+)\]\s*:\s*(.*)$")
+_FIELD = re.compile(r"^-\s+(\w+(?:\s*/\s*\w+)*)\s+\[(.+)\]\s*:\s*(.*)$")
 _OPTIONS = re.compile(r"Options:\s*(.+)$")
+
+SUBRESOURCE_FLAG = "x-sdk-subresource"
 
 OPERATION_FLAGS = {
     "create": "x-sdk-create",
@@ -151,7 +153,28 @@ def declaredOperations(root: Path, resource: str) -> dict:
         flags = ["x-sdk-data-only"]
 
     return {"flags": flags, "unsupported": unsupported, "missingInit": False,
-            "logEntity": logEntity(root, resource)}
+            "logEntity": logEntity(root, resource), "subResource": inheritsSubResource(root, resource)}
+
+
+def inheritsSubResource(root: Path, resource: str) -> bool:
+    """Base por nome no AST: o import varia (`starkcore.utils.resource` ou `.subresource`)."""
+    source = modulePath(root, resource)
+    if not source.is_file():
+        return False
+
+    try:
+        node = resourceClass(source.read_text(encoding="utf-8"), resource)
+    except LookupError:
+        return False
+    return any(baseName(base) == "SubResource" for base in node.bases)
+
+
+def baseName(base: ast.expr) -> str | None:
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return None
 
 
 def logEntity(root: Path, resource: str) -> str | None:
@@ -360,6 +383,31 @@ def parseType(raw: str) -> dict:
     return resolved[0]
 
 
+def documentedField(pythonName: str, rawType: str, description: str, section: str) -> dict:
+    name = camelCase(pythonName)
+    schema = parseType(rawType)
+    if schema.get("type") == "integer":
+        fmt = integerFormat(name)
+        if fmt:
+            schema["format"] = fmt
+
+    options = declaredOptions(description)
+    if options and schema.get("type") == "string":
+        schema["enum"] = options
+
+    stringFmt = stringFormat(name)
+    if stringFmt and schema.get("type") == "string" and "format" not in schema:
+        schema["format"] = stringFmt
+
+    return {
+        "name": name,
+        "pythonName": pythonName,
+        "schema": schema,
+        "description": description.strip(),
+        "section": section,
+    }
+
+
 def parseDocstring(doc: str) -> tuple[str, list[dict]]:
     summary: list[str] = []
     fields: list[dict] = []
@@ -376,31 +424,10 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
                 summary.append(cleaned)
             continue
         match = _FIELD.match(line)
-        if match:
-            name = camelCase(match.group(1))
-            schema = parseType(match.group(2))
-            if schema.get("type") == "integer":
-                fmt = integerFormat(name)
-                if fmt:
-                    schema["format"] = fmt
-
-            options = declaredOptions(match.group(3))
-            if options and schema.get("type") == "string":
-                schema["enum"] = options
-
-            stringFmt = stringFormat(name)
-            if stringFmt and schema.get("type") == "string" and "format" not in schema:
-                schema["format"] = stringFmt
-
-            fields.append(
-                {
-                    "name": name,
-                    "pythonName": match.group(1),
-                    "schema": schema,
-                    "description": match.group(3).strip(),
-                    "section": section,
-                }
-            )
+        if not match:
+            continue
+        for pythonName in re.split(r"\s*/\s*", match.group(1)):
+            fields.append(documentedField(pythonName, match.group(2), match.group(3), section))
 
     return (" ".join(summary), fields)
 
@@ -617,6 +644,8 @@ def reportOperations(root: Path, resource: str) -> int:
 
     for flag in operations["flags"]:
         emit(f"{flag}: true")
+    if operations["subResource"]:
+        emit(f"{SUBRESOURCE_FLAG}: true")
     if operations["logEntity"]:
         emit(f"x-sdk-log-entity: {operations['logEntity']}")
     return 0

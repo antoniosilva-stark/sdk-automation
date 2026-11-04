@@ -88,3 +88,14 @@ def test_realReachMeetsTheDeliveryTarget():
     assert report["total"] == 43
     assert reachable == 42
     assert [entry["resource"] for entry in report["outOfReach"]] == ["request"]
+
+
+def test_subresourceFlagIsNotAnOperationSection(coverageReport, tmpPath):
+    template = tmpPath / "model.mustache"
+    section = "x-sdk-subresource"
+    template.write_text("{{#vendorExtensions.%s}}x{{/vendorExtensions.%s}}" % (section, section), encoding="utf-8")
+    flags = coverageReport.templateFlags(template)
+    extractSchema = coverageReport.loadTool("extract-schema")
+
+    assert "x-sdk-subresource" not in extractSchema.OPERATION_FLAGS.values()
+    assert flags & set(extractSchema.OPERATION_FLAGS.values()) == set()

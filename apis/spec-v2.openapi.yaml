@@ -3085,6 +3085,7 @@ components:
       $ref: ./schemas/verifiedaccount.yaml#/components/schemas/VerifiedAccountCreate
     MerchantCategory:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategory
     MerchantCategoryCreate:
       $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategoryCreate
@@ -3158,6 +3159,7 @@ components:
       $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallmentCreate
     MerchantCountry:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountry
     MerchantCountryCreate:
       $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountryCreate
@@ -3194,6 +3196,7 @@ components:
       $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequestCreate
     Institution:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/institution.yaml#/components/schemas/Institution
     InstitutionCreate:
       $ref: ./schemas/institution.yaml#/components/schemas/InstitutionCreate
@@ -3410,6 +3413,7 @@ components:
       $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPaymentCreate
     CardMethod:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethod
     CardMethodCreate:
       $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethodCreate

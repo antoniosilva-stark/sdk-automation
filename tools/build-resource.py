@@ -54,21 +54,21 @@ GENERATORS = {
 
 GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
 LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
-SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log")
+SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log", "x-sdk-subresource")
 REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
               "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
 
 
-def declaredFlags(resource: str) -> set[str]:
-    spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
+def declaredFlags(resource: str, specFile: str = SPEC_FILE) -> set[str]:
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
     schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
     return {key for key in schema if key.startswith("x-sdk-")}
 
 
-def hasObjectArray(resource: str) -> bool:
+def hasObjectArray(resource: str, specFile: str = SPEC_FILE) -> bool:
     """Array de objeto sai como List<Object> no template; array de string sai como String[]."""
     lint = loadTool("lint-spec")
-    specPath = REPO_ROOT / SPEC_FILE
+    specPath = REPO_ROOT / specFile
     schemas = (loadFast(specPath.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
     props = lint.schemaProps(schemas.get(resource), specPath)
     return any(
@@ -140,6 +140,16 @@ def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
     return properties
 
 
+def classDataProperty(resource: str, specFile: str = SPEC_FILE) -> str:
+    """Nome do ClassData estatico como propriedade do gerador: o Mustache le "false" como verdadeiro,
+    entao vai o nome e nao um booleano."""
+    lint = loadTool("lint-spec")
+    specPath = REPO_ROOT / specFile
+    schemas = (loadFast(specPath.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
+    names = lint.schemaProps(schemas.get(resource), specPath)
+    return f"classDataName={loadTool('java-docs').classDataName(names)}"
+
+
 def loadFast(text: str):
     """libyaml quando disponivel: a spec tem 7.131 linhas e o parser puro custa 138 ms."""
     return yaml.load(text, Loader=SafeLoader)
@@ -196,7 +206,10 @@ def plannedPairs(resource: str, language: str) -> dict[str, tuple[str, str]]:
 
 def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FILE) -> int:
     extra = list(run["extra"])
-    properties = javaImports(declaredFlags(resource), hasObjectArray(resource)) if run["generator"] == "java" else []
+    properties = []
+    if run["generator"] == "java":
+        properties = javaImports(declaredFlags(resource, specFile), hasObjectArray(resource, specFile))
+        properties.append(classDataProperty(resource, specFile))
     if properties:
         extra.extend(["--additional-properties", ",".join(properties)])
 
