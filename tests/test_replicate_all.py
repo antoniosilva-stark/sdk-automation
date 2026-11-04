@@ -9,7 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from conftest import TOOLS_DIR, REPO_ROOT, runWithClosedStdout, requiresGenerator, requiresJavaSdk, requiresPythonSdk
+from conftest import (
+    TOOLS_DIR,
+    REPO_ROOT,
+    M2_REPOSITORY,
+    runWithClosedStdout,
+    requiresGenerator,
+    requiresJavaSdk,
+    requiresPythonSdk,
+)
 
 
 def loadReplicateAll():
@@ -1259,7 +1267,6 @@ def test_stagingCreationFailureOfOneResourceBecomesErrorAndTheNextOnesAreMeasure
 
 
 JAVA_REPO = REPO_ROOT / "_references/sdk-java"
-M2 = Path.home() / ".m2/repository"
 
 
 def gitStatus(path):
@@ -1294,7 +1301,7 @@ def realReplication(tmp_path_factory, request):
     code = replicate.main([
         "--out", str(out),
         "--json", str(report),
-        f"--maven-arg=-Dmaven.repo.local={M2}",
+        f"--maven-arg=-Dmaven.repo.local={M2_REPOSITORY}",
         "Transaction", "DictKey", "SplitProfile",
     ])
     return {"code": code, "out": out, "report": report, "before": before}
@@ -1322,7 +1329,7 @@ def test_realReplicationTargetCompilesAndReferenceStaysUntouched(realReplication
     assert realReplication["before"] == ""
     assert gitStatus(JAVA_REPO) == ""
     result = subprocess.run(
-        ["mvn", "-q", "-B", "--no-transfer-progress", f"-Dmaven.repo.local={M2}", "test-compile"],
+        ["mvn", "-q", "-B", "--no-transfer-progress", f"-Dmaven.repo.local={M2_REPOSITORY}", "test-compile"],
         capture_output=True, text=True, cwd=realReplication["out"],
     )
     assert result.returncode == 0, result.stdout[-2000:]
