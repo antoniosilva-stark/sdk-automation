@@ -1,4 +1,4 @@
-.PHONY: help setup install validate check-bc generate clean test test-node test-python parity replica replicate clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
+.PHONY: help setup install validate check-bc generate clean test test-node test-python parity replica replicate compare clone-sdk-ref clone-sdk-ref-pinned refresh-sdk-ref reference
 
 BC_BASE ?= $(shell git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/development)
 SDK_PYTHON ?=
@@ -163,6 +163,10 @@ replicate: ## Replica os recursos Java num alvo sem eles e mede o que o pipeline
 	@echo "$(BLUE)Replicando os recursos em $(REPLICATED_DIR)...$(NC)"
 	@mkdir -p $(dir $(REPLICATED_DIR))
 	python3 tools/replicate-all.py --out $(REPLICATED_DIR) $(ARGS)
+
+compare: ## Compara o Java gerado pelo make replicate com o sdk-java real (le REPLICATED_DIR; nada e escrito)
+	@echo "$(BLUE)Comparando $(REPLICATED_DIR) com o sdk-java real...$(NC)"
+	python3 tools/compare-with-real.py --generated $(REPLICATED_DIR) $(ARGS)
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)
 	@echo ""
