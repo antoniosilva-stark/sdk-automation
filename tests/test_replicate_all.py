@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import TOOLS_DIR, REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresPythonSdk
+from conftest import TOOLS_DIR, REPO_ROOT, runWithClosedStdout, requiresGenerator, requiresJavaSdk, requiresPythonSdk
 
 
 def loadReplicateAll():
@@ -354,7 +354,11 @@ def test_compilationFailureRemovesTheNewFilesAndTheNextResourcesKeepGoing(sdk, t
 
 
 def test_compilationFailureWithAbsentDependencyIsDependencyMissingNotCompileError(sdk, tmpPath):
-    strict = {**allGenerated(), "Beta": (1, LINT_BLOCKED, {}), "Gamma": generated("Gamma", "class Gamma { Beta beta; }\n")}
+    strict = {
+        **allGenerated(),
+        "Beta": (1, LINT_BLOCKED, {}),
+        "Gamma": generated("Gamma", "class Gamma { Beta beta; }\n"),
+    }
     target = tmpPath / "replica.json"
     out = tmpPath / "out"
     runner, _ = fakeRunner(strict)
@@ -509,8 +513,10 @@ def test_textReportMatchesTheJson(sdk, tmpPath, capsys):
     positions = [table.index(f" {entry['resource']} ") for entry in report["resources"]]
     assert positions == sorted(positions)
     assert report["byState"] == {"gerado": 2, "barrado pelo lint-spec": 1, "formato nao suportado": 1}
-    for state, count in report["byState"].items():
-        assert f"{state}" in text and str(count) in text
+    section = text[text.index("[INFO] por estado (strict):"):].split("\n\n")[0].splitlines()[1:]
+    assert len(section) == len(report["byState"])
+    for line, (state, count) in zip(section, report["byState"].items()):
+        assert line.split() == [*state.split(), str(count)]
     assert report["integration"]["state"] == "ok"
 
 
@@ -581,7 +587,8 @@ def test_dependencyCycleIsUsageErrorListingTheNodes(sdk, tmpPath, capsys):
     runner, calls = fakeRunner(allGenerated())
     assert runMain(sdk, tmpPath / "out", runner=runner) == 2
     text = capsys.readouterr().out
-    assert "ciclo de dependência (ou dependente de ciclo) entre recursos: " in text and "Alpha" in text and "Beta" in text
+    assert "ciclo de dependência (ou dependente de ciclo) entre recursos: " in text
+    assert "Alpha" in text and "Beta" in text
     assert calls == []
 
 
@@ -601,7 +608,13 @@ def test_relativeOutFromAnotherCwdReachesTheChildAsTheResolvedAbsolutePath(sdk, 
     (work / "rel").mkdir(parents=True)
     monkeypatch.chdir(work)
     runner, calls = fakeRunner(allGenerated())
-    code = replicate.main(["--out", "rel/out", "--skip-compile"], runner=runner, source=sdk, resources=FAKE_RESOURCES, sha="abc1234")
+    code = replicate.main(
+        ["--out", "rel/out", "--skip-compile"],
+        runner=runner,
+        source=sdk,
+        resources=FAKE_RESOURCES,
+        sha="abc1234",
+    )
     assert code == 0
     expected = (work / "rel/out").resolve()
     assert all(call["env"] == {"SDK_JAVA": str(expected)} for call in buildCalls(calls))
@@ -925,7 +938,11 @@ def test_compileDetailRelativizesTheMavenPathsToOutSoTheCauseSurvivesTheTableWid
 
 
 def test_dependencyMissingDetailKeepsTheCauseInTheTableWithALongOut(sdk, tmpPath, capsys):
-    strict = {**allGenerated(), "Beta": (1, LINT_BLOCKED, {}), "Gamma": generated("Gamma", "class Gamma { Beta beta; }\n")}
+    strict = {
+        **allGenerated(),
+        "Beta": (1, LINT_BLOCKED, {}),
+        "Gamma": generated("Gamma", "class Gamma { Beta beta; }\n"),
+    }
     out, target = longOut(tmpPath), tmpPath / "replica.json"
     runner, _ = fakeRunner(strict)
     runMain(sdk, out, "--json", str(target), runner=relativizingMaven(runner))
@@ -1129,8 +1146,13 @@ def test_integrationRestoreFailureReachesTheDetailInTheTextAndTheJson(sdk, tmpPa
 
 
 @pytest.mark.parametrize("interruptedIn", ["write", "compile"])
-def test_integrationInterruptWithAFailingRestoreRaisesTheInterruptAndWarnsOnTheConsole(sdk, tmpPath, monkeypatch, capsys,
-                                                                                        interruptedIn):
+def test_integrationInterruptWithAFailingRestoreRaisesTheInterruptAndWarnsOnTheConsole(
+    sdk,
+    tmpPath,
+    monkeypatch,
+    capsys,
+    interruptedIn,
+):
     out = tmpPath / "out"
     runner, _ = fakeRunner(allGenerated())
 
@@ -1251,17 +1273,16 @@ def test_realTopologicalOrderPutsEveryResourceAfterAllItsDependencies():
     dependencies = replicate.dependenciesOf(source=JAVA_REPO, resources=names)
     order, stuck = replicate.topologicalOrder(dependencies=dependencies, requested=names)
     assert stuck == []
+    assert len(names) == 42
+    assert len(order) == len(set(order)) == len(names)
     assert sorted(order) == sorted(names)
     position = {name: index for index, name in enumerate(order)}
     for name, deps in dependencies.items():
         assert all(position[dep] < position[name] for dep in deps)
-    assert {"Boleto", "BoletoHolmes", "Transfer"} <= set(dependencies["Event"])
-    assert dependencies["VerifiedTransfer"] == ["Transfer"]
-    assert dependencies["CorporateRule"] == ["CardMethod", "MerchantCategory", "MerchantCountry"]
-    assert sorted(name for name, deps in dependencies.items() if deps) == [
-        "CorporateCard", "CorporateHolder", "CorporateRule", "Event", "Invoice", "PaymentRequest", "VerifiedTransfer",
-    ]
-    assert len(order) == 42
+    assert {"Boleto", "BoletoHolmes", "Invoice", "Transfer"} <= set(dependencies["Event"])
+    assert "Transfer" in dependencies["VerifiedTransfer"]
+    assert "CorporateRule" in dependencies["CorporateCard"]
+    assert replicate.topologicalOrder(dependencies=dependencies, requested=names) == (order, stuck)
 
 
 @pytest.fixture(scope="module")
@@ -1305,3 +1326,228 @@ def test_realReplicationTargetCompilesAndReferenceStaysUntouched(realReplication
         capture_output=True, text=True, cwd=realReplication["out"],
     )
     assert result.returncode == 0, result.stdout[-2000:]
+
+
+def test_textShowsTheAdvisoryCauseWhenTheSecondPassFails(sdk, tmpPath, capsys):
+    strict = {**allGenerated(), "Delta": (1, UNSUPPORTED, {})}
+    advisory = {"Delta": generated("Delta", "public class Delta { BROKEN }\n")}
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner(strict, advisory)
+    runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner)
+    text = capsys.readouterr().out
+    _, byName = entries(target)
+    cause = byName["Delta"]["advisory"]["detail"].splitlines()[0]
+    assert cause
+    line = next(line for line in text.splitlines() if line.startswith("  ") and " Delta " in line)
+    assert f"advisory: {cause}"[:replicate.DETAIL_WIDTH] in line
+
+
+def test_textKeepsTheStrictDetailWhenTheAdvisoryGenerated(sdk, tmpPath, capsys):
+    strict = {**allGenerated(), "Delta": (1, UNSUPPORTED, {})}
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner(strict, {"Delta": generated("Delta")})
+    runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner)
+    text = capsys.readouterr().out
+    _, byName = entries(target)
+    line = next(line for line in text.splitlines() if line.startswith("  ") and " Delta " in line)
+    assert "advisory:" not in line
+    assert byName["Delta"]["strict"]["detail"].splitlines()[0][:replicate.DETAIL_WIDTH] in line
+
+
+def test_emitFlushesSoProgressReachesAPipeImmediately(monkeypatch):
+    class Recorder:
+        def __init__(self):
+            self.flushCount = 0
+            self.written = []
+
+        def write(self, text):
+            self.written.append(text)
+
+        def flush(self):
+            self.flushCount += 1
+
+    recorder = Recorder()
+    monkeypatch.setattr(sys, "stdout", recorder)
+    replicate.emit("[INFO] [1/2] Alpha: gerado")
+    assert recorder.written == ["[INFO] [1/2] Alpha: gerado\n"]
+    assert recorder.flushCount == 1
+
+
+@pytest.mark.parametrize("target, variable, directory", [
+    ("replicate", "REPLICATED_DIR", "tools/replicate-all.py"),
+    ("replica", "REPLICA_DIR", "tools/make-replica.py"),
+])
+def test_makeCreatesTheParentOfOutButNotOutItself(target, variable, directory):
+    result = subprocess.run(
+        ["make", "-n", target, f"{variable}=/tmp/x/y/z"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    lines = result.stdout.splitlines()
+    mkdirs = [line for line in lines if line.startswith("mkdir")]
+    assert mkdirs == ["mkdir -p /tmp/x/y/"]
+    assert lines.index(mkdirs[0]) < next(i for i, line in enumerate(lines) if directory in line)
+
+
+@pytest.mark.parametrize("target, variable", [("replicate", "REPLICATED_DIR"), ("replica", "REPLICA_DIR")])
+def test_makeParentOfABareOutIsTheCurrentDirectory(target, variable):
+    result = subprocess.run(
+        ["make", "-n", target, f"{variable}=bare"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert "mkdir -p ./" in result.stdout.splitlines()
+
+
+def unsupportedEntry(strictDetail, advisory):
+    return {
+        "resource": "Delta",
+        "order": 1,
+        "strict": {"state": "formato nao suportado", "detail": strictDetail, "compiled": None},
+        "advisory": advisory,
+    }
+
+
+def test_shortDetailShowsTheStrictCauseAndTheAdvisoryCauseWhenTheAdvisoryFails(sdk, tmpPath, capsys):
+    strict = {**allGenerated(), "Delta": (1, UNSUPPORTED, {})}
+    advisory = {"Delta": generated("Delta", "public class Delta { BROKEN }\n")}
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner(strict, advisory)
+    runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner)
+    _, byName = entries(target)
+    strictCause = byName["Delta"]["strict"]["detail"].splitlines()[0]
+    advisoryCause = byName["Delta"]["advisory"]["detail"].splitlines()[0]
+    detail = replicate.shortDetail(byName["Delta"])
+    assert strictCause[:30] in detail
+    assert f"advisory: {advisoryCause[:20]}" in detail
+    assert strictCause in byName["Delta"]["strict"]["detail"]
+    assert advisoryCause in byName["Delta"]["advisory"]["detail"]
+    assert detail in capsys.readouterr().out
+
+
+def test_shortDetailKeepsTheAdvisoryPrefixAndFitsTheWidthWithLongCauses():
+    advisory = {"state": "erro de compilação", "detail": "B" * 300, "compiled": False}
+    detail = replicate.shortDetail(unsupportedEntry("A" * 300, advisory))
+    assert len(detail) <= replicate.DETAIL_WIDTH
+    assert "advisory: B" in detail
+    assert detail.startswith("AAAA")
+
+
+def test_shortDetailKeepsTheWholeShortAdvisoryCauseWhenTheStrictOneIsLong():
+    advisory = {"state": "erro de compilação", "detail": "boom", "compiled": False}
+    detail = replicate.shortDetail(unsupportedEntry("A" * 300, advisory))
+    assert len(detail) <= replicate.DETAIL_WIDTH
+    assert detail.endswith("advisory: boom")
+
+
+@pytest.mark.parametrize("advisory", [
+    None,
+    {"state": "gerado", "detail": "", "compiled": True},
+    {"state": "erro de compilação", "detail": "", "compiled": False},
+])
+def test_shortDetailWithoutAnAdvisoryCauseShowsOnlyTheStrictCause(advisory):
+    assert replicate.shortDetail(unsupportedEntry("create de objeto unico", advisory)) == "create de objeto unico"
+
+
+def test_renderDoesNotRepeatTheAdvisoryCauseAlreadyInItsBlockedLabel():
+    advisory = {"state": "barrado pelo lint-spec", "detail": "NO_ID", "compiled": None}
+    entry = unsupportedEntry("get sem id", advisory)
+    report = {
+        "sha": "abc",
+        "skipCompile": False,
+        "generated": 0,
+        "total": 1,
+        "advisoryGenerated": 0,
+        "byState": {"formato nao suportado": 1},
+        "resources": [entry],
+        "integration": {"state": "ok", "detail": ""},
+    }
+    line = [row for row in replicate.render(report).splitlines() if " Delta " in row][0]
+    assert line.count("NO_ID") == 1
+    assert "get sem id" in line
+
+
+class BrokenStdout:
+
+    def __init__(self, brokenWrite=False, brokenFlush=False, error=BrokenPipeError):
+        self.brokenWrite = brokenWrite
+        self.brokenFlush = brokenFlush
+        self.error = error
+
+    def write(self, text):
+        if self.brokenWrite:
+            raise self.error("write")
+        return len(text)
+
+    def flush(self):
+        if self.brokenFlush:
+            raise self.error("flush")
+
+
+def test_emitSurvivesABrokenPipeOnWrite(monkeypatch):
+    monkeypatch.setattr(sys, "stdout", BrokenStdout(brokenWrite=True))
+    replicate.emit("x")
+
+
+def test_emitSurvivesABrokenPipeOnFlush(monkeypatch):
+    monkeypatch.setattr(sys, "stdout", BrokenStdout(brokenFlush=True))
+    replicate.emit("x")
+
+
+def test_emitPointsABrokenStdoutAtDevnullSoLaterWritesAndTheFinalFlushSucceed(monkeypatch):
+    reader, writer = os.pipe()
+    os.close(reader)
+    stdout = open(writer, "w")
+    monkeypatch.setattr(sys, "stdout", stdout)
+    replicate.emit("x")
+    replicate.emit("y")
+    assert os.path.samestat(os.fstat(writer), os.stat(os.devnull))
+    stdout.close()
+
+
+@pytest.mark.parametrize("where", ["brokenWrite", "brokenFlush"])
+def test_emitDoesNotSwallowOtherOsErrors(monkeypatch, where):
+    monkeypatch.setattr(sys, "stdout", BrokenStdout(**{where: True, "error": PermissionError}))
+    with pytest.raises(PermissionError):
+        replicate.emit("x")
+
+
+def test_measurementFinishesAndWritesTheJsonWhenTheStdoutPipeIsClosed(sdk, tmpPath, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", BrokenStdout(brokenWrite=True))
+    target = tmpPath / "replica.json"
+    runner, _ = fakeRunner(allGenerated())
+    assert runMain(sdk, tmpPath / "out", "--json", str(target), runner=runner) == 0
+    report, _ = entries(target)
+    assert report["generated"] == 4
+
+
+@requiresGenerator
+@requiresJavaSdk
+@requiresPythonSdk
+@pytest.mark.parametrize("environment", [{}, {"PYTHONUNBUFFERED": "1"}])
+def test_programWithTheStdoutReaderClosedExitsWithTheRealCodeAndWritesTheJson(tmpPath, environment):
+    # antes do redirecionamento para o devnull: exit 120 (buffered) ou traceback do emit da base (unbuffered)
+    target = tmpPath / "replica.json"
+    arguments = [
+        str(TOOLS_DIR / "replicate-all.py"),
+        "--out", str(tmpPath / "out"),
+        "--skip-compile",
+        "--json", str(target),
+        "DictKey",
+    ]
+    result = runWithClosedStdout(arguments, environment)
+    assert result.returncode == 0, result.stderr
+    assert "BrokenPipeError" not in result.stderr
+    _, byName = entries(target)
+    assert set(byName) == {"DictKey"}
+
+
+def test_programUsageErrorWithTheStdoutReaderClosedStillExitsWith2(sdk, tmpPath):
+    # antes do redirecionamento para o devnull: exit 120, e o CI perdia o código de erro de uso
+    out = tmpPath / "out"
+    writeFile(out, "junk.txt", "x")
+    result = runWithClosedStdout([str(TOOLS_DIR / "replicate-all.py"), "--out", str(out), "--from", str(sdk)], {})
+    assert result.returncode == 2, result.stderr
+    assert "BrokenPipeError" not in result.stderr

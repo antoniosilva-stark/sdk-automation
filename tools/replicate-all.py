@@ -41,16 +41,16 @@ _GATE_LINE = re.compile(r"^\s*\[ERROR\] assert-generated \S+ \(exit", re.MULTILI
 _GAP_LINE = re.compile(r"^\s*\[ERROR\] .*? CONTRACT_GAP (\w+) (.+)$", re.MULTILINE)
 
 
-def emit(text: str) -> None:
-    sys.stdout.write(f"{text}\n")
-
-
 @functools.cache
 def loadTool(name: str):
     spec = spec_from_file_location(name.replace("-", "_"), TOOLS_DIR / f"{name}.py")
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+# o mesmo da base: com o leitor do pipe fechado (| head) a medição de minutos segue com o código real
+emit = loadTool("make-replica").emit
 
 
 def dependenciesOf(source: Path, resources: list[str]) -> dict[str, list[str]]:
@@ -98,7 +98,11 @@ def gateDetail(output: str) -> str:
     gaps = _GAP_LINE.findall(output)
     if gaps:
         return "; ".join(f"{kind} {text}" for kind, text in gaps[:GATE_GAP_LINES])
-    errors = [line.strip() for line in output.splitlines() if line.lstrip().startswith("[ERROR]") and not _GATE_LINE.match(line)]
+    errors = [
+        line.strip()
+        for line in output.splitlines()
+        if line.lstrip().startswith("[ERROR]") and not _GATE_LINE.match(line)
+    ]
     return errors[0] if errors else ""
 
 
@@ -216,7 +220,11 @@ def placedOutcome(problem: str | None, kept: bool, errors: list[str], dependenci
         return outcome(STATE_GENERATED)
     if kept:
         return {**outcome(STATE_GENERATED), "compiled": True}
-    missing = [dependency for dependency in dependencies if not (out / loadTool("make-replica").MAIN_PACKAGE / f"{dependency}.java").is_file()]
+    missing = [
+        dependency
+        for dependency in dependencies
+        if not (out / loadTool("make-replica").MAIN_PACKAGE / f"{dependency}.java").is_file()
+    ]
     if missing:
         detail = ", ".join(missing) + (f"; mvn: {errors[0]}" if errors else "")
         return {**outcome(STATE_DEPENDENCY, detail), "compiled": False}
@@ -271,7 +279,11 @@ def swapGsonAdapters(source: Path, config: dict, pattern: re.Pattern) -> dict:
     if not real.is_file():
         return {"state": "pulada", "detail": "origem sem GsonAdapters"}
     mainPackage = config["out"] / replica.MAIN_PACKAGE
-    missing = [name for name in replica.referencedNames(replica.readText(real), pattern) if not (mainPackage / f"{name}.java").is_file()]
+    missing = [
+        name
+        for name in replica.referencedNames(replica.readText(real), pattern)
+        if not (mainPackage / f"{name}.java").is_file()
+    ]
     if missing:
         return {"state": "pulada", "detail": f"faltam {', '.join(missing)}"}
     if config["skipCompile"]:
@@ -289,7 +301,8 @@ def swapGsonAdapters(source: Path, config: dict, pattern: re.Pattern) -> dict:
         # tratado aqui e não no integrate: o aviso de restauração que falhou precisa entrar no mesmo detalhe
         errors = [f"{type(error).__name__}: {error}"]
     finally:
-        # também em Ctrl-C, exceção ou escrita que falha pela metade: o alvo não pode ficar com um GsonAdapters que não compila
+        # também em Ctrl-C, exceção ou escrita que falha pela metade:
+        # o alvo não pode ficar com um GsonAdapters que não compila
         if adapted is not None and not compiled:
             restoreWarnings = restoreAdapted(target, adapted)
     if compiled:
@@ -333,12 +346,26 @@ def stateLabel(result: dict | None) -> str:
     return result["state"]
 
 
+def causeOf(result: dict | None) -> str:
+    detail = result["detail"] if result else ""
+    if not detail or stateLabel(result) != result["state"]:
+        return ""
+    return detail.splitlines()[0]
+
+
 def shortDetail(entry: dict) -> str:
-    for result in (entry["strict"], entry["advisory"]):
-        detail = result["detail"] if result else ""
-        if detail and stateLabel(result) == result["state"]:
-            return detail.splitlines()[0][:DETAIL_WIDTH]
-    return ""
+    strictCause = causeOf(entry["strict"])
+    advisoryCause = causeOf(entry["advisory"])
+    if not advisoryCause or entry["advisory"]["state"] == STATE_GENERATED:
+        return strictCause[:DETAIL_WIDTH]
+    prefix = "advisory: "
+    if not strictCause:
+        return f"{prefix}{advisoryCause}"[:DETAIL_WIDTH]
+    # o strict ocupa o que o advisory não usa (metade no mínimo): o prefixo e a causa do advisory nunca somem
+    room = DETAIL_WIDTH - len(" | ") - len(prefix)
+    strictRoom = max(room // 2, room - len(advisoryCause))
+    strictPart = strictCause[:strictRoom]
+    return f"{strictPart} | {prefix}{advisoryCause[:room - len(strictPart)]}"
 
 
 def integrationLabel(integration: dict) -> str:
@@ -419,13 +446,26 @@ def usageIssue(args, out: Path, jsonPath: Path | None, source: Path | None, know
 
 
 def parseArguments(argv: list[str] | None):
-    parser = argparse.ArgumentParser(description="Replica os recursos Java da spec num alvo sem eles e mede o que o pipeline gera")
+    parser = argparse.ArgumentParser(
+        description="Replica os recursos Java da spec num alvo sem eles e mede o que o pipeline gera",
+    )
     parser.add_argument("resources", nargs="*", help="recursos a replicar (padrão: todos os schemas)")
     parser.add_argument("--out", required=True, help="diretório da réplica (inexistente ou vazio); fica ao final")
-    parser.add_argument("--from", dest="source", default=None, help="raiz do sdk-java (padrão: SDK_JAVA ou _references/sdk-java)")
+    parser.add_argument(
+        "--from",
+        dest="source",
+        default=None,
+        help="raiz do sdk-java (padrão: SDK_JAVA ou _references/sdk-java)",
+    )
     parser.add_argument("--json", dest="jsonPath", default=None, help="grava o relatório em JSON neste arquivo")
     parser.add_argument("--skip-compile", dest="skipCompile", action="store_true", help="não roda o mvn test-compile")
-    parser.add_argument("--maven-arg", dest="mavenArguments", action="append", default=[], help="repassado ao mvn antes do goal (repetível)")
+    parser.add_argument(
+        "--maven-arg",
+        dest="mavenArguments",
+        action="append",
+        default=[],
+        help="repassado ao mvn antes do goal (repetível)",
+    )
     return parser.parse_args(argv)
 
 

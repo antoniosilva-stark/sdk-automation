@@ -197,6 +197,25 @@ def runTool(fileName: str, *args: str, env: dict | None = None) -> tuple[int, st
     return result.returncode, result.stdout
 
 
+def runWithClosedStdout(arguments, environment):
+    # o leitor fecha antes de o filho nascer: toda escrita no stdout dá EPIPE, sem corrida com o `| head`
+    reader, writer = os.pipe()
+    os.close(reader)
+    inherited = {key: value for key, value in os.environ.items() if key != "PYTHONUNBUFFERED"}
+    try:
+        return subprocess.run(
+            [sys.executable, *arguments],
+            stdout=writer,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=REPO_ROOT,
+            env={**inherited, **environment},
+            timeout=300,
+        )
+    finally:
+        os.close(writer)
+
+
 @pytest.fixture
 def tmpPath(request):
     return request.getfixturevalue("tmp_path")

@@ -156,10 +156,12 @@ parity: ## Mede a paridade do Java gerado contra o sdk-java (N de 42)
 
 replica: ## Monta a base de replicacao: sdk-java sem os 42 recursos gerados, compilando (ARGS="--skip-compile")
 	@echo "$(BLUE)Montando a base de replicacao em $(REPLICA_DIR)...$(NC)"
+	@mkdir -p $(dir $(REPLICA_DIR))
 	python3 tools/make-replica.py --out $(REPLICA_DIR) $(ARGS)
 
 replicate: ## Replica os recursos Java num alvo sem eles e mede o que o pipeline gera (~4 min; --out vazio ou inexistente)
 	@echo "$(BLUE)Replicando os recursos em $(REPLICATED_DIR)...$(NC)"
+	@mkdir -p $(dir $(REPLICATED_DIR))
 	python3 tools/replicate-all.py --out $(REPLICATED_DIR) $(ARGS)
 
 check: validate check-bc test ## Run all checks (validate + breaking-changes + tests)

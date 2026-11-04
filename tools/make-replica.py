@@ -22,7 +22,24 @@ KILL_DRAIN_SECONDS = 5
 
 
 def emit(text: str) -> None:
-    sys.stdout.write(f"{text}\n")
+    try:
+        sys.stdout.write(f"{text}\n")
+        # em pipe (CI, tee) o Python faz block-buffering: sem flush o progresso só aparece no fim
+        sys.stdout.flush()
+    except BrokenPipeError:
+        silenceStdout()
+
+
+def silenceStdout() -> None:
+    # a saída é só informativa (| head): o texto pendente e o que vier depois vão para o devnull, senão o flush
+    # final do interpretador falha de novo e força o exit 120 no lugar do código real
+    try:
+        descriptor = sys.stdout.fileno()
+    except (AttributeError, ValueError):
+        return
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, descriptor)
+    os.close(devnull)
 
 
 @functools.cache
