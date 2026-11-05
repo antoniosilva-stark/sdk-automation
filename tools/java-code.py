@@ -67,7 +67,8 @@ def renderJavaCode(
 
 def renderLog(resource: str, shape: dict) -> dict:
     """Nomes do Log interno prontos para o Mustache. `short` e como o real escreve dentro do proprio Log; o `new Page`
-    qualificado nao se escreve (`Page` resolve para a Page do Log, a mesma classe)."""
+    qualificado nao se escreve (`Page` resolve para a Page do Log, a mesma classe). `classData` e um eixo proprio: o
+    real escreve `new ClassData(Log.class, ...)` ou `new ClassData(Recurso.Log.class, ...)` independente dos nomes."""
     isShort = shape["names"] == "short"
     typeName = "Log" if isShort else f"{resource}.Log"
     hasErrors = shape["errors"] != "none"
@@ -75,6 +76,7 @@ def renderLog(resource: str, shape: dict) -> dict:
         "typeName": typeName,
         "pageName": f"{typeName}.Page",
         "newPageName": "Log.Page" if isShort else "Page",
+        "classDataClass": "Log" if shape["classData"] == "short" else f"{resource}.Log",
         "errorsType": shape["errors"] if hasErrors else "",
         "hasErrors": hasErrors,
         "usesErrorElement": shape["errors"] == "List<ErrorElement>",

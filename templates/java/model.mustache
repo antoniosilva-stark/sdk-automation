@@ -326,7 +326,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{#vendorExtensions.x-sdk-java-code.log}}
 
     public final static class Log extends Resource {
-        static ClassData data = new ClassData({{classname}}.Log.class, "{{classname}}Log");
+        static ClassData data = new ClassData({{classDataClass}}.class, "{{classname}}Log");
 
         public String created;
         public String type;

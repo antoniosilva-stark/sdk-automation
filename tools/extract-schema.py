@@ -19,8 +19,12 @@ CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
 SCHEMAS_DIR = REPO_ROOT / "apis/schemas"
 
 # Valores aceitos do javaLogs; o default e a saida do template antes da secao existir e vale para recurso sem entrada
-JAVA_LOG_VALUES = {"names": ("short", "qualified"), "errors": ("String[]", "List<ErrorElement>", "none")}
-JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>"}
+JAVA_LOG_VALUES = {
+    "names": ("short", "qualified"),
+    "errors": ("String[]", "List<ErrorElement>", "none"),
+    "classData": ("short", "qualified"),
+}
+JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"}
 
 VENDORED_ROOT = Path("_references/sdk-python")
 
@@ -136,7 +140,7 @@ def javaInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dic
 def javaLogShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
     shapes = loadConventions(Path(conventions)).get("javaLogs") or {}
     if not isinstance(shapes, dict):
-        raise ValueError("javaLogs deve ser um mapa recurso -> {names, errors}")
+        raise ValueError("javaLogs deve ser um mapa recurso -> {names, errors, classData}")
     checkKnownResources("javaLogs", shapes)
     for name, shape in shapes.items():
         checkLogShape(name, shape)
@@ -145,7 +149,7 @@ def javaLogShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
 
 def checkLogShape(resource: str, shape) -> None:
     if not isinstance(shape, dict):
-        raise ValueError(f"{resource}: javaLogs deve ser um mapa {{names, errors}}, veio {shape!r}")
+        raise ValueError(f"{resource}: javaLogs deve ser um mapa {{names, errors, classData}}, veio {shape!r}")
     for field, allowed in JAVA_LOG_VALUES.items():
         if field not in shape:
             raise ValueError(f"{resource}: javaLogs.{field} ausente")

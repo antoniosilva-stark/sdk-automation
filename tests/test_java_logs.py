@@ -48,6 +48,10 @@ def _pageParts(block: str) -> tuple:
     return (re.search(r"^            public (List<.+?>) logs;", block, re.M).group(1), _splitParameters(constructor))
 
 
+def _classDataClass(block: str) -> str:
+    return re.search(r"^        static ClassData data = new ClassData\((.+?), ", block, re.M).group(1)
+
+
 def _realSimpleShape(resource: str) -> dict | None:
     block = _realLogBlock(resource)
     if block is None or not re.search(r"^        public Log\(", block, re.M):
@@ -68,7 +72,12 @@ def _realSimpleShape(resource: str) -> dict | None:
     qualified = {f"{resource}.Log", f"Generator<{resource}.Log>", f"{resource}.Log.Page"}
     if returns not in (SHORT_RETURNS, qualified):
         return None
-    return {"names": "short" if returns == SHORT_RETURNS else "qualified", "errors": types.get("errors", "none")}
+    classData = "short" if _classDataClass(block) == "Log.class" else "qualified"
+    return {
+        "names": "short" if returns == SHORT_RETURNS else "qualified",
+        "errors": types.get("errors", "none"),
+        "classData": classData,
+    }
 
 
 def _realLogResources(buildResource) -> list:
@@ -80,6 +89,12 @@ def _realLogResources(buildResource) -> list:
 @pytest.mark.parametrize("resource", sorted(_logEntries()))
 def test_everyJavaLogsEntryEqualsTheShapeOfTheRealLog(resource):
     assert _realSimpleShape(resource) == _logEntries()[resource]
+
+
+@requiresJavaSdk
+def test_everyRealClassDataOfAListedLogIsLogClassOrTheQualifiedForm(buildResource):
+    for resource in _logEntries():
+        assert _classDataClass(_realLogBlock(resource)) in ("Log.class", f"{resource}.Log.class")
 
 
 @requiresJavaSdk
@@ -113,12 +128,13 @@ def test_generatedLogDeclarationsMatchTheRealOnes(buildResource, tmpPath, resour
     assert _logConstructor(generated) == _logConstructor(real)
     assert _pageParts(generated) == _pageParts(real)
     assert set(_logFields(generated).items()) == set(_logFields(real).items())
+    assert _classDataClass(generated) == _classDataClass(real)
 
 
 @requiresGenerator
 @pytest.mark.parametrize("resource, entry, page", [
-    ("Transfer", 'names: short, errors: "String[]"', "return new Log.Page(logs, page.cursor);"),
-    ("CorporateCard", "names: qualified, errors: none", "return new Page(logs, page.cursor);"),
+    ("Transfer", 'names: short, errors: "String[]", classData: short', "return new Log.Page(logs, page.cursor);"),
+    ("CorporateCard", "names: qualified, errors: none, classData: qualified", "return new Page(logs, page.cursor);"),
 ])
 def test_pageIsBuiltByTheNameTheShapeSelects(buildResource, tmpPath, resource, entry, page):
     source = _generated(buildResource, tmpPath, resource, f"javaLogs:\n  {resource}: {{{entry}}}\n")
@@ -128,7 +144,7 @@ def test_pageIsBuiltByTheNameTheShapeSelects(buildResource, tmpPath, resource, e
 
 @requiresGenerator
 def test_errorsNoneDropsTheFieldTheParameterTheJavadocAndTheImport(buildResource, tmpPath):
-    source = _generated(buildResource, tmpPath, "CorporateCard", "javaLogs:\n  CorporateCard: {names: short, errors: none}\n")
+    source = _generated(buildResource, tmpPath, "CorporateCard", "javaLogs:\n  CorporateCard: {names: short, errors: none, classData: short}\n")
     block = _logBlock(source)
 
     assert "errors" not in block
@@ -138,15 +154,26 @@ def test_errorsNoneDropsTheFieldTheParameterTheJavadocAndTheImport(buildResource
 
 @requiresGenerator
 def test_errorsStringArrayDropsTheErrorElementImport(buildResource, tmpPath):
-    source = _generated(buildResource, tmpPath, "Transfer", "javaLogs:\n  Transfer: {names: short, errors: \"String[]\"}\n")
+    source = _generated(buildResource, tmpPath, "Transfer", "javaLogs:\n  Transfer: {names: short, errors: \"String[]\", classData: short}\n")
 
     assert "public String[] errors;" in source
     assert "ErrorElement" not in source
 
 
 @requiresGenerator
+def test_classDataFollowsItsOwnAxisIndependentlyOfTheNames(buildResource, tmpPath):
+    mixed = _generated(buildResource, tmpPath / "mixed", "Transfer",
+                       "javaLogs:\n  Transfer: {names: short, errors: none, classData: qualified}\n")
+    short = _generated(buildResource, tmpPath / "short", "Transfer",
+                       "javaLogs:\n  Transfer: {names: qualified, errors: none, classData: short}\n")
+
+    assert 'new ClassData(Transfer.Log.class, "TransferLog");' in mixed
+    assert 'new ClassData(Log.class, "TransferLog");' in short
+
+
+@requiresGenerator
 def test_resourceWithoutEntryKeepsTheQualifiedLogWithErrorElement(buildResource, tmpPath):
-    source = _generated(buildResource, tmpPath, "Transfer", "javaLogs:\n  Balance: {names: short, errors: none}\n")
+    source = _generated(buildResource, tmpPath, "Transfer", "javaLogs:\n  Balance: {names: short, errors: none, classData: short}\n")
 
     assert "public static Transfer.Log get(String id) throws Exception {" in source
     assert "public static Generator<Transfer.Log> query() throws Exception {" in source
@@ -154,6 +181,7 @@ def test_resourceWithoutEntryKeepsTheQualifiedLogWithErrorElement(buildResource,
     assert "public List<ErrorElement> errors;" in source
     assert "import com.starkbank.error.ErrorElement;" in source
     assert "return new Page(logs, page.cursor);" in source
+    assert 'new ClassData(Transfer.Log.class, "TransferLog");' in source
 
 
 @requiresGenerator
@@ -163,7 +191,7 @@ def test_explicitDefaultEntryEqualsNoEntry(buildResource, tmpPath):
         buildResource,
         tmpPath / "explicit",
         "Transfer",
-        "javaLogs:\n  Transfer: {names: qualified, errors: \"List<ErrorElement>\"}\n",
+        "javaLogs:\n  Transfer: {names: qualified, errors: \"List<ErrorElement>\", classData: qualified}\n",
     )
 
     assert explicit == plain
@@ -172,7 +200,7 @@ def test_explicitDefaultEntryEqualsNoEntry(buildResource, tmpPath):
 @requiresGenerator
 def test_entryOfAnotherResourceLeavesTheGeneratedClassIdentical(buildResource, tmpPath):
     plain = _generated(buildResource, tmpPath / "plain", "Transfer", "javaTypes:\n")
-    other = _generated(buildResource, tmpPath / "other", "Transfer", "javaLogs:\n  Invoice: {names: short, errors: none}\n")
+    other = _generated(buildResource, tmpPath / "other", "Transfer", "javaLogs:\n  Invoice: {names: short, errors: none, classData: short}\n")
 
     assert other == plain
 
@@ -198,29 +226,33 @@ def _loadLogs(extractSchema, tmpPath, text: str, resource: str = "Balance"):
 
 
 def test_javaLogShapeReturnsTheEntryOfTheResource(extractSchema, tmpPath):
-    text = "javaLogs:\n  Balance: {names: short, errors: none}\n"
+    text = "javaLogs:\n  Balance: {names: short, errors: none, classData: short}\n"
 
-    assert _loadLogs(extractSchema, tmpPath, text) == {"names": "short", "errors": "none"}
+    assert _loadLogs(extractSchema, tmpPath, text) == {"names": "short", "errors": "none", "classData": "short"}
 
 
 def test_javaLogShapeIsTheTodayDefaultWithoutEntryOrSection(extractSchema, tmpPath):
-    default = {"names": "qualified", "errors": "List<ErrorElement>"}
+    default = {"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"}
 
-    assert _loadLogs(extractSchema, tmpPath, "javaLogs:\n  Invoice: {names: short, errors: none}\n") == default
+    assert _loadLogs(extractSchema, tmpPath, "javaLogs:\n  Invoice: {names: short, errors: none, classData: short}\n") == default
     assert _loadLogs(extractSchema, tmpPath, "javaTypes:\n") == default
 
 
 @pytest.mark.parametrize("text, message", [
-    ("javaLogs:\n  Balance: {names: shorter, errors: none}\n", "Balance: javaLogs.names.*'shorter'"),
-    ("javaLogs:\n  Balance: {names: short, errors: strings}\n", "Balance: javaLogs.errors.*'strings'"),
-    ("javaLogs:\n  Balance: {names: short}\n", "Balance: javaLogs.errors ausente"),
-    ("javaLogs:\n  Balance: {errors: none}\n", "Balance: javaLogs.names ausente"),
+    ("javaLogs:\n  Balance: {names: shorter, errors: none, classData: short}\n", "Balance: javaLogs.names.*'shorter'"),
+    ("javaLogs:\n  Balance: {names: short, errors: strings, classData: short}\n", "Balance: javaLogs.errors.*'strings'"),
+    ("javaLogs:\n  Balance: {names: short, classData: short}\n", "Balance: javaLogs.errors ausente"),
+    ("javaLogs:\n  Balance: {errors: none, classData: short}\n", "Balance: javaLogs.names ausente"),
     ("javaLogs:\n  Balance: short\n", "Balance: javaLogs.*mapa"),
     ("javaLogs:\n  Balance: [short, none]\n", "Balance: javaLogs.*mapa"),
-    ("javaLogs:\n  Balance: {names: [short], errors: none}\n", "Balance: javaLogs.names.*\\['short'\\]"),
-    ("javaLogs:\n  Transferr: {names: short, errors: none}\n", "Transferr: javaLogs cita recurso"),
-    ("javaLogs:\n  balance: {names: short, errors: none}\n", "balance: javaLogs cita recurso"),
-    ("javaLogs:\n  Invoice: {names: short, errors: nope}\n", "Invoice: javaLogs.errors.*'nope'"),
+    ("javaLogs:\n  Balance: {names: [short], errors: none, classData: short}\n", "Balance: javaLogs.names.*\\['short'\\]"),
+    ("javaLogs:\n  Transferr: {names: short, errors: none, classData: short}\n", "Transferr: javaLogs cita recurso"),
+    ("javaLogs:\n  Balance: {names: short, errors: none}\n", "Balance: javaLogs.classData ausente"),
+    ("javaLogs:\n  Balance: {names: short, errors: none, classData: shorter}\n", "Balance: javaLogs.classData.*'shorter'"),
+    ("javaLogs:\n  Balance: {names: short, errors: none, classData: [short]}\n", "Balance: javaLogs.classData.*\\['short'\\]"),
+    ("javaLogs:\n  Balance: {names: short, errors: none, classData: Log.class}\n", "Balance: javaLogs.classData.*'Log.class'"),
+    ("javaLogs:\n  balance: {names: short, errors: none, classData: short}\n", "balance: javaLogs cita recurso"),
+    ("javaLogs:\n  Invoice: {names: short, errors: nope, classData: short}\n", "Invoice: javaLogs.errors.*'nope'"),
 ])
 def test_invalidJavaLogsDataFailsNamingTheResourceTheFieldAndTheValue(extractSchema, tmpPath, text, message):
     with pytest.raises(ValueError, match=message):
@@ -247,14 +279,17 @@ def test_renderJavaCodeCarriesNoLogWithoutAShape(javaCode, javaDocs):
 
 
 @pytest.mark.parametrize("shape, expected", [
-    ({"names": "short", "errors": "String[]"},
-     {"typeName": "Log", "pageName": "Log.Page", "newPageName": "Log.Page",
+    ({"names": "short", "errors": "String[]", "classData": "short"},
+     {"typeName": "Log", "pageName": "Log.Page", "newPageName": "Log.Page", "classDataClass": "Log",
       "errorsType": "String[]", "hasErrors": True, "usesErrorElement": False}),
-    ({"names": "qualified", "errors": "List<ErrorElement>"},
-     {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page",
+    ({"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"},
+     {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page", "classDataClass": "Balance.Log",
       "errorsType": "List<ErrorElement>", "hasErrors": True, "usesErrorElement": True}),
-    ({"names": "qualified", "errors": "none"},
-     {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page",
+    ({"names": "qualified", "errors": "none", "classData": "qualified"},
+     {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page", "classDataClass": "Balance.Log",
+      "errorsType": "", "hasErrors": False, "usesErrorElement": False}),
+    ({"names": "short", "errors": "none", "classData": "qualified"},
+     {"typeName": "Log", "pageName": "Log.Page", "newPageName": "Log.Page", "classDataClass": "Balance.Log",
       "errorsType": "", "hasErrors": False, "usesErrorElement": False}),
 ])
 def test_renderJavaCodeResolvesTheLogNamesAndErrorsFromTheShape(javaCode, javaDocs, shape, expected):

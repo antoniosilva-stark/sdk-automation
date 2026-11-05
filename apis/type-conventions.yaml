@@ -231,32 +231,36 @@ javaInnerClasses:
       fields: {name: String, action: String, type: String, id: String}
       constructors: [[name, action, type, id], []]
 
-# Forma do Log interno, Recurso -> {names, errors}. O real nao e uniforme (medido contra sdk-java f60902a, 24 recursos com
-# Log; 20 aqui, os 4 de forma propria ficam fora, ver LOG_EXCLUSIONS em tests/test_java_logs.py):
+# Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias. O real nao e uniforme
+# (medido contra sdk-java f60902a, 24 recursos com Log; 20 aqui, os 4 de forma propria ficam fora, ver LOG_EXCLUSIONS em
+# tests/test_java_logs.py):
 #   names:  `short` escreve `Log get(String id)`, `Generator<Log>`, `Log.Page page()`, `List<Log> logs` e `new Log.Page(...)`
 #           (12 de 20); `qualified` escreve `Recurso.Log`, `Recurso.Log.Page` e `new Page(...)` (8 de 20), que e o que o
 #           template emitia antes e segue valendo para recurso sem entrada.
 #   errors: tipo do campo e do parametro do construtor all-args do Log: `String[]` (13 de 20), `List<ErrorElement>` (5) ou
 #           `none` (2), sem campo, sem parametro e sem `@param errors`. So `List<ErrorElement>` importa ErrorElement.
+#   classData: a linha `static ClassData data = new ClassData(<X>.class, ...)` do Log: `short` escreve `Log.class` (10 de 20) e
+#           `qualified` `Recurso.Log.class` (10 de 20, o que o template emitia). E um eixo a parte dos nomes: DarfPayment e
+#           TaxPayment usam nomes `short` e `Recurso.Log.class`.
 # Valida-se contra o real em tests/test_java_logs.py (cada entrada e o real; todo Log simples do real esta aqui).
 javaLogs:
-  Boleto: {names: short, errors: "String[]"}
-  BoletoPayment: {names: short, errors: "String[]"}
-  BrcodePayment: {names: short, errors: "String[]"}
-  CorporateCard: {names: qualified, errors: none}
-  CorporateHolder: {names: qualified, errors: none}
-  DarfPayment: {names: short, errors: "String[]"}
-  Deposit: {names: short, errors: "String[]"}
-  Invoice: {names: short, errors: "String[]"}
-  InvoicePullRequest: {names: short, errors: "String[]"}
-  InvoicePullSubscription: {names: short, errors: "String[]"}
-  MerchantCard: {names: qualified, errors: "String[]"}
-  MerchantPurchase: {names: qualified, errors: "List<ErrorElement>"}
-  MerchantSession: {names: qualified, errors: "String[]"}
-  Split: {names: qualified, errors: "List<ErrorElement>"}
-  SplitProfile: {names: qualified, errors: "List<ErrorElement>"}
-  SplitReceiver: {names: qualified, errors: "List<ErrorElement>"}
-  TaxPayment: {names: short, errors: "String[]"}
-  Transfer: {names: short, errors: "String[]"}
-  UtilityPayment: {names: short, errors: "String[]"}
-  VerifiedAccount: {names: short, errors: "List<ErrorElement>"}
+  Boleto: {names: short, errors: "String[]", classData: short}
+  BoletoPayment: {names: short, errors: "String[]", classData: short}
+  BrcodePayment: {names: short, errors: "String[]", classData: short}
+  CorporateCard: {names: qualified, errors: none, classData: qualified}
+  CorporateHolder: {names: qualified, errors: none, classData: qualified}
+  DarfPayment: {names: short, errors: "String[]", classData: qualified}
+  Deposit: {names: short, errors: "String[]", classData: short}
+  Invoice: {names: short, errors: "String[]", classData: short}
+  InvoicePullRequest: {names: short, errors: "String[]", classData: short}
+  InvoicePullSubscription: {names: short, errors: "String[]", classData: short}
+  MerchantCard: {names: qualified, errors: "String[]", classData: qualified}
+  MerchantPurchase: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  MerchantSession: {names: qualified, errors: "String[]", classData: qualified}
+  Split: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  SplitProfile: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  SplitReceiver: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  TaxPayment: {names: short, errors: "String[]", classData: qualified}
+  Transfer: {names: short, errors: "String[]", classData: short}
+  UtilityPayment: {names: short, errors: "String[]", classData: short}
+  VerifiedAccount: {names: short, errors: "List<ErrorElement>", classData: short}

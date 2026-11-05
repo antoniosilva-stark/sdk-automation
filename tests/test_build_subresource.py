@@ -65,7 +65,7 @@ def test_propertyNamedDataRenamesTheStaticClassData(builtOnce):
     assert "Rest.getId(classData," in outer
     assert re.search(r"Rest\.\w+\(data,", outer) is None
     assert 'dataCopy.remove("data")' in outer
-    assert 'static ClassData data = new ClassData(InvoicePullSubscription.Log.class' in source
+    assert 'static ClassData data = new ClassData(Log.class, "InvoicePullSubscriptionLog")' in source
 
 
 @requiresGenerator

@@ -305,7 +305,7 @@ def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
     source = (target / "src/main/java/com/starkbank/Invoice.java").read_text(encoding="utf-8")
 
     assert "public final static class Log extends Resource" in source
-    assert 'new ClassData(Invoice.Log.class, "InvoiceLog")' in source
+    assert 'new ClassData(Log.class, "InvoiceLog")' in source
     assert "public static Log get(String id)" in source
     assert "public static Generator<Log> query()" in source
     assert "public static Log.Page page()" in source
