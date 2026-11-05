@@ -16,6 +16,7 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
+SCHEMAS_DIR = REPO_ROOT / "apis/schemas"
 
 VENDORED_ROOT = Path("_references/sdk-python")
 
@@ -102,6 +103,14 @@ def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | Non
 
 def javaTypeOverrides(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
     return (loadConventions(Path(conventions)).get("javaTypes") or {}).get(resource) or {}
+
+
+def javaOpenClass(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
+    openClasses = loadConventions(Path(conventions)).get("javaOpenClasses") or []
+    unknown = sorted(name for name in openClasses if not (SCHEMAS_DIR / f"{name.lower()}.yaml").is_file())
+    if unknown:
+        raise ValueError(f"{unknown[0]}: javaOpenClasses cita recurso que nao existe em apis/schemas")
+    return resource in openClasses
 
 
 def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:

@@ -91,3 +91,18 @@ javaTypes:
     metadata: HashMap<String, Object>
   Workspace:
     allowedTaxIds: List<String>
+
+# Recursos cuja classe externa o real declara `public class`, sem `final`. O real nao e uniforme: 10 de 42 nao sao final
+# (medido contra sdk-java f60902a); os outros 32 sao `final`, e esse segue como default do perfil para recurso novo.
+# Valida-se contra o real em tests/test_java_field_types.py (cada nome nao e final e todo nao-final esta aqui).
+javaOpenClasses:
+  - DictKey
+  - Event
+  - Institution
+  - MerchantCard
+  - MerchantInstallment
+  - MerchantPurchase
+  - MerchantSession
+  - PaymentPreview
+  - Split
+  - SplitReceiver

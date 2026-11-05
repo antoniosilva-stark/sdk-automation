@@ -109,8 +109,10 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
     rendered = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)
-    overrides = extractSchema.javaTypeOverrides(resource, conventions or extractSchema.CONVENTIONS_FILE)
-    code = javaCode.renderJavaCode(schema, entity, resource, overrides)
+    conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
+    overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
+    isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
+    code = javaCode.renderJavaCode(schema, entity, resource, overrides, isOpen=isOpen)
 
     shutil.copytree(apisDir, stagedDir / "apis")
     entryLine = f"\n    {resource}:\n"

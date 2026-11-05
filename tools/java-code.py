@@ -33,11 +33,12 @@ def renderJavaCode(
     resource: str,
     overrides: dict,
     profile: dict = JAVA_CODE_PROFILE,
+    isOpen: bool = False,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao e construtor all-args) e o corpo do Map-ctor, os dois
-    sobre o mesmo tipo por campo, para o cast nunca divergir da declaracao."""
+    sobre o mesmo tipo por campo, para o cast nunca divergir da declaracao. `open`: a classe externa nao e `final`."""
     fields = renderFields(schema, resource, overrides, profile)
-    return {"fields": fields, **renderMapConstructor(entity, fields, profile)}
+    return {"fields": fields, "open": isOpen, **renderMapConstructor(entity, fields, profile)}
 
 
 def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = JAVA_CODE_PROFILE) -> list:

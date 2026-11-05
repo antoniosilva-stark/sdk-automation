@@ -15,7 +15,7 @@ package {{package}};
 {{/usesObjectList}}{{/usesList}}import java.util.Map;
 
 
-public final class {{classname}} extends {{#vendorExtensions.x-sdk-subresource}}SubResource{{/vendorExtensions.x-sdk-subresource}}{{^vendorExtensions.x-sdk-subresource}}Resource{{/vendorExtensions.x-sdk-subresource}} {
+public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk-java-code.open}}class {{classname}} extends {{#vendorExtensions.x-sdk-subresource}}SubResource{{/vendorExtensions.x-sdk-subresource}}{{^vendorExtensions.x-sdk-subresource}}Resource{{/vendorExtensions.x-sdk-subresource}} {
     /**
 {{#vendorExtensions.x-sdk-java-docs.dataDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.dataDoc}}     */

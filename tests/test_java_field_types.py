@@ -1,5 +1,6 @@
 import re
 import yaml
+import pytest
 
 from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk
 
@@ -138,3 +139,87 @@ def test_returnOnlyPrimitiveIsNeverAssignedNull(buildResource, tmpPath):
     assert re.search(r"^    public long amount;$", source, re.M)
     assert "this.amount = 0;" in source
     assert "this.amount = null;" not in source
+
+
+def _realOpenResources(resources: list) -> set:
+    declaration = re.compile(r"^public (final )?class ", re.M)
+    opened = set()
+    for resource in resources:
+        path = REAL_SOURCES / f"{resource}.java"
+        match = declaration.search(path.read_text(encoding="utf-8")) if path.is_file() else None
+        if match and not match.group(1):
+            opened.add(resource)
+    return opened
+
+
+def _openClasses() -> list:
+    return yaml.safe_load(_realConventionsText())["javaOpenClasses"]
+
+
+@requiresJavaSdk
+def test_everyOpenClassIsNotFinalInTheRealSdk():
+    assert _realOpenResources(_openClasses()) == set(_openClasses())
+
+
+@requiresJavaSdk
+def test_theOpenClassListIsCompleteAgainstTheRealSdk(buildResource):
+    resources = buildResource.loadTool("parity-report").schemaResources()
+
+    assert _realOpenResources(resources) == set(_openClasses())
+
+
+def test_theOpenClassListIsAlphabeticalWithoutRepeats():
+    assert _openClasses() == sorted(set(_openClasses()))
+
+
+@requiresGenerator
+def test_resourceInTheOpenListIsGeneratedWithoutFinal(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", "javaOpenClasses:\n  - Transfer\n")
+
+    assert "public class Transfer extends Resource {" in source
+    assert "public final class Transfer" not in source
+
+
+@requiresGenerator
+def test_resourceOutsideTheOpenListIsGeneratedFinal(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", "javaOpenClasses:\n  - Balance\n")
+
+    assert "public final class Transfer extends Resource {" in source
+
+
+@requiresGenerator
+def test_openClassOnlyLiftsTheOuterClassAndLeavesTheLogFinal(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", "javaOpenClasses:\n  - Transfer\n")
+
+    assert "public final static class Log" in source
+
+
+def test_unknownResourceInTheOpenListFailsNamingIt(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaOpenClasses:\n  - Balance\n  - Transferr\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Transferr"):
+        extractSchema.javaOpenClass("Balance", conventions)
+
+
+def test_javaOpenClassIsTrueOnlyForListedResources(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaOpenClasses:\n  - Balance\n", encoding="utf-8")
+
+    assert extractSchema.javaOpenClass("Balance", conventions) is True
+    assert extractSchema.javaOpenClass("Transfer", conventions) is False
+
+
+def test_javaOpenClassIsFalseWhenTheSectionIsAbsent(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaTypes:\n", encoding="utf-8")
+
+    assert extractSchema.javaOpenClass("Balance", conventions) is False
+
+
+def test_renderJavaCodeCarriesTheOpenFlag(javaCode, javaDocs):
+    schemas = yaml.safe_load((SCHEMAS / "balance.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
+    entity = javaDocs.describeEntity(schemas["Balance"], schemas["BalanceCreate"])
+
+    assert javaCode.renderJavaCode(schemas["Balance"], entity, "Balance", {})["open"] is False
+    assert javaCode.renderJavaCode(schemas["Balance"], entity, "Balance", {}, isOpen=True)["open"] is True
