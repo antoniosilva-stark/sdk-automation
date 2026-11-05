@@ -123,6 +123,12 @@ def javaConstructorTypes(resource: str, conventions: Path = CONVENTIONS_FILE) ->
     return types.get(resource) or {}
 
 
+def javaInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    classes = loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    checkKnownResources("javaInnerClasses", classes)
+    return classes.get(resource) or {}
+
+
 @lru_cache(maxsize=None)
 def schemaResourceNames() -> frozenset:
     """Nomes canonicos: no arquivo ha tambem `<Recurso>Create`, e o recurso e a chave que casa com o nome do arquivo."""

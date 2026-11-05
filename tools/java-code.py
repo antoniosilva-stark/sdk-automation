@@ -1,4 +1,5 @@
 from collections import Counter
+from re import fullmatch
 
 
 # Perfil do alvo em dados: a proxima linguagem troca este dicionario, nao o codigo abaixo.
@@ -39,13 +40,137 @@ def renderJavaCode(
     isOpen: bool = False,
     ctorOrder: list | None = None,
     ctorTypes: dict | None = None,
+    innerClasses: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
-    construtor all-args, que no real e dado do Java. `open`: a classe externa nao e `final`."""
+    construtor all-args, que no real e dado do Java. `open`: a classe externa nao e `final`. `innerClasses`: as classes
+    internas simples do real, ja com os construtores e o corpo do Map-ctor prontos."""
     fields = renderFields(schema, resource, overrides, profile)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
-    return {"fields": fields, "ctorFields": ctorFields, "open": isOpen, **renderMapConstructor(entity, fields, profile)}
+    return {
+        "fields": fields,
+        "ctorFields": ctorFields,
+        "open": isOpen,
+        "innerClasses": renderInnerClasses(resource, innerClasses or {}, profile),
+        **renderMapConstructor(entity, fields, profile),
+    }
+
+
+INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData"}
+# `Log` e `Page` o template ja emite dentro da classe externa; repetir o nome nao compilaria
+TEMPLATE_INNER_CLASSES = ("Log", "Page")
+MAP_CONSTRUCTOR_SIGNATURE = "Map<String, Object>"
+
+
+def renderInnerClasses(resource: str, innerClasses: dict, profile: dict = JAVA_CODE_PROFILE) -> list:
+    """Classes internas simples ja prontas para o Mustache: o real as escreve a mao e a spec nao as descreve, entao a
+    definicao e dado do Java. Cada construtor atribui os campos recebidos e `null` nos demais; o Map-ctor le so os
+    campos de `map`. Campo primitivo nao aceita null, entao tem de ser recebido e lido."""
+    return [renderInnerClass(resource, name, definition, profile) for name, definition in innerClasses.items()]
+
+
+def renderInnerClass(resource: str, name: str, definition: dict, profile: dict) -> dict:
+    where = f"{resource}.{name}"
+    checkInnerClass(where, name, definition, resource, profile)
+    fields = definition["fields"]
+    rendered = {
+        "className": name,
+        "isFinal": definition.get("final", True),
+        "fields": [{"name": field, "javaType": javaType} for field, javaType in fields.items()],
+    }
+    if "classData" in definition:
+        rendered["classDataLine"] = innerClassDataLine(name, definition["classData"])
+    rendered["constructors"] = [renderInnerConstructor(names, fields) for names in definition.get("constructors") or []]
+    if "map" in definition:
+        rendered["map"] = renderInnerMapConstructor(definition["map"], fields, profile)
+    return rendered
+
+
+def checkInnerClass(where: str, name, definition, resource: str, profile: dict) -> None:
+    checkInnerClassName(where, name, resource)
+    if not isinstance(definition, dict):
+        raise ValueError(f"{where}: definicao deve ser um mapa")
+    unknown = sorted(str(key) for key in set(definition) - INNER_CLASS_KEYS)
+    if unknown:
+        raise ValueError(f"{where}: chave desconhecida: {unknown[0]}")
+    fields = definition.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError(f"{where}: fields ausente ou vazio")
+    for field, javaType in fields.items():
+        checkInnerClassField(where, field, javaType, profile)
+    constructors = definition.get("constructors") or []
+    for names in constructors:
+        checkInnerFieldNames(where, "construtor", names, fields, profile)
+    if "map" in definition:
+        checkInnerFieldNames(where, "map", definition["map"], fields, profile)
+    checkInnerClassSignatures(where, constructors, fields, "map" in definition)
+    if not isinstance(definition.get("final", True), bool):
+        raise ValueError(f"{where}: final deve ser booleano")
+    if "classData" in definition and not isIdentifier(definition["classData"], "[A-Z]"):
+        raise ValueError(f"{where}: classData invalido: {definition['classData']!r}")
+
+
+def isIdentifier(value, firstCharacter: str) -> bool:
+    return isinstance(value, str) and fullmatch(rf"{firstCharacter}[A-Za-z0-9]*", value) is not None
+
+
+def checkInnerClassName(where: str, name, resource: str) -> None:
+    if not isIdentifier(name, "[A-Z]"):
+        raise ValueError(f"{where}: nome de classe interna invalido")
+    if name in TEMPLATE_INNER_CLASSES:
+        raise ValueError(f"{where}: nome de classe interna que o template ja emite")
+    if name == resource:
+        raise ValueError(f"{where}: nome de classe interna igual ao da classe externa")
+
+
+def checkInnerClassField(where: str, field, javaType, profile: dict) -> None:
+    if not isIdentifier(field, "[a-z]"):
+        raise ValueError(f"{where}.{field}: nome de campo invalido")
+    checkOverrideType(where, field, javaType, profile)
+
+
+def checkInnerFieldNames(where: str, label: str, names, fields: dict, profile: dict) -> None:
+    """`names` so pode citar campo da classe, sem repeticao, e tem de cobrir os primitivos."""
+    if not isinstance(names, list):
+        raise ValueError(f"{where}: {label} deve ser uma lista de campos")
+    unknown = [name for name in names if name not in fields]
+    if unknown:
+        raise ValueError(f"{where}: {label} cita campo que a classe nao tem: {unknown[0]}")
+    repeated = sorted(name for name, count in Counter(names).items() if count > 1)
+    if repeated:
+        raise ValueError(f"{where}: {label} repete campo: {repeated[0]}")
+    omitted = [name for name, javaType in fields.items() if javaType in profile["primitives"] and name not in names]
+    if omitted:
+        raise ValueError(f"{where}: {label} omite o primitivo {omitted[0]}")
+
+
+def checkInnerClassSignatures(where: str, constructors: list, fields: dict, hasMap: bool) -> None:
+    """Dois construtores com os mesmos tipos de parametro nao compilam, mesmo com nomes de campo diferentes."""
+    signatures = [tuple(fields[name] for name in names) for names in constructors]
+    if hasMap:
+        signatures.append((MAP_CONSTRUCTOR_SIGNATURE,))
+    if len(set(signatures)) != len(signatures):
+        raise ValueError(f"{where}: dois construtores com a mesma assinatura")
+
+
+def innerClassDataLine(name: str, classData: str) -> str:
+    return f'static SubResource.ClassData data = new SubResource.ClassData({name}.class, "{classData}");'
+
+
+def renderInnerConstructor(names: list, fields: dict) -> dict:
+    signature = ", ".join(f"{fields[name]} {name}" for name in names)
+    if not names:
+        return {"signature": signature, "body": []}
+    body = [f"this.{field} = {field};" if field in names else f"this.{field} = null;" for field in fields]
+    return {"signature": signature, "body": body}
+
+
+def renderInnerMapConstructor(names: list, fields: dict, profile: dict) -> dict:
+    body = []
+    for field, javaType in fields.items():
+        body += readLines(field, javaType, profile) if field in names else [f"this.{field} = null;"]
+    return {"suppress": any("<" in fields[name] for name in names), "body": body}
 
 
 def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = JAVA_CODE_PROFILE) -> list:

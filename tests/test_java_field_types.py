@@ -2,7 +2,7 @@ import re
 import yaml
 import pytest
 
-from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk
+from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresJavac
 
 SCHEMAS = REPO_ROOT / "apis/schemas"
 REAL_SOURCES = REPO_ROOT / "_references/sdk-java/src/main/java/com/starkbank"
@@ -510,6 +510,7 @@ _RESOURCE_SECTIONS = [
     ("javaOpenClasses", "javaOpenClasses:\n  - {name}\n", "javaOpenClass"),
     ("javaConstructorOrder", "javaConstructorOrder:\n  {name}: [id]\n", "javaConstructorOrder"),
     ("javaConstructorTypes", "javaConstructorTypes:\n  {name}:\n    amount: int\n", "javaConstructorTypes"),
+    ("javaInnerClasses", "javaInnerClasses:\n  {name}: {{}}\n", "javaInnerClasses"),
 ]
 
 
@@ -548,3 +549,278 @@ def test_everyResourceNameOfTheRealTablesIsAccepted(extractSchema):
     assert all(extractSchema.javaOpenClass(name) for name in yaml.safe_load(_realConventionsText())["javaOpenClasses"])
     assert all(extractSchema.javaConstructorOrder(name) for name in sections("javaConstructorOrder"))
     assert all(extractSchema.javaConstructorTypes(name) for name in sections("javaConstructorTypes"))
+    assert all(extractSchema.javaInnerClasses(name) for name in sections("javaInnerClasses"))
+
+
+def _innerEntries() -> list:
+    section = _constructorSection("javaInnerClasses")
+    return [(resource, name, definition) for resource, classes in section.items()
+            for name, definition in classes.items()]
+
+
+_INNER_IDS = [f"{resource}.{name}" for resource, name, _ in _innerEntries()]
+
+
+def _realInnerBlock(resource: str, name: str) -> str | None:
+    source = (REAL_SOURCES / f"{resource}.java").read_text(encoding="utf-8")
+    match = re.search(rf"^    public (?:final )?static (?:final )?class {name}\b[^{{]*\{{", source, re.M)
+    if not match:
+        return None
+    depth, index = 1, match.end()
+    while depth:
+        depth += (source[index] == "{") - (source[index] == "}")
+        index += 1
+    return source[match.start():index]
+
+
+def _realInnerConstructors(block: str, name: str) -> list:
+    pattern = rf"^        public {name}\s*\((.*?)\)\s*(?:throws [\w, ]+)?\{{"
+    return [_splitParameters(match.group(1)) for match in re.finditer(pattern, block, re.M | re.S)]
+
+
+_MAP_PARAMETER = [("Map<String, Object>", "data")]
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryExistsInTheRealWithTheSameFinalityAndSuperclass(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+
+    assert block is not None
+    header = block.split("{", 1)[0]
+    assert (" final " in f" {header} ") is definition.get("final", True)
+    assert re.search(r"\bextends SubResource\s*$", header)
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheRealFieldsWithTheirTypesInDeclarationOrder(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+
+    declared = re.findall(r"^        public ([\w<>\[\], ]+?) (\w+);", block, re.M)
+
+    assert [(field, javaType) for javaType, field in declared] == list(definition["fields"].items())
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheRealPositionalConstructorsWithFieldNamesAndTypesInOrder(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+    positional = [parameters for parameters in _realInnerConstructors(block, name) if parameters != _MAP_PARAMETER]
+
+    real = sorted([field for _, field in parameters] for parameters in positional)
+    assert real == sorted(definition["constructors"])
+    for parameters in positional:
+        assert all(javaType == definition["fields"][field] for javaType, field in parameters)
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheMapConstructorOnlyWhenTheRealDoesAndReadsTheSameFields(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+    hasMapConstructor = _MAP_PARAMETER in _realInnerConstructors(block, name)
+
+    assert hasMapConstructor is ("map" in definition)
+    reads = re.findall(r'this\.(\w+) = .*dataCopy\.remove\("\1"\)', block)
+    assert reads == definition.get("map", [])
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryDeclaresTheClassDataOnlyWhenTheRealDoes(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+
+    real = re.search(rf'static (?:SubResource\.)?ClassData data = new (?:SubResource\.)?ClassData\({name}\.class, "(\w+)"\)',
+                     block)
+
+    assert (real.group(1) if real else None) == definition.get("classData")
+
+
+_NOT_SIMPLE_INNER = {("Transfer", "Rule"), ("MerchantSession", "Purchase"), ("PaymentRequest", "Deserializer")}
+_NOT_SIMPLE_FILES = {"Event"}
+
+
+def _realInnerClasses() -> set:
+    declaration = re.compile(r"^    public (?:final )?static (?:final )?class (\w+)", re.M)
+    found = set()
+    for path in sorted(REAL_SOURCES.glob("*.java")):
+        if path.stem in _NOT_SIMPLE_FILES:
+            continue
+        found.update((path.stem, name) for name in declaration.findall(path.read_text(encoding="utf-8")))
+    return {pair for pair in found if pair[1] not in ("Log", "Page")} - _NOT_SIMPLE_INNER
+
+
+@requiresJavaSdk
+def test_innerClassSectionHoldsExactlyTheSimpleInnerClassesOfTheRealSdk():
+    section = {(resource, name) for resource, name, _ in _innerEntries()}
+
+    assert sorted(_realInnerClasses() - section) == []
+    assert sorted(section - _realInnerClasses()) == []
+
+
+def test_innerClassSectionIsAlphabeticalByResourceAndByClass():
+    section = _constructorSection("javaInnerClasses")
+
+    assert list(section) == sorted(section)
+    assert all(list(classes) == sorted(classes) for classes in section.values())
+
+
+_SYNTHETIC_INNER = """javaInnerClasses:
+  Transfer:
+    Pair:
+      fields: {key: String, amount: Integer, tags: "String[]"}
+      constructors: [[key], [key, amount, tags], []]
+      map: [key, tags]
+      classData: Pairs
+    Slot:
+      fields: {size: long}
+      constructors: [[size]]
+      final: false
+"""
+
+
+@requiresGenerator
+def test_innerClassIsEmittedInsideTheOuterClassAfterTheLogWithItsConstructors(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_INNER)
+
+    assert source.index("public final static class Log") < source.index("public final static class Pair extends SubResource {")
+    assert source.rstrip().endswith("    }\n}")
+    assert "        public String key;\n        public Integer amount;\n        public String[] tags;\n" in source
+    assert "        public Pair(String key) {\n            this.key = key;\n            this.amount = null;\n" in source
+    assert "        public Pair(String key, Integer amount, String[] tags) {\n" in source
+    assert "        public Pair() {\n        }\n" in source
+
+
+@requiresGenerator
+def test_innerClassMapConstructorReadsOnlyTheListedFieldsAndRejectsTheRest(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_INNER)
+
+    assert ("        public Pair(Map<String, Object> data) throws Exception {\n"
+            "            HashMap<String, Object> dataCopy = new HashMap<>(data);\n") in source
+    assert '            this.key = (String) dataCopy.remove("key");\n' in source
+    assert "            this.amount = null;\n" in source
+    assert '            this.tags = (String[]) dataCopy.remove("tags");\n' in source
+    assert 'throw new Exception("Unknown parameters used in constructor: [" + String.join' in source.split("class Pair")[1]
+
+
+@requiresGenerator
+def test_innerClassFinalFalseEmitsAnOpenClassWithPrimitiveFieldAndNoClassData(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_INNER)
+
+    assert "    public static class Slot extends SubResource {\n" in source
+    assert "final static class Slot" not in source
+    assert "        public long size;\n" in source
+    assert "        public Slot(long size) {\n            this.size = size;\n        }\n" in source
+    assert source.split("class Slot")[1].count("ClassData") == 0
+
+
+@requiresGenerator
+def test_innerClassDataIsEmittedOnlyWhenDeclared(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_INNER)
+    pair = source.split("class Pair")[1].split("class Slot")[0]
+
+    assert '        static SubResource.ClassData data = new SubResource.ClassData(Pair.class, "Pairs");\n' in pair
+
+
+@requiresGenerator
+def test_resourceWithoutInnerEntryIsGeneratedIdenticallyWhateverOtherResourcesDeclare(buildResource, tmpPath):
+    plain = _generated(buildResource, tmpPath / "plain", "Transfer", "javaTypes:\n")
+    other = _generated(buildResource, tmpPath / "other", "Transfer", _SYNTHETIC_INNER.replace("Transfer:", "Balance:"))
+
+    assert other == plain
+    assert "static class Pair" not in plain
+
+
+@requiresGenerator
+@requiresJavac
+@pytest.mark.parametrize("resource, inner", [
+    ("Boleto", ["Description", "Discount"]),
+    ("Invoice", ["Description", "Discount", "Payment", "Rule"]),
+    ("MerchantSession", ["AllowedInstallment"]),
+])
+def test_resourceWithInnerClassesPassesTheJavacGate(builtOnce, resource, inner):
+    code, out, target = builtOnce(resource, "java")
+
+    assert code == 0, out
+    assert "sintaxe (javac)" in out
+    source = (target / f"src/main/java/com/starkbank/{resource}.java").read_text(encoding="utf-8")
+    assert all(re.search(rf"static class {name} extends SubResource \{{", source) for name in inner)
+
+
+def _balanceInner(javaCode, javaDocs, innerClasses):
+    schemas = yaml.safe_load((SCHEMAS / "balance.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
+    entity = javaDocs.describeEntity(schemas["Balance"], schemas["BalanceCreate"])
+    return javaCode.renderJavaCode(schemas["Balance"], entity, "Balance", {}, innerClasses=innerClasses)["innerClasses"]
+
+
+def test_renderJavaCodeCarriesNoInnerClassWithoutEntry(javaCode, javaDocs):
+    assert _balanceInner(javaCode, javaDocs, None) == []
+    assert _balanceInner(javaCode, javaDocs, {}) == []
+
+
+def test_renderJavaCodeRendersInnerClassConstructorsWithAssignmentsAndNulls(javaCode, javaDocs):
+    rendered = _balanceInner(javaCode, javaDocs, {"Pair": {
+        "fields": {"key": "String", "amount": "Integer"},
+        "constructors": [["key"], []],
+    }})
+
+    assert rendered == [{
+        "className": "Pair",
+        "isFinal": True,
+        "fields": [{"name": "key", "javaType": "String"}, {"name": "amount", "javaType": "Integer"}],
+        "constructors": [
+            {"signature": "String key", "body": ["this.key = key;", "this.amount = null;"]},
+            {"signature": "", "body": []},
+        ],
+    }]
+
+
+_PAIR = {"fields": {"key": "String", "amount": "Integer"}, "constructors": [["key", "amount"]]}
+
+
+@pytest.mark.parametrize("innerClasses, message", [
+    ({"Pair": {**_PAIR, "constructors": [["key", "nope"]]}}, "Balance.Pair: construtor cita campo que a classe nao tem: nope"),
+    ({"Pair": {**_PAIR, "map": ["nope"]}}, "Balance.Pair: map cita campo que a classe nao tem: nope"),
+    ({"Pair": {**_PAIR, "fields": {"key": "Foo", "amount": "Integer"}}}, "Balance.Pair.key: tipo de override 'Foo'"),
+    ({"Pair": {**_PAIR, "constructors": [["key", "key"]]}}, "Balance.Pair: construtor repete campo: key"),
+    ({"Pair": {**_PAIR, "constructors": [["key"], ["key"]]}}, "Balance.Pair: dois construtores com a mesma assinatura"),
+    ({"Pair": {**_PAIR, "constructors": [["key"], ["amount"]], "fields": {"key": "String", "amount": "String"}}},
+     "Balance.Pair: dois construtores com a mesma assinatura"),
+    ({"Pair": {**_PAIR, "constructors": [["key"]], "fields": {"key": "String", "size": "long"}}},
+     "Balance.Pair: construtor omite o primitivo size"),
+    ({"Pair": {**_PAIR, "map": ["key", "key"]}}, "Balance.Pair: map repete campo: key"),
+    ({"Pair": {**_PAIR, "final": "no"}}, "Balance.Pair: final deve ser booleano"),
+    ({"Pair": {**_PAIR, "classData": "bad name"}}, "Balance.Pair: classData invalido: 'bad name'"),
+    ({"Pair": {**_PAIR, "extra": 1}}, "Balance.Pair: chave desconhecida: extra"),
+    ({"Pair": {"constructors": [["key"]]}}, "Balance.Pair: fields ausente ou vazio"),
+    ({"pair": _PAIR}, "Balance.pair: nome de classe interna invalido"),
+    ({"Log": _PAIR}, "Balance.Log: nome de classe interna que o template ja emite"),
+    ({"Page": _PAIR}, "Balance.Page: nome de classe interna que o template ja emite"),
+    ({"Balance": _PAIR}, "Balance.Balance: nome de classe interna igual ao da classe externa"),
+])
+def test_invalidInnerClassFailsNamingTheResourceTheClassAndTheProblem(javaCode, javaDocs, innerClasses, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        _balanceInner(javaCode, javaDocs, innerClasses)
+
+
+def test_innerClassWithAnAcceptedTypeFromTheProfileIsRendered(javaCode, javaDocs):
+    fields = {"a": "Number", "b": "long", "c": "int", "d": "String[]", "e": "Map<String, Object>"}
+    rendered = _balanceInner(javaCode, javaDocs, {"Pair": {"fields": fields, "constructors": [list(fields)], "map": list(fields)}})
+
+    assert rendered[0]["map"]["suppress"] is True
+    assert 'this.b = ((Number) dataCopy.remove("b")).longValue();' in rendered[0]["map"]["body"]
+
+
+def test_innerClassLoaderReturnsTheClassesOfTheResourceAndNothingForTheOthers(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaInnerClasses:\n  Balance:\n    Pair:\n      fields: {key: String}\n", encoding="utf-8")
+
+    assert extractSchema.javaInnerClasses("Balance", conventions) == {"Pair": {"fields": {"key": "String"}}}
+    assert extractSchema.javaInnerClasses("Transfer", conventions) == {}
+
+
+def test_innerClassLoaderDefaultsToNothingWhenTheSectionIsAbsent(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaTypes:\n", encoding="utf-8")
+
+    assert extractSchema.javaInnerClasses("Balance", conventions) == {}

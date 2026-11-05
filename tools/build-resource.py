@@ -120,6 +120,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         isOpen=isOpen,
         ctorOrder=extractSchema.javaConstructorOrder(resource, conventionsFile),
         ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
+        innerClasses=extractSchema.javaInnerClasses(resource, conventionsFile),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

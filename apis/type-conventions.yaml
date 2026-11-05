@@ -150,3 +150,61 @@ javaConstructorTypes:
     counterAmount: Long
   Transaction:
     fee: int
+
+# Classes internas simples que o real escreve a mao (a spec nao descreve sub-objeto) e o gerador emite a partir deste
+# dado. Recurso -> classe interna -> `fields` (declaracao, ordem do real), `constructors` (construtores publicos
+# posicionais: campos recebidos, os demais ficam null; [] e o sem argumentos), `map` (campos LIDOS do `X(Map)`, os demais
+# ficam null; ausente = sem esse construtor), `final` (default true) e `classData` (nome do ClassData, so quando o real
+# o declara). Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
+# Fora (outras entregas): Log/Page/User dentro de Log (ME 9.4), Transfer.Rule (Deserializer manual), PaymentRequest.
+# Deserializer, MerchantSession.Purchase e tudo do Event (ME 9.8).
+javaInnerClasses:
+  Boleto:
+    Description:
+      fields: {text: String, amount: Integer}
+      constructors: [[text], [text, amount], []]
+    Discount:
+      fields: {date: String, percentage: Number}
+      constructors: [[date, percentage], []]
+  BrcodePayment:
+    Rule:
+      fields: {key: String, value: Number}
+      constructors: [[key, value], []]
+      map: [key, value]
+  CorporateHolder:
+    Permission:
+      fields: {ownerId: String, ownerType: String, ownerEmail: String, ownerName: String, ownerPictureUrl: String,
+        ownerStatus: String, created: String}
+      constructors: [[ownerId, ownerType, ownerEmail, ownerName, ownerPictureUrl, ownerStatus, created]]
+      map: [ownerId, ownerType]
+  DynamicBrcode:
+    Rule:
+      fields: {key: String, value: "String[]"}
+      constructors: [[key, value], []]
+      map: [key, value]
+  Invoice:
+    Description:
+      fields: {key: String, value: String}
+      constructors: [[key, value], []]
+    Discount:
+      fields: {percentage: Number, due: String}
+      constructors: [[percentage, due], []]
+    Payment:
+      fields: {amount: Integer, name: String, taxId: String, bankCode: String, branchCode: String,
+        accountNumber: String, accountType: String, endToEndId: String, method: String}
+      constructors: [[amount, name, taxId, bankCode, branchCode, accountNumber, accountType, endToEndId, method], []]
+      classData: Payment
+    Rule:
+      fields: {key: String, value: "String[]"}
+      constructors: [[key, value]]
+      map: [key, value]
+  MerchantSession:
+    AllowedInstallment:
+      fields: {totalAmount: long, count: int}
+      constructors: [[totalAmount, count]]
+      final: false
+      classData: AllowedInstallments
+  PaymentRequest:
+    Action:
+      fields: {name: String, action: String, type: String, id: String}
+      constructors: [[name, action, type, id], []]
