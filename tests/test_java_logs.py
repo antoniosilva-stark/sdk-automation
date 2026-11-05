@@ -9,12 +9,15 @@ from test_java_field_types import REAL_SOURCES, SCHEMAS, _generated, _realConven
 # saida de hoje do template. O teste prova que cada um segue diferente do simples no real, entao a lista nao envelhece.
 LOG_EXCLUSIONS = {
     "BoletoHolmes": "campo extra `updated` e ctor created,type,holmes,id,updated",
-    "CorporatePurchase": "campos extras description e corporateTransactionId, sem ctor all-args",
+    "CorporatePurchase": "campos extras description e corporateTransactionId e ctor all-args de 7 parametros",
     "MerchantInstallment": "o parametro do ctor e `merchantInstallment` e o campo e `installment`",
     "PaymentRequest": "Log escrito a mao com a classe interna User (ME 9.8)",
 }
 
 SHORT_RETURNS = {"Log", "Generator<Log>", "Log.Page"}
+
+
+SPEC_FILE = REPO_ROOT / "apis/spec-v2.openapi.yaml"
 
 
 def _logEntries() -> dict:
@@ -294,3 +297,37 @@ def test_renderJavaCodeCarriesNoLogWithoutAShape(javaCode, javaDocs):
 ])
 def test_renderJavaCodeResolvesTheLogNamesAndErrorsFromTheShape(javaCode, javaDocs, shape, expected):
     assert _balanceCode(javaCode, javaDocs, logShape=shape)["log"] == expected
+
+
+def _specLogResources(extractSchema, specFile) -> set:
+    schemas = extractSchema.loadFast(specFile.read_text(encoding="utf-8"))["components"]["schemas"]
+    return {name for name, schema in schemas.items() if isinstance(schema, dict) and "x-sdk-log" in schema}
+
+
+def _logFlagDrift(flagged: set, entries) -> tuple:
+    """Entrada do javaLogs sem a flag `x-sdk-log` na spec nunca chega ao template; recurso com a flag e fora do javaLogs
+    e da exclusao nomeada geraria o Log com o default sem ninguem ter decidido. PaymentRequest tem Log escrito a mao, sem
+    a flag, por isso a exclusao nao precisa estar na spec."""
+    return (sorted(set(entries) - flagged), sorted(flagged - set(entries) - set(LOG_EXCLUSIONS)))
+
+
+def test_javaLogsAndTheSpecLogFlagCoverTheSameResources(extractSchema):
+    flagged = _specLogResources(extractSchema, SPEC_FILE)
+
+    assert _logFlagDrift(flagged, _logEntries()) == ([], [])
+
+
+def test_logFlagDriftNamesAnEntryWithoutTheFlagAndAFlagWithoutAnEntry(extractSchema, tmpPath):
+    spec = tmpPath / "spec.yaml"
+    spec.write_text(
+        "components:\n  schemas:\n"
+        "    Transfer:\n      x-sdk-log: true\n"
+        "    Balance:\n      type: object\n"
+        "    Webhook:\n      x-sdk-log: true\n",
+        encoding="utf-8",
+    )
+    flagged = _specLogResources(extractSchema, spec)
+
+    assert flagged == {"Transfer", "Webhook"}
+    assert _logFlagDrift(flagged, {"Transfer": {}, "Balance": {}}) == (["Balance"], ["Webhook"])
+    assert _logFlagDrift(flagged, {"Transfer": {}, "Webhook": {}}) == ([], [])
