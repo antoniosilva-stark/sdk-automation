@@ -56,7 +56,7 @@ def test_propertyNamedDataRenamesTheStaticClassData(builtOnce):
 
     assert 'static ClassData classData = new ClassData(InvoicePullSubscription.class, ' in outer
     assert '"InvoicePullSubscription");' in outer
-    assert re.search(r"^    public \S+ data;$", outer, re.M)
+    assert re.search(r"^    public [\w<>, ]+ data;$", outer, re.M)
     assert "public InvoicePullSubscription(Map<String, Object> classData) throws Exception {" in outer
     assert "new HashMap<>(classData)" in outer
     assert "@param classData map of properties" in outer

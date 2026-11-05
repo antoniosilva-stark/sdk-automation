@@ -40,6 +40,7 @@ LOG_OVERLOADS = {
 }
 COM_IMPORT_ORDER = ("com.starkbank.utils.Generator", "com.starkbank.utils.Resource", "com.starkbank.utils.Rest",
                     "com.starkcore.utils.SubResource", "com.starkbank.error.ErrorElement")
+PRIMITIVE_GETTERS = {"long": "longValue", "int": "intValue"}
 NUMERIC_GETTERS = {"Integer": "intValue", "Long": "longValue", "Float": "floatValue", "Double": "doubleValue"}
 METHOD_LINE = re.compile(r"^( {4}| {8})public static [\w.<>\[\], ?]+? (\w+)\((.*?)\) throws Exception \{$")
 
@@ -64,7 +65,7 @@ def _schemas(resource: str) -> tuple:
 
 def _declaredTypes(source: str) -> dict:
     """Campos `public T nome;` da classe de topo (o gerador e a fonte do tipo; o teste nao o recalcula)."""
-    return {name: javaType for javaType, name in re.findall(r"^    public ([\w<>\[\]]+) (\w+);$", source, re.M)}
+    return {name: javaType for javaType, name in re.findall(r"^    public ([\w<>\[\], ]+?) (\w+);$", source, re.M)}
 
 
 def _mapConstructorBody(source: str) -> str:
@@ -103,8 +104,9 @@ def test_returnOnlyFieldsAreNullAndNeverReadFromTheMap(generated, resource):
 
     body = _mapConstructorBody(source)
 
+    declared = _declaredTypes(source)
     for name in returnOnly:
-        assert f"this.{name} = null;" in body
+        assert f"this.{name} = {'0' if declared[name] in PRIMITIVE_GETTERS else 'null'};" in body
         assert f'dataCopy.remove("{name}")' not in source
 
 
@@ -120,6 +122,9 @@ def test_everyCreatableFieldIsReadWithTheGeneratedDeclaredType(generated, resour
         if schema["properties"][name].get("x-sdk-id"):
             continue
         javaType = declared[name]
+        if javaType in PRIMITIVE_GETTERS:
+            assert f'this.{name} = ((Number) dataCopy.remove("{name}")).{PRIMITIVE_GETTERS[javaType]}();' in body
+            continue
         if javaType in NUMERIC_GETTERS:
             assert f'Number {name} = (Number) dataCopy.remove("{name}");' in body
             assert f"this.{name} = {name} == null ? null : {name}.{NUMERIC_GETTERS[javaType]}();" in body
@@ -136,11 +141,8 @@ def test_noNumericIsReadWithADirectCast(generated, resource):
 
 
 @requiresGenerator
-def test_aLongFieldIsConvertedWithLongValue(generated):
-    source = generated("Transfer")
-
-    assert 'Number amount = (Number) dataCopy.remove("amount");' in source
-    assert "this.amount = amount == null ? null : amount.longValue();" in source
+def test_aPrimitiveLongFieldIsConvertedWithLongValueWithoutANullBranch(generated):
+    assert 'this.amount = ((Number) dataCopy.remove("amount")).longValue();' in generated("Transfer")
 
 
 @requiresGenerator
@@ -310,6 +312,7 @@ def test_hygieneNoTrailingSpaceAndTheBraceSitsOnTheStatementLine(generated, reso
 
 # ---------------------------------------------------------------- comportamento real do construtor
 CONSTRUCTOR_MAIN = """
+import com.starkbank.Balance;
 import com.starkbank.SplitProfile;
 import com.starkbank.Transaction;
 import java.util.HashMap;
@@ -333,6 +336,15 @@ public class Main {
             data.put("description", "Tony Stark");
             System.out.println("amount " + amount.getClass().getSimpleName() + " -> " + new Transaction(data).amount);
         }
+        try {
+            Map<String, Object> withoutAmount = new HashMap<>();
+            withoutAmount.put("description", "Tony Stark");
+            new Transaction(withoutAmount);
+            System.out.println("amount absent -> accepted");
+        } catch (NullPointerException exception) {
+            System.out.println("amount absent -> NullPointerException");
+        }
+        System.out.println("balance return-only -> " + new Balance(new HashMap<>()).amount);
         for (String key : new String[]{"status", "created", "updated"}) {
             Map<String, Object> data = new HashMap<>();
             data.put("interval", "week");
@@ -345,6 +357,7 @@ public class Main {
             }
         }
         Map<String, Object> transactionData = new HashMap<>();
+        transactionData.put("amount", 1L);
         transactionData.put("balance", 1L);
         try {
             new Transaction(transactionData);
@@ -362,7 +375,7 @@ def constructorRun(tmp_path_factory, builtOnce, javaRuntimeClasspath):
     classpath = javaRuntimeClasspath
     work = tmp_path_factory.mktemp("constructor-runtime")
     sources = []
-    for resource in ("SplitProfile", "Transaction"):
+    for resource in ("SplitProfile", "Transaction", "Balance"):
         code, out, target = builtOnce(resource, "java", *dict(RESOURCES)[resource])
         assert code == 0, out
         copy = work / "src/com/starkbank" / f"{resource}.java"
@@ -393,6 +406,16 @@ def test_theGeneratedConstructorAcceptsAnyNumericTypeInTheMap(constructorRun):
     assert "amount Integer -> 100" in constructorRun
     assert "amount Long -> 100" in constructorRun
     assert "amount Double -> 100" in constructorRun
+
+
+@requiresGenerator
+def test_aPrimitiveFieldAbsentFromTheMapThrowsNullPointerLikeTheReal(constructorRun):
+    assert "amount absent -> NullPointerException" in constructorRun
+
+
+@requiresGenerator
+def test_aReturnOnlyPrimitiveFieldIsZeroInTheMapConstructor(constructorRun):
+    assert "balance return-only -> 0" in constructorRun
 
 
 @requiresGenerator

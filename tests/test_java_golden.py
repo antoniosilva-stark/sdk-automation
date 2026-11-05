@@ -390,8 +390,6 @@ IMPORT_ORDER = ("real na minoria do proprio real: Rest>Resource>Generator (11 de
                 " e java.util fora de ordem alfabetica (13 contra 21)")
 BALANCE_IMPORTS = "o real importa o que nao usa (Generator, List, HashMap, ArrayList); o gate DEAD_IMPORT reprova import morto"
 
-FREE_OBJECT = ("tipo-perdido",
-               "Entrega 9: objeto livre `metadata`: o real usa HashMap<String, Object>; o gerador emite Object")
 RULE = ("tipo-perdido",
         "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
         " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
@@ -437,8 +435,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DEPRECATED,
         "allArgs|Transaction(all-args)|order|moved=[senderId, fee, balance, created]":
             DOCSTRING_ORDER,
-        "allArgs|Transaction(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
         "allArgs|Transaction(all-args)|type|fee real=int gen=Integer":
             PRIMITIVE,
         "doc|sections -[Parameters (required):, Parameters (optional):] +[]|Transaction(Map<String, Object>)":
@@ -451,8 +447,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DEPRECATED,
         "fields|order|moved=[senderId, fee]":
             DOCSTRING_ORDER,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "mapctor|amount real=directcast:int gen=number:longValue":
             PRIMITIVE_CAST,
     },
@@ -463,8 +457,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
         "allArgs|Transfer(all-args)|order|moved=[id]":
             ID_POSITION,
-        "allArgs|Transfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
         "allArgs|Log.Log(all-args)|type|errors real=String[] gen=List<ErrorElement>":
             LOG_ERRORS,
         "doc|tags -[] +[param:displayDescription]|Transfer(all-args)":
@@ -479,8 +471,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
         "fields|extra|displayDescription":
             DOCSTRING_EXTRA,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "fields|type|Log.errors real=String[] gen=List<ErrorElement>":
             LOG_ERRORS,
         "mapctor|displayDescription real=None gen=cast:String":
@@ -489,10 +479,6 @@ EXPECTED: dict[str, dict[str, str]] = {
     "Balance": {
         "allArgs|Balance(all-args)|order|moved=[id]":
             ID_POSITION,
-        "allArgs|Balance(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
             BALANCE_IMPORTS,
     },
@@ -513,8 +499,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_MISSING,
         "allArgs|VerifiedTransfer(all-args)|order|moved=[id]":
             ID_POSITION,
-        "allArgs|VerifiedTransfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
         "doc|tags -[param:accountType] +[]|VerifiedTransfer(all-args)":
             DOCSTRING_MISSING,
         "doc|sections -[Parameters (optional):] +[]|VerifiedTransfer(Map<String, Object>)":
@@ -525,8 +509,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             LIST_PARAM,
         "fields|missing|accountType":
             DOCSTRING_MISSING,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "mapctor|accountType real=cast:String gen=None":
             DOCSTRING_MISSING,
         "imports|real=Rest,Resource | Map,List,HashMap,ArrayList gen=Resource,Rest | ArrayList,HashMap,List,Map":
@@ -558,8 +540,6 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             RULE,
         "allArgs|Transfer(all-args)|type|rules real=List<Rule> gen=List<Object>":
             RULE,
-        "allArgs|Transfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
         "allArgs|Log.Page.Page(all-args)|type|logs real=List<Log> gen=List<Transfer.Log>":
             LOG_QUALIFIED,
         "annotations|-[] +[SuppressWarnings]|Transfer(Map<String, Object>)":
@@ -576,8 +556,6 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             RULE,
         "fields|type|rules real=List<Rule> gen=List<Object>":
             RULE,
-        "fields|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
         "fields|type|Log.Page.logs real=List<Log> gen=List<Transfer.Log>":
             LOG_QUALIFIED,
         "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
@@ -598,7 +576,7 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             BALANCE_GET,
         "rest|get real={'getStream': 1} gen={'getId': 1}":
             BALANCE_GET,
-        "mapctor|amount real=None gen=null":
+        "mapctor|amount real=None gen=other:0":
             BALANCE_MAP_CTOR,
         "mapctor|currency real=None gen=null":
             BALANCE_MAP_CTOR,
@@ -622,12 +600,8 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             RULE,
         "allArgs|VerifiedTransfer(all-args)|type|rules real=List<Transfer.Rule> gen=List<Object>":
             RULE,
-        "allArgs|VerifiedTransfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
         "fields|type|rules real=List<Transfer.Rule> gen=List<Object>":
             RULE,
-        "fields|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
         "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
             RULE,
     },

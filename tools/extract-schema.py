@@ -100,6 +100,10 @@ def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | Non
     return (loadConventions(Path(conventions)).get("integerFormats") or {}).get(field)
 
 
+def javaTypeOverrides(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    return (loadConventions(Path(conventions)).get("javaTypes") or {}).get(resource) or {}
+
+
 def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
     return (loadConventions(Path(conventions)).get("stringFormats") or {}).get(field)
 

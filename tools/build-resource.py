@@ -89,7 +89,7 @@ def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     return node
 
 
-def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
+def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = None) -> dict:
     """Copia `apis/` para `stagedDir` e injeta o Javadoc e o corpo do Map-ctor pre-renderizados na entrada do
     recurso da copia.
 
@@ -98,6 +98,7 @@ def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
     copiada. O `x-sdk-docs` original segue no schema copiado e a spec e os schemas do repo nao sao tocados."""
     javaDocs = loadTool("java-docs")
     javaCode = loadTool("java-code")
+    extractSchema = loadTool("extract-schema")
     apisDir = REPO_ROOT / "apis"
     specPath = REPO_ROOT / SPEC_FILE
     specText = specPath.read_text(encoding="utf-8")
@@ -107,7 +108,8 @@ def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
     rendered = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)
-    code = javaCode.renderMapConstructor(schema, entity)
+    overrides = extractSchema.javaTypeOverrides(resource, conventions or extractSchema.CONVENTIONS_FILE)
+    code = javaCode.renderJavaCode(schema, entity, resource, overrides)
 
     shutil.copytree(apisDir, stagedDir / "apis")
     entryLine = f"\n    {resource}:\n"

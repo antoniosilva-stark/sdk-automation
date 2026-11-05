@@ -1049,3 +1049,19 @@ def test_subresourceFlagDoesNotCountAsAnOperation(extractSchema, tmpPath):
     root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "parse")
 
     assert extractSchema.declaredOperations(root, "Widget")["flags"] == ["x-sdk-data-only"]
+
+
+def test_javaTypeOverridesOfAnEmptySectionOrMissingFileAreEmpty(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("integerFormats:\n  amount: int64\njavaTypes:\n", encoding="utf-8")
+
+    assert extractSchema.javaTypeOverrides("Transfer", conventions) == {}
+    assert extractSchema.javaTypeOverrides("Transfer", tmpPath / "nao-existe.yaml") == {}
+
+
+def test_javaTypeOverridesAreScopedByResource(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaTypes:\n  Invoice:\n    amount: Number\n", encoding="utf-8")
+
+    assert extractSchema.javaTypeOverrides("Invoice", conventions) == {"amount": "Number"}
+    assert extractSchema.javaTypeOverrides("Transfer", conventions) == {}

@@ -17,7 +17,7 @@ def _entity(properties: dict, creatable: tuple) -> tuple:
 
 def _render(javaCode, properties: dict, creatable: tuple) -> dict:
     schema, entity = _entity(properties, creatable)
-    return javaCode.renderMapConstructor(schema, entity)
+    return javaCode.renderJavaCode(schema, entity, "Widget", {})
 
 
 def test_integerIsReadAsNumberAndConvertedWithoutCast(javaCode):
@@ -111,14 +111,14 @@ def test_aGenericFieldThatIsReturnOnlyIsNotCastSoItNeedsNoSuppress(javaCode):
 def test_theProfileIsData(javaCode):
     profile = {**javaCode.JAVA_CODE_PROFILE, "numericGetters": {"Integer": "shortValue"}}
     schema, entity = _entity({"delay": {"type": "integer"}}, ("delay",))
-    body = javaCode.renderMapConstructor(schema, entity, profile)["ctorMapBody"]
+    body = javaCode.renderJavaCode(schema, entity, "Widget", {}, profile)["ctorMapBody"]
     assert body[1].endswith("delay.shortValue();")
 
 
 def test_splitProfileFromTheRepositorySchema(javaCode, javaDocs):
     schemas = yaml.safe_load((SCHEMAS / "splitprofile.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
     entity = javaDocs.describeEntity(schemas["SplitProfile"], schemas["SplitProfileCreate"])
-    body = javaCode.renderMapConstructor(schemas["SplitProfile"], entity)["ctorMapBody"]
+    body = javaCode.renderJavaCode(schemas["SplitProfile"], entity, "SplitProfile", {})["ctorMapBody"]
     assert body == [
         'this.interval = (String) dataCopy.remove("interval");',
         'Number delay = (Number) dataCopy.remove("delay");',
@@ -146,7 +146,7 @@ def test_aTypeTheProfileDoesNotCoverFailsClosedNamingTheField(javaCode, prop):
     schema, entity = _entity({"widget": prop}, ("widget",))
 
     with pytest.raises(ValueError, match="widget"):
-        javaCode.renderMapConstructor(schema, entity)
+        javaCode.renderJavaCode(schema, entity, "Widget", {})
 
 
 def _everySchemaProperty() -> list:
@@ -179,3 +179,127 @@ def test_theSweepNoticesACaseRemovedFromTheProfile(javaCode):
     with pytest.raises(ValueError, match="int64"):
         for _, prop in _everySchemaProperty():
             javaCode.javaTypeOf(prop, profile)
+
+
+def _fields(javaCode, properties: dict, overrides: dict | None = None) -> list:
+    return javaCode.renderFields({"properties": properties}, "Widget", overrides or {}, javaCode.JAVA_CODE_PROFILE)
+
+
+@pytest.mark.parametrize("prop, expected", [
+    ({"type": "integer"}, "Integer"),
+    ({"type": "integer", "format": "int64"}, "Long"),
+    ({"type": "number"}, "Number"),
+    ({"type": "number", "format": "double"}, "Double"),
+    ({"type": "boolean"}, "Boolean"),
+    ({"type": "string", "format": "date-time"}, "String"),
+    ({"type": "object"}, "Object"),
+    ({"type": "array", "items": {"type": "string"}}, "String[]"),
+    ({"type": "array", "items": {"type": "object"}}, "List<Object>"),
+])
+def test_fieldTypeDefaultsToTheProfileRule(javaCode, prop, expected):
+    assert _fields(javaCode, {"value": prop}) == [{"name": "value", "javaType": expected, "isId": False}]
+
+
+def test_fieldsKeepSchemaOrderAndMarkTheId(javaCode):
+    fields = _fields(javaCode, {
+        "id": {"type": "string", "x-sdk-id": True},
+        "amount": {"type": "integer", "format": "int64"},
+        "status": {"type": "string", "readOnly": True},
+    })
+
+    assert [(field["name"], field["javaType"], field["isId"]) for field in fields] == [
+        ("id", "String", True),
+        ("amount", "Long", False),
+        ("status", "String", False),
+    ]
+
+
+def test_resourceOverrideBeatsTheProfileDefault(javaCode):
+    fields = _fields(javaCode, {"amount": {"type": "integer", "format": "int64"}}, {"amount": "Integer"})
+
+    assert fields[0]["javaType"] == "Integer"
+
+
+def test_overrideOfAFieldTheSchemaDoesNotHaveFailsInsteadOfBeingIgnored(javaCode):
+    with pytest.raises(ValueError, match="Widget.amout"):
+        _fields(javaCode, {"amount": {"type": "integer"}}, {"amout": "Long"})
+
+
+def test_fieldWithoutProfileRuleFailsNamingResourceAndField(javaCode):
+    with pytest.raises(ValueError, match="Widget.blob: tipo sem regra no perfil"):
+        _fields(javaCode, {"blob": {"type": "string", "format": "binary"}})
+
+
+def test_overrideReachesTheMapConstructorCastAndTheFieldsOfTheSameRender(javaCode):
+    schema, entity = _entity({"amount": {"type": "integer", "format": "int64"}}, ("amount",))
+
+    rendered = javaCode.renderJavaCode(schema, entity, "Widget", {"amount": "Integer"})
+
+    assert rendered["ctorMapBody"][1] == "this.amount = amount == null ? null : amount.intValue();"
+    assert [field["javaType"] for field in rendered["fields"]] == ["Integer"]
+
+
+def _overridden(javaCode, prop: dict, javaType: str, creatable: bool = True) -> dict:
+    schema, entity = _entity({"value": prop}, ("value",) if creatable else ())
+    return javaCode.renderJavaCode(schema, entity, "Widget", {"value": javaType})
+
+
+@pytest.mark.parametrize("javaType, getter", [("long", "longValue"), ("int", "intValue")])
+def test_primitiveIsReadThroughNumberWithoutANullBranch(javaCode, javaType, getter):
+    rendered = _overridden(javaCode, {"type": "integer"}, javaType)
+
+    assert rendered["ctorMapBody"] == [f'this.value = ((Number) dataCopy.remove("value")).{getter}();']
+    assert rendered["ctorMapSuppress"] is False
+
+
+@pytest.mark.parametrize("javaType", ["long", "int"])
+def test_returnOnlyPrimitiveGetsZeroBecausePrimitiveCannotBeNull(javaCode, javaType):
+    rendered = _overridden(javaCode, {"type": "integer"}, javaType, creatable=False)
+
+    assert rendered["ctorMapBody"] == ["this.value = 0;"]
+
+
+def test_returnOnlyBoxedFieldStillGetsNull(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "Long", creatable=False)
+
+    assert rendered["ctorMapBody"] == ["this.value = null;"]
+
+
+def test_numberOverrideIsReadWithADirectCast(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "Number")
+
+    assert rendered["ctorMapBody"] == ['this.value = (Number) dataCopy.remove("value");']
+
+
+def test_stringOverrideOnANumericFieldIsReadWithADirectCast(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "String")
+
+    assert rendered["ctorMapBody"] == ['this.value = (String) dataCopy.remove("value");']
+    assert rendered["ctorMapSuppress"] is False
+
+
+@pytest.mark.parametrize("javaType", ["Map<String, Object>", "HashMap<String, Object>", "List<String>"])
+def test_genericOverrideIsCastDirectlyAndTurnsOnSuppress(javaCode, javaType):
+    rendered = _overridden(javaCode, {"type": "object"}, javaType)
+
+    assert rendered["ctorMapBody"] == [f'this.value = ({javaType}) dataCopy.remove("value");']
+    assert rendered["ctorMapSuppress"] is True
+
+
+@pytest.mark.parametrize("override", ["Lon", "BigDecimal", "float", "", 5, ["a"], None])
+def test_overrideTypeOutsideWhatTheMapConstructorReadsFails(javaCode, override):
+    with pytest.raises(ValueError, match="Widget.amount: tipo de override"):
+        _fields(javaCode, {"amount": {"type": "integer"}}, {"amount": override})
+
+
+def test_overrideOfTheIdFieldFailsInsteadOfBeingIgnored(javaCode):
+    with pytest.raises(ValueError, match="Widget.id: override de campo id"):
+        _fields(javaCode, {"id": {"type": "string", "x-sdk-id": True}}, {"id": "Long"})
+
+
+@pytest.mark.parametrize("javaType", [
+    "String", "Integer", "Long", "Number", "Float", "Double", "Boolean", "Object", "long", "int",
+    "String[]", "List<Object>", "Map<String, Object>", "HashMap<String, Object>", "List<String>",
+])
+def test_overrideTypeTheMapConstructorReadsIsAccepted(javaCode, javaType):
+    assert _fields(javaCode, {"amount": {"type": "integer"}}, {"amount": javaType})[0]["javaType"] == javaType

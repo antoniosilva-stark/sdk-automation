@@ -9,3 +9,85 @@ integerFormats:
 stringFormats:
   pdf: uri
   link: uri
+
+# Tipo Java por campo, Recurso -> campo -> tipo. Medido contra sdk-java f60902a: o real tipa por familia de
+# recurso, nao por regra global (Transfer `long`, Invoice `Number`, Corporate* `Long`, DarfPayment `String`), entao so
+# entra aqui o campo em que o real foge do default do perfil de tools/java-code.py; o default vale para recurso novo.
+# O tipo precisa ser um que o Map-ctor sabe ler (perfil: String, Integer, Long, Number, Float, Double, Boolean, Object,
+# String[], List<Object>, mais long/int primitivos e Map/HashMap/List<String> por cast direto). Campo que o schema nao
+# tem falha na geracao.
+javaTypes:
+  Balance:
+    amount: long
+  Boleto:
+    amount: long
+    fine: Number
+    interest: Number
+  BrcodePayment:
+    amount: Number
+  CorporateBalance:
+    limit: Long
+    maxLimit: Long
+  CorporatePurchase:
+    tax: Long
+    issuerAmount: Long
+    merchantAmount: Long
+    merchantFee: Long
+  CorporateRule:
+    counterAmount: Number
+  CorporateTransaction:
+    tags: String[]
+  # o real le os tres valores com Long.parseLong(String.valueOf(...)); o gerado le via ((Number) x).longValue()
+  DarfPayment:
+    nominalAmount: long
+    fineAmount: long
+    interestAmount: long
+    amount: String
+    fee: String
+  Deposit:
+    amount: long
+  DynamicBrcode:
+    amount: Number
+    expiration: Number
+  Invoice:
+    amount: Number
+    expiration: Number
+    fine: Number
+    interest: Number
+    nominalAmount: Number
+    fineAmount: Number
+    interestAmount: Number
+    discountAmount: Number
+  InvoicePullSubscription:
+    pullRetryLimit: Long
+    amountMinLimit: Long
+    data: Map<String, Object>
+  MerchantCard:
+    tags: List<String>
+  MerchantInstallment:
+    amount: long
+    fee: int
+    transactionIds: List<String>
+  MerchantPurchase:
+    amount: long
+    installmentCount: int
+    metadata: Map<String, Object>
+  MerchantSession:
+    allowedFundingTypes: List<String>
+    expiration: Number
+    allowedIps: List<String>
+  Split:
+    amount: long
+  TaxPayment:
+    amount: String
+    fee: String
+  Transaction:
+    amount: long
+  Transfer:
+    amount: long
+    metadata: HashMap<String, Object>
+  VerifiedTransfer:
+    amount: long
+    metadata: HashMap<String, Object>
+  Workspace:
+    allowedTaxIds: List<String>
