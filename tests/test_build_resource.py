@@ -463,19 +463,33 @@ def test_objectArrayRequestsTheListImportAlone(buildResource):
     assert "usesObjectList=true" not in buildResource.javaImports({"x-sdk-get"})
 
 
+def test_parseHelpersRequestTheArrayListImportEvenWithoutAListOperation(buildResource):
+    assert "usesParsers=true" in buildResource.javaImports({"x-sdk-get"}, hasParsers=True)
+    assert "usesParsers=true" not in buildResource.javaImports({"x-sdk-get"})
+
+
+def test_theStagedSpecTellsWhichResourcesCarryParseHelpers(buildResource, tmpPath):
+    with_helpers = buildResource.stageJavaDocs("CorporateRule", tmpPath / "with")
+    without = buildResource.stageJavaDocs("Balance", tmpPath / "without")
+
+    assert buildResource.hasParsers("CorporateRule", str(with_helpers["spec"])) is True
+    assert buildResource.hasParsers("Balance", str(without["spec"])) is False
+
+
 def test_onlyObjectArraysCountAsList(buildResource):
     assert buildResource.hasObjectArray("CorporateRule") is True
     assert buildResource.hasObjectArray("Balance") is False
 
 
 @requiresGenerator
-def test_objectArrayResourceImportsList(builtOnce):
+def test_objectArrayResourceImportsListAndArrayListOnlyForItsParseHelpers(builtOnce):
     code, out, target = builtOnce("CorporateRule", "java", "--advisory")
 
     assert code == 0, out
     source = (target / "src/main/java/com/starkbank/CorporateRule.java").read_text(encoding="utf-8")
     assert "import java.util.List;" in source
-    assert "import java.util.ArrayList;" not in source
+    assert "import java.util.ArrayList;" in source
+    assert "new ArrayList<>()" in source
 
 
 @requiresGenerator

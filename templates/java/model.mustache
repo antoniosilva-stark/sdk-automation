@@ -9,7 +9,8 @@ package {{package}};
 
 {{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
-{{/usesList}}import java.util.HashMap;
+{{/usesList}}{{^usesList}}{{#usesParsers}}import java.util.ArrayList;
+{{/usesParsers}}{{/usesList}}import java.util.HashMap;
 {{#usesList}}import java.util.List;
 {{/usesList}}{{^usesList}}{{#usesObjectList}}import java.util.List;
 {{/usesObjectList}}{{/usesList}}import java.util.Map;
@@ -50,6 +51,13 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     public {{classname}}() {
 {{^vendorExtensions.x-sdk-subresource}}        super(null);
 {{/vendorExtensions.x-sdk-subresource}}    }
+{{#vendorExtensions.x-sdk-java-code.ctorMapParsers}}
+
+    @SuppressWarnings("unchecked")
+    {{{signature}}} {
+{{#body}}        {{{.}}}
+{{/body}}    }
+{{/vendorExtensions.x-sdk-java-code.ctorMapParsers}}
 {{#vendorExtensions.x-sdk-put}}
 
     /**

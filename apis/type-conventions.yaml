@@ -14,8 +14,10 @@ stringFormats:
 # recurso, nao por regra global (Transfer `long`, Invoice `Number`, Corporate* `Long`, DarfPayment `String`), entao so
 # entra aqui o campo em que o real foge do default do perfil de tools/java-code.py; o default vale para recurso novo.
 # O tipo precisa ser um que o Map-ctor sabe ler (perfil: String, Integer, Long, Number, Float, Double, Boolean, Object,
-# String[], List<Object>, mais long/int primitivos e Map/HashMap/List<String> por cast direto). Campo que o schema nao
-# tem falha na geracao.
+# String[], List<Object>, mais long/int primitivos e Map/HashMap/List<String>/Resource por cast direto). `List<E>` e o
+# tipo do real, VERBATIM, para o campo que o schema descreve so como array de object: E e uma classe interna do proprio
+# recurso (em javaInnerClasses, com ou sem o qualificador `Recurso.`) ou outro recurso gerado; o Map-ctor converte cada
+# Map em E por um auxiliar `parseX`, como o real. Campo que o schema nao tem falha na geracao.
 javaTypes:
   Balance:
     amount: long
@@ -23,11 +25,19 @@ javaTypes:
     amount: long
     fine: Number
     interest: Number
+    descriptions: List<Boleto.Description>
+    discounts: List<Boleto.Discount>
   BrcodePayment:
     amount: Number
+    rules: List<BrcodePayment.Rule>
   CorporateBalance:
     limit: Long
     maxLimit: Long
+  CorporateCard:
+    rules: List<CorporateRule>
+  CorporateHolder:
+    permissions: List<Permission>
+    rules: List<CorporateRule>
   CorporatePurchase:
     tax: Long
     issuerAmount: Long
@@ -35,6 +45,9 @@ javaTypes:
     merchantFee: Long
   CorporateRule:
     counterAmount: Number
+    categories: List<MerchantCategory>
+    countries: List<MerchantCountry>
+    methods: List<CardMethod>
   CorporateTransaction:
     tags: String[]
   # o real le os tres valores com Long.parseLong(String.valueOf(...)); o gerado le via ((Number) x).longValue()
@@ -49,6 +62,7 @@ javaTypes:
   DynamicBrcode:
     amount: Number
     expiration: Number
+    rules: List<DynamicBrcode.Rule>
   Invoice:
     amount: Number
     expiration: Number
@@ -58,6 +72,10 @@ javaTypes:
     fineAmount: Number
     interestAmount: Number
     discountAmount: Number
+    descriptions: List<Invoice.Description>
+    discounts: List<Invoice.Discount>
+    rules: List<Invoice.Rule>
+    splits: List<Split>
   InvoicePullSubscription:
     pullRetryLimit: Long
     amountMinLimit: Long
@@ -76,6 +94,10 @@ javaTypes:
     allowedFundingTypes: List<String>
     expiration: Number
     allowedIps: List<String>
+    allowedInstallments: List<AllowedInstallment>
+  PaymentRequest:
+    payment: Resource
+    actions: List<PaymentRequest.Action>
   Split:
     amount: long
   TaxPayment:

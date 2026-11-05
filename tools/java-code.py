@@ -26,7 +26,7 @@ JAVA_CODE_PROFILE = {
     "primitives": {"long": {"getter": "longValue", "zero": "0"}, "int": {"getter": "intValue", "zero": "0"}},
     # genericos que o Map-ctor le por cast direto: so os que o override pode pedir; tipo fora deste conjunto e dos
     # valores do perfil falha, em vez de gerar `Lon` ou um cast que nao compila
-    "genericTypes": ["Map<String, Object>", "HashMap<String, Object>", "List<String>", "String[]"],
+    "genericTypes": ["Map<String, Object>", "HashMap<String, Object>", "List<String>", "String[]", "Resource"],
     "numericGetters": {"Integer": "intValue", "Long": "longValue", "Float": "floatValue", "Double": "doubleValue"},
 }
 
@@ -41,19 +41,22 @@ def renderJavaCode(
     ctorOrder: list | None = None,
     ctorTypes: dict | None = None,
     innerClasses: dict | None = None,
+    resourceNames: frozenset = frozenset(),
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
     construtor all-args, que no real e dado do Java. `open`: a classe externa nao e `final`. `innerClasses`: as classes
-    internas simples do real, ja com os construtores e o corpo do Map-ctor prontos."""
-    fields = renderFields(schema, resource, overrides, profile)
+    internas simples do real, ja com os construtores e o corpo do Map-ctor prontos. `resourceNames`: os recursos
+    geradores, para o override `List<Recurso>`; esse tipo e o `List<ClasseInterna>` saem do Map-ctor por um auxiliar
+    `parseX` (`ctorMapParsers`), como no real."""
+    fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
     return {
         "fields": fields,
         "ctorFields": ctorFields,
         "open": isOpen,
         "innerClasses": renderInnerClasses(resource, innerClasses or {}, profile),
-        **renderMapConstructor(entity, fields, profile),
+        **renderMapConstructor(entity, fields, profile, innerClasses or {}),
     }
 
 
@@ -173,7 +176,14 @@ def renderInnerMapConstructor(names: list, fields: dict, profile: dict) -> dict:
     return {"suppress": any("<" in fields[name] for name in names), "body": body}
 
 
-def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = JAVA_CODE_PROFILE) -> list:
+def renderFields(
+    schema: dict,
+    resource: str,
+    overrides: dict,
+    profile: dict = JAVA_CODE_PROFILE,
+    innerClasses: dict | None = None,
+    resourceNames: frozenset = frozenset(),
+) -> list:
     """Todos os campos na ordem do schema (inclusive id e return-only) com o tipo Java ja decidido: o override do
     recurso vence o default do perfil. Override de campo inexistente falha, senao um typo viraria no-op calado."""
     properties = schema.get("properties") or {}
@@ -187,7 +197,7 @@ def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = J
             raise ValueError(f"{resource}.{name}: override de campo id, que o template sempre emite como String")
         javaType = overrides[name] if name in overrides else fieldTypeOf(resource, name, prop, profile)
         if name in overrides:
-            checkOverrideType(resource, name, javaType, profile)
+            checkOverrideType(resource, name, javaType, profile, innerClasses or {}, resourceNames)
         fields.append({"name": name, "javaType": javaType, "isId": isId})
     return fields
 
@@ -226,13 +236,52 @@ def checkConstructorTypes(fields: list, resource: str, types: dict, profile: dic
         checkOverrideType(resource, name, javaType, profile)
 
 
-def checkOverrideType(resource: str, name: str, javaType, profile: dict) -> None:
+def checkOverrideType(
+    resource: str,
+    name: str,
+    javaType,
+    profile: dict,
+    innerClasses: dict | None = None,
+    resourceNames: frozenset = frozenset(),
+) -> None:
     accepted = supportedTypes(profile)
     if isinstance(javaType, str) and javaType in accepted:
+        return
+    element = subObjectElement(javaType, profile)
+    if element is not None:
+        checkSubObjectElement(resource, name, element, innerClasses or {}, resourceNames)
         return
     raise ValueError(
         f"{resource}.{name}: tipo de override {javaType!r} que o Map-ctor nao le; aceitos: {', '.join(accepted)}"
     )
+
+
+def subObjectElement(javaType, profile: dict) -> str | None:
+    """`E` de `List<E>` quando E e `Nome` ou `Recurso.Nome`; `List<String>` e `List<Object>` o perfil ja le por cast."""
+    if not isinstance(javaType, str) or javaType in supportedTypes(profile):
+        return None
+    match = fullmatch(r"List<(\w+(?:\.\w+)?)>", javaType)
+    return match.group(1) if match else None
+
+
+def checkSubObjectElement(resource: str, name: str, element: str, innerClasses: dict, resourceNames) -> None:
+    """E e uma classe interna do proprio recurso (qualificada ou nao) ou, sem qualificador, outro recurso gerado."""
+    qualifier, _, bare = element.rpartition(".")
+    if qualifier and qualifier != resource:
+        raise ValueError(f"{resource}.{name}: qualificador {qualifier!r} de {element!r} nao e o proprio recurso")
+    if qualifier and bare not in innerClasses:
+        raise ValueError(f"{resource}.{name}: classe interna {bare!r} nao esta em javaInnerClasses")
+    if bare in innerClasses:
+        checkInnerClassBuildable(resource, name, bare, innerClasses[bare])
+        return
+    if bare not in resourceNames:
+        raise ValueError(f"{resource}.{name}: elemento {element!r} de List nao e classe interna nem recurso gerado")
+
+
+def checkInnerClassBuildable(resource: str, name: str, className: str, definition: dict) -> None:
+    if "map" in definition or any(definition.get("constructors") or []):
+        return
+    raise ValueError(f"{resource}.{name}: classe interna {className!r} nao tem construtor que receba campos")
 
 
 def supportedTypes(profile: dict) -> list:
@@ -249,7 +298,12 @@ def fieldTypeOf(resource: str, name: str, prop: dict, profile: dict) -> str:
         raise ValueError(f"{resource}.{name}: {error}") from error
 
 
-def renderMapConstructor(entity: dict, fields: list, profile: dict = JAVA_CODE_PROFILE) -> dict:
+def renderMapConstructor(
+    entity: dict,
+    fields: list,
+    profile: dict = JAVA_CODE_PROFILE,
+    innerClasses: dict | None = None,
+) -> dict:
     """Linhas do corpo de `X(Map)` ja prontas; o Mustache so as emoldura.
 
     Return-only recebe `null` e nao sai do Map, entao a chave dele cai em "Unknown parameters" (168 campos
@@ -257,6 +311,7 @@ def renderMapConstructor(entity: dict, fields: list, profile: dict = JAVA_CODE_P
     javaTypeByName = {field["name"]: field["javaType"] for field in fields}
     lines = []
     castTypes = []
+    parsers = []
     for field in entity["fields"]:
         if field["isId"]:
             continue
@@ -266,11 +321,71 @@ def renderMapConstructor(entity: dict, fields: list, profile: dict = JAVA_CODE_P
             continue
         javaType = javaTypeByName[field["name"]]
         castTypes.append(javaType)
-        lines += readLines(field["name"], javaType, profile)
+        element = subObjectElement(javaType, profile)
+        if element is None:
+            lines += readLines(field["name"], javaType, profile)
+            continue
+        parser = f"parse{field['name'][0].upper()}{field['name'][1:]}"
+        lines.append(f'this.{field["name"]} = {parser}((List<Object>) dataCopy.remove("{field["name"]}"));')
+        innerDefinition = (innerClasses or {}).get(element.rpartition(".")[2])
+        parsers.append(renderParseHelper(parser, element, innerDefinition, profile))
     return {
         "ctorMapBody": lines,
         "ctorMapSuppress": any("<" in javaType for javaType in castTypes),
+        "ctorMapParsers": parsers,
     }
+
+
+def renderParseHelper(parser: str, element: str, innerDefinition: dict | None, profile: dict) -> dict:
+    """`parseX(List<Object>)` privado, como o real: null -> null, item ja do tipo E e mantido, item Map vira E (pelo
+    construtor Map, ou pelo posicional mais longo quando a classe interna nao o tem), outro tipo falha."""
+    body = [
+        "if (items == null) {",
+        "    return null;",
+        "}",
+        f"List<{element}> parsed = new ArrayList<>();",
+        "for (Object item : items) {",
+        f"    if (item instanceof {element}) {{",
+        f"        parsed.add(({element}) item);",
+        "        continue;",
+        "    }",
+        "    if (item instanceof Map) {",
+        *renderParsedItem(element, innerDefinition, profile),
+        "        continue;",
+        "    }",
+        f'    throw new Exception("Unknown type \\"" + item.getClass() + "\\", use {element} or HashMap");',
+        "}",
+        "return parsed;",
+    ]
+    return {"signature": f"private static List<{element}> {parser}(List<Object> items) throws Exception", "body": body}
+
+
+def renderParsedItem(element: str, innerDefinition: dict | None, profile: dict) -> list:
+    if innerDefinition is None or "map" in innerDefinition:
+        return [f"        parsed.add(new {element}((Map<String, Object>) item));"]
+    fields = innerDefinition["fields"]
+    names = max(innerDefinition["constructors"], key=len)
+    arguments = [f"            {readItemValue(name, fields[name], profile)}," for name in names]
+    arguments[-1] = arguments[-1].rstrip(",")
+    return [
+        "        Map<String, Object> map = (Map<String, Object>) item;",
+        f"        parsed.add(new {element}(",
+        *arguments,
+        "        ));",
+    ]
+
+
+def readItemValue(name: str, javaType: str, profile: dict) -> str:
+    """Valor de `map.get(name)` no tipo do parametro: numerico por `Number` (o Map de um JSON traz Integer, Long ou
+    Double), os demais por cast."""
+    value = f'map.get("{name}")'
+    primitive = profile["primitives"].get(javaType)
+    if primitive is not None:
+        return f"((Number) {value}).{primitive['getter']}()"
+    getter = profile["numericGetters"].get(javaType)
+    if getter is None:
+        return f"({javaType}) {value}"
+    return f"{value} == null ? null : ((Number) {value}).{getter}()"
 
 
 def javaTypeOf(prop: dict, profile: dict) -> str:

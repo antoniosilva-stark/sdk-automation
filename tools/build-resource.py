@@ -78,6 +78,13 @@ def hasObjectArray(resource: str, specFile: str = SPEC_FILE) -> bool:
     )
 
 
+def hasParsers(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O Map-ctor emite `parseX` (que monta um ArrayList) quando a spec preparada traz o auxiliar do recurso."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool((schema.get("x-sdk-java-code") or {}).get("ctorMapParsers"))
+
+
 def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     """Schema do componente, seguindo o `$ref` para o arquivo em `schemas/` quando ha."""
     entry = ((spec.get("components") or {}).get("schemas") or {}).get(name)
@@ -121,6 +128,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         ctorOrder=extractSchema.javaConstructorOrder(resource, conventionsFile),
         ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
         innerClasses=extractSchema.javaInnerClasses(resource, conventionsFile),
+        resourceNames=extractSchema.schemaResourceNames(),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")
@@ -135,7 +143,12 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}
 
 
-def javaImports(flags: set[str], objectArray: bool = False, createForm: str = "list") -> list[str]:
+def javaImports(
+    flags: set[str],
+    objectArray: bool = False,
+    createForm: str = "list",
+    hasParsers: bool = False,
+) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
     Só o que vale entra: additional-property chega como string, e "false" é
@@ -153,6 +166,8 @@ def javaImports(flags: set[str], objectArray: bool = False, createForm: str = "l
         properties.append("usesSubResource=true")
     if flags & set(REST_USERS):
         properties.append("usesRest=true")
+    if hasParsers:
+        properties.append("usesParsers=true")
     return properties
 
 
@@ -228,6 +243,7 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
             declaredFlags(resource, specFile),
             hasObjectArray(resource, specFile),
             createForm=createFormOf(resource),
+            hasParsers=hasParsers(resource, specFile),
         )
         properties.append(classDataProperty(resource, specFile))
     if properties:

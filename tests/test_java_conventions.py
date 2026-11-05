@@ -65,7 +65,7 @@ def _schemas(resource: str) -> tuple:
 
 def _declaredTypes(source: str) -> dict:
     """Campos `public T nome;` da classe de topo (o gerador e a fonte do tipo; o teste nao o recalcula)."""
-    return {name: javaType for javaType, name in re.findall(r"^    public ([\w<>\[\], ]+?) (\w+);$", source, re.M)}
+    return {name: javaType for javaType, name in re.findall(r"^    public ([\w<>\[\], .]+?) (\w+);$", source, re.M)}
 
 
 def _mapConstructorBody(source: str) -> str:
@@ -129,6 +129,10 @@ def test_everyCreatableFieldIsReadWithTheGeneratedDeclaredType(generated, resour
             assert f'Number {name} = (Number) dataCopy.remove("{name}");' in body
             assert f"this.{name} = {name} == null ? null : {name}.{NUMERIC_GETTERS[javaType]}();" in body
             continue
+        if re.fullmatch(r"List<\w+(\.\w+)?>", javaType) and javaType not in ("List<String>", "List<Object>"):
+            parser = f"parse{name[0].upper()}{name[1:]}"
+            assert f'this.{name} = {parser}((List<Object>) dataCopy.remove("{name}"));' in body
+            continue
         assert f'this.{name} = ({javaType}) dataCopy.remove("{name}");' in body
 
 
@@ -149,7 +153,7 @@ def test_aPrimitiveLongFieldIsConvertedWithLongValueWithoutANullBranch(generated
 @pytest.mark.parametrize("resource", RESOURCE_IDS)
 def test_suppressWarningsOnlyWhereThereIsAGenericCast(generated, resource):
     lines = generated(resource).splitlines()
-    starts = [number for number, line in enumerate(lines) if re.match(r"^    public .*\) (throws Exception )?\{$", line)]
+    starts = [number for number, line in enumerate(lines) if re.match(r"^    (?:public|private static) .*\) (throws Exception )?\{$", line)]
     annotated = {number for number in starts if lines[number - 1].strip() == '@SuppressWarnings("unchecked")'}
     needing = set()
     for number in starts:

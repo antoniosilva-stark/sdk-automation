@@ -1,8 +1,11 @@
 import re
+import shutil
+import subprocess
+
 import yaml
 import pytest
 
-from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresJavac
+from conftest import REFERENCES, REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresJavac
 
 SCHEMAS = REPO_ROOT / "apis/schemas"
 REAL_SOURCES = REPO_ROOT / "_references/sdk-java/src/main/java/com/starkbank"
@@ -48,7 +51,7 @@ def _realConventionsText() -> str:
 def _realOuterFields(resource: str) -> dict:
     """`public T campo;` da classe externa (4 espacos, antes de qualquer classe interna): `amount` do Boleto e do
     Invoice tambem existe na classe interna, com outro tipo."""
-    declared = re.findall(r"^    public ([\w<>\[\], ]+?) (\w+);", _outerSource(resource), re.M)
+    declared = re.findall(r"^    public ([\w<>\[\], .]+?) (\w+);", _outerSource(resource), re.M)
     return {name: javaType for javaType, name in reversed(declared)}
 
 
@@ -76,7 +79,14 @@ def test_everyOverrideIsAcceptedByTheProfileAndPointsToAFieldOfItsSchema(javaCod
         schemas = yaml.safe_load((SCHEMAS / f"{resource.lower()}.yaml").read_text(encoding="utf-8"))["components"]
         entity = javaDocs.describeEntity(schemas["schemas"][resource], schemas["schemas"][f"{resource}Create"])
         overrides = extractSchema.javaTypeOverrides(resource)
-        javaCode.renderJavaCode(schemas["schemas"][resource], entity, resource, overrides)
+        javaCode.renderJavaCode(
+            schemas["schemas"][resource],
+            entity,
+            resource,
+            overrides,
+            innerClasses=extractSchema.javaInnerClasses(resource),
+            resourceNames=extractSchema.schemaResourceNames(),
+        )
 
 
 def _real(buildResource, tmpPath, resource: str) -> str:
@@ -275,6 +285,8 @@ def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> li
         extractSchema.javaTypeOverrides(resource),
         ctorOrder=extractSchema.javaConstructorOrder(resource),
         ctorTypes=extractSchema.javaConstructorTypes(resource),
+        innerClasses=extractSchema.javaInnerClasses(resource),
+        resourceNames=extractSchema.schemaResourceNames(),
     )["ctorFields"]
 
 
@@ -788,6 +800,8 @@ _PAIR = {"fields": {"key": "String", "amount": "Integer"}, "constructors": [["ke
      "Balance.Pair: dois construtores com a mesma assinatura"),
     ({"Pair": {**_PAIR, "constructors": [["key"]], "fields": {"key": "String", "size": "long"}}},
      "Balance.Pair: construtor omite o primitivo size"),
+    ({"Pair": {**_PAIR, "constructors": [["key", "size"]], "fields": {"key": "String", "size": "long"}, "map": ["key"]}},
+     "Balance.Pair: map omite o primitivo size"),
     ({"Pair": {**_PAIR, "map": ["key", "key"]}}, "Balance.Pair: map repete campo: key"),
     ({"Pair": {**_PAIR, "final": "no"}}, "Balance.Pair: final deve ser booleano"),
     ({"Pair": {**_PAIR, "classData": "bad name"}}, "Balance.Pair: classData invalido: 'bad name'"),
@@ -824,3 +838,298 @@ def test_innerClassLoaderDefaultsToNothingWhenTheSectionIsAbsent(extractSchema, 
     conventions.write_text("javaTypes:\n", encoding="utf-8")
 
     assert extractSchema.javaInnerClasses("Balance", conventions) == {}
+
+
+def _isSubObjectType(resource: str, javaType: str, innerNames: set, resources: set) -> bool:
+    """`Resource`, `List<InternaDoRecurso>` (qualificada ou nao) ou `List<OutroRecurso>`: o que o gerador nao deriva do
+    schema, que so diz `array` de `object`."""
+    if javaType == "Resource":
+        return True
+    match = re.fullmatch(r"List<(?:(\w+)\.)?(\w+)>", javaType)
+    if not match:
+        return False
+    qualifier, bare = match.groups()
+    if bare in innerNames:
+        return qualifier in (None, resource)
+    return qualifier is None and bare in resources
+
+
+@requiresJavaSdk
+def test_everyRealOuterSubObjectListAndResourceFieldOfAGeneratedResourceHasItsOverride(buildResource):
+    resources = set(buildResource.loadTool("parity-report").schemaResources())
+    innerByResource = _constructorSection("javaInnerClasses")
+    table = yaml.safe_load(_realConventionsText())["javaTypes"]
+
+    missing = [f"{resource}.{name}: real={javaType} tabela={table.get(resource, {}).get(name)}"
+               for resource in sorted(resources) if (REAL_SOURCES / f"{resource}.java").is_file()
+               for name, javaType in _realOuterFields(resource).items()
+               if _isSubObjectType(resource, javaType, set(innerByResource.get(resource, {})), resources)
+               and table.get(resource, {}).get(name) != javaType]
+
+    assert missing == []
+
+
+@requiresJavaSdk
+def test_theSubObjectOverridesAreTheOnesTheRealSdkDeclares(buildResource):
+    resources = set(buildResource.loadTool("parity-report").schemaResources())
+    innerByResource = _constructorSection("javaInnerClasses")
+    table = yaml.safe_load(_realConventionsText())["javaTypes"]
+
+    declared = {f"{resource}.{name}": javaType for resource, fields in table.items()
+                for name, javaType in fields.items()
+                if _isSubObjectType(resource, javaType, set(innerByResource.get(resource, {})), resources)}
+
+    assert declared == {
+        "Boleto.descriptions": "List<Boleto.Description>",
+        "Boleto.discounts": "List<Boleto.Discount>",
+        "BrcodePayment.rules": "List<BrcodePayment.Rule>",
+        "CorporateCard.rules": "List<CorporateRule>",
+        "CorporateHolder.permissions": "List<Permission>",
+        "CorporateHolder.rules": "List<CorporateRule>",
+        "CorporateRule.categories": "List<MerchantCategory>",
+        "CorporateRule.countries": "List<MerchantCountry>",
+        "CorporateRule.methods": "List<CardMethod>",
+        "DynamicBrcode.rules": "List<DynamicBrcode.Rule>",
+        "Invoice.descriptions": "List<Invoice.Description>",
+        "Invoice.discounts": "List<Invoice.Discount>",
+        "Invoice.rules": "List<Invoice.Rule>",
+        "Invoice.splits": "List<Split>",
+        "MerchantSession.allowedInstallments": "List<AllowedInstallment>",
+        "PaymentRequest.actions": "List<PaymentRequest.Action>",
+        "PaymentRequest.payment": "Resource",
+    }
+
+
+_SYNTHETIC_LIST = """javaInnerClasses:
+  Transfer:
+    Rule:
+      fields: {key: String, value: Number}
+      constructors: [[key, value], []]
+      map: [key, value]
+javaTypes:
+  Transfer:
+    rules: List<Transfer.Rule>
+"""
+
+
+@requiresGenerator
+def test_listOfInnerClassesTypesTheFieldTheAllArgsConstructorAndTheMapCall(buildResource, tmpPath):
+    source = _outer(_generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_LIST))
+
+    assert re.search(r"^    public List<Transfer.Rule> rules;$", source, re.M)
+    assert re.search(r"public Transfer\(.*\bList<Transfer.Rule> rules\b", source)
+    assert '        this.rules = parseRules((List<Object>) dataCopy.remove("rules"));\n' in source
+    assert "List<Object> rules" not in source
+    assert '@SuppressWarnings("unchecked")\n    public Transfer(Map<String, Object> data)' in source
+
+
+@requiresGenerator
+def test_theParseHelperIsEmittedRightAfterTheNoArgConstructor(buildResource, tmpPath):
+    source = _outer(_generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_LIST))
+
+    helper = ('    @SuppressWarnings("unchecked")\n'
+              "    private static List<Transfer.Rule> parseRules(List<Object> items) throws Exception {\n"
+              "        if (items == null) {\n"
+              "            return null;\n"
+              "        }\n")
+    assert source.count("private static List<Transfer.Rule> parseRules") == 1
+    assert helper in source
+    assert source.index("    public Transfer() {") < source.index(helper)
+    assert "        parsed.add(new Transfer.Rule((Map<String, Object>) item));\n" in source
+
+
+@requiresGenerator
+def test_aListOverrideOfAnotherResourceLeavesTheGeneratedClassIdentical(buildResource, tmpPath):
+    plain = _generated(buildResource, tmpPath / "plain", "Transfer", "javaTypes:\n")
+    other = _generated(
+        buildResource,
+        tmpPath / "other",
+        "Transfer",
+        "javaInnerClasses:\n  Invoice:\n    Rule:\n      fields: {key: String}\n      constructors: [[key]]\n"
+        "javaTypes:\n  Invoice:\n    rules: List<Invoice.Rule>\n",
+    )
+
+    assert other == plain
+    assert "parseRules" not in plain
+
+
+@requiresGenerator
+def test_aListOverrideThatNamesAnUnknownElementFailsTheStaging(buildResource, tmpPath):
+    with pytest.raises(ValueError, match="Transfer.rules: elemento 'Foo' de List nao e classe interna"):
+        _generated(buildResource, tmpPath, "Transfer", "javaTypes:\n  Transfer:\n    rules: List<Foo>\n")
+
+
+@requiresGenerator
+def test_aResourceWithParseHelpersButNoListOperationImportsArrayList(buildResource, tmpPath):
+    plain = _generated(buildResource, tmpPath / "plain", "CorporateRule", "javaTypes:\n")
+    typed = _generated(buildResource, tmpPath / "typed", "CorporateRule", _realConventionsText())
+
+    assert "ArrayList" not in plain
+    assert "import java.util.ArrayList;" in typed
+    assert "parseCategories" in typed
+
+
+_LIST_RUNTIME_MAIN = r"""
+import com.starkbank.Boleto;
+import com.starkbank.BrcodePayment;
+import com.starkbank.Invoice;
+import com.starkbank.MerchantSession;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class Main {
+    static Map<String, Object> map(Object... pairs) {
+        Map<String, Object> result = new HashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            result.put((String) pairs[index], pairs[index + 1]);
+        }
+        return result;
+    }
+
+    static List<Object> list(Object... items) {
+        return new ArrayList<>(Arrays.asList(items));
+    }
+
+    interface Action {
+        void run() throws Exception;
+    }
+
+    static void expectFailure(String label, Action action) {
+        try {
+            action.run();
+            System.out.println(label + " -> accepted");
+        } catch (Exception exception) {
+            System.out.println(label + " -> " + exception.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Boleto boleto = new Boleto(map(
+            "amount", 100,
+            "discounts", list(map("date", "2020-03-12", "percentage", 2.5)),
+            "descriptions", list(map("text", "Taxes", "amount", 120L), map("text", "Only"))
+        ));
+        System.out.println("boleto discount -> " + boleto.discounts.get(0).getClass().getName() + " "
+            + boleto.discounts.get(0).date + " " + boleto.discounts.get(0).percentage);
+        System.out.println("boleto description 0 -> " + boleto.descriptions.get(0).text + " " + boleto.descriptions.get(0).amount);
+        System.out.println("boleto description 1 -> " + boleto.descriptions.get(1).text + " " + boleto.descriptions.get(1).amount);
+
+        Boleto.Discount original = new Boleto.Discount("2020-01-01", 1.5);
+        Boleto kept = new Boleto(map("amount", 1, "discounts", list(original)));
+        System.out.println("boleto instance kept -> " + (kept.discounts.get(0) == original));
+        System.out.println("boleto empty list -> " + new Boleto(map("amount", 1, "discounts", list())).discounts.size());
+        System.out.println("boleto null list -> " + new Boleto(map("amount", 1)).discounts);
+        expectFailure("boleto invalid item", () -> new Boleto(map("amount", 1, "discounts", list("text"))));
+        expectFailure("boleto unknown key", () -> new Boleto(map("amount", 1, "nope", 1)));
+
+        BrcodePayment brcode = new BrcodePayment(map("rules", list(map("key", "resendingLimit", "value", 5))));
+        System.out.println("brcode rule -> " + brcode.rules.get(0).getClass().getName() + " " + brcode.rules.get(0).key
+            + " " + brcode.rules.get(0).value);
+        expectFailure("brcode rule unknown key", () -> new BrcodePayment(map("rules", list(map("key", "a", "nope", 1)))));
+
+        Invoice invoice = new Invoice(map(
+            "amount", 100,
+            "discounts", list(map("percentage", 2.5, "due", "2020-11-25")),
+            "rules", list(map("key", "allowedTaxIds", "value", new String[]{"012.345.678-90"})),
+            "splits", list(map("amount", 5L, "receiverId", "1234"))
+        ));
+        System.out.println("invoice discount -> " + invoice.discounts.get(0).getClass().getName() + " "
+            + invoice.discounts.get(0).percentage + " " + invoice.discounts.get(0).due);
+        System.out.println("invoice rule -> " + invoice.rules.get(0).getClass().getName() + " " + invoice.rules.get(0).key
+            + " " + invoice.rules.get(0).value[0]);
+        System.out.println("invoice split -> " + invoice.splits.get(0).getClass().getName() + " " + invoice.splits.get(0).receiverId);
+
+        MerchantSession session = new MerchantSession(map(
+            "allowedInstallments", list(map("totalAmount", 1000, "count", 2), map("totalAmount", 3000L, "count", 3))
+        ));
+        System.out.println("session installment 0 -> " + session.allowedInstallments.get(0).totalAmount + " "
+            + session.allowedInstallments.get(0).count);
+        System.out.println("session installment 1 -> " + session.allowedInstallments.get(1).totalAmount + " "
+            + session.allowedInstallments.get(1).count);
+    }
+}"""
+
+_LIST_RUNTIME_RESOURCES = ("Boleto", "Invoice", "BrcodePayment", "MerchantSession")
+
+
+@pytest.fixture(scope="module")
+def listRun(tmp_path_factory, builtOnce, javaRuntimeClasspath):
+    work = tmp_path_factory.mktemp("list-runtime")
+    sources = []
+    for resource in _LIST_RUNTIME_RESOURCES:
+        code, out, target = builtOnce(resource, "java")
+        assert code == 0, out
+        copy = work / "src/com/starkbank" / f"{resource}.java"
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(target / "src/main/java/com/starkbank" / f"{resource}.java", copy)
+        sources.append(str(copy))
+    (work / "src/Main.java").write_text(_LIST_RUNTIME_MAIN, encoding="utf-8")
+
+    # os gerados vencem o do real no -sourcepath; Split e o resto do real so entram se alguem os referencia
+    compiled = subprocess.run(
+        ["javac", "-d", str(work / "out"), "-cp", javaRuntimeClasspath, "-sourcepath",
+         str(REFERENCES["java"] / "src/main/java"), *sources, str(work / "src/Main.java")],
+        capture_output=True, text=True,
+    )
+    assert compiled.returncode == 0, compiled.stderr
+    ran = subprocess.run(["java", "-cp", f"{work / 'out'}:{javaRuntimeClasspath}", "Main"], capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    return ran.stdout.splitlines()
+
+
+@requiresGenerator
+@requiresJavac
+def test_aListOfMapsBecomesTheInnerObjectsWithTheirValues(listRun):
+    assert "boleto discount -> com.starkbank.Boleto$Discount 2020-03-12 2.5" in listRun
+    assert "boleto description 0 -> Taxes 120" in listRun
+    assert "boleto description 1 -> Only null" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_aListThatAlreadyHoldsInstancesPassesIntactAndNullStaysNull(listRun):
+    assert "boleto instance kept -> true" in listRun
+    assert "boleto empty list -> 0" in listRun
+    assert "boleto null list -> null" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_anItemOfAnInvalidTypeFailsLikeTheReal(listRun):
+    assert 'boleto invalid item -> Unknown type "class java.lang.String", use Boleto.Discount or HashMap' in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_anUnknownKeyOfTheOuterMapStillFails(listRun):
+    assert "boleto unknown key -> Unknown parameters used in constructor: [nope]" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_anInnerClassWithAMapConstructorIsBuiltByItAndKeepsItsUnknownKeyCheck(listRun):
+    assert "brcode rule -> com.starkbank.BrcodePayment$Rule resendingLimit 5" in listRun
+    assert "brcode rule unknown key -> Unknown parameters used in constructor: [nope]" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_anInnerClassWithoutAMapConstructorIsBuiltByItsPositionalOne(listRun):
+    assert "invoice discount -> com.starkbank.Invoice$Discount 2.5 2020-11-25" in listRun
+    assert "invoice rule -> com.starkbank.Invoice$Rule allowedTaxIds 012.345.678-90" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_aListOfAGeneratedResourceIsBuiltByItsMapConstructor(listRun):
+    assert "invoice split -> com.starkbank.Split 1234" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+def test_primitiveFieldsOfAnInnerClassAreReadAsNumberWhateverTheNumericType(listRun):
+    assert "session installment 0 -> 1000 2" in listRun
+    assert "session installment 1 -> 3000 3" in listRun
