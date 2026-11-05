@@ -230,3 +230,33 @@ javaInnerClasses:
     Action:
       fields: {name: String, action: String, type: String, id: String}
       constructors: [[name, action, type, id], []]
+
+# Forma do Log interno, Recurso -> {names, errors}. O real nao e uniforme (medido contra sdk-java f60902a, 24 recursos com
+# Log; 20 aqui, os 4 de forma propria ficam fora, ver LOG_EXCLUSIONS em tests/test_java_logs.py):
+#   names:  `short` escreve `Log get(String id)`, `Generator<Log>`, `Log.Page page()`, `List<Log> logs` e `new Log.Page(...)`
+#           (12 de 20); `qualified` escreve `Recurso.Log`, `Recurso.Log.Page` e `new Page(...)` (8 de 20), que e o que o
+#           template emitia antes e segue valendo para recurso sem entrada.
+#   errors: tipo do campo e do parametro do construtor all-args do Log: `String[]` (13 de 20), `List<ErrorElement>` (5) ou
+#           `none` (2), sem campo, sem parametro e sem `@param errors`. So `List<ErrorElement>` importa ErrorElement.
+# Valida-se contra o real em tests/test_java_logs.py (cada entrada e o real; todo Log simples do real esta aqui).
+javaLogs:
+  Boleto: {names: short, errors: "String[]"}
+  BoletoPayment: {names: short, errors: "String[]"}
+  BrcodePayment: {names: short, errors: "String[]"}
+  CorporateCard: {names: qualified, errors: none}
+  CorporateHolder: {names: qualified, errors: none}
+  DarfPayment: {names: short, errors: "String[]"}
+  Deposit: {names: short, errors: "String[]"}
+  Invoice: {names: short, errors: "String[]"}
+  InvoicePullRequest: {names: short, errors: "String[]"}
+  InvoicePullSubscription: {names: short, errors: "String[]"}
+  MerchantCard: {names: qualified, errors: "String[]"}
+  MerchantPurchase: {names: qualified, errors: "List<ErrorElement>"}
+  MerchantSession: {names: qualified, errors: "String[]"}
+  Split: {names: qualified, errors: "List<ErrorElement>"}
+  SplitProfile: {names: qualified, errors: "List<ErrorElement>"}
+  SplitReceiver: {names: qualified, errors: "List<ErrorElement>"}
+  TaxPayment: {names: short, errors: "String[]"}
+  Transfer: {names: short, errors: "String[]"}
+  UtilityPayment: {names: short, errors: "String[]"}
+  VerifiedAccount: {names: short, errors: "List<ErrorElement>"}

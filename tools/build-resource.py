@@ -119,6 +119,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
     isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
+    logShape = extractSchema.javaLogShape(resource, conventionsFile)
     code = javaCode.renderJavaCode(
         schema,
         entity,
@@ -129,6 +130,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
         innerClasses=extractSchema.javaInnerClasses(resource, conventionsFile),
         resourceNames=extractSchema.schemaResourceNames(),
+        logShape=logShape if "x-sdk-log" in flags else None,
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

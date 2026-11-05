@@ -306,11 +306,11 @@ def test_logIsEmittedAsInnerClassWhenDeclared(builtOnce):
 
     assert "public final static class Log extends Resource" in source
     assert 'new ClassData(Invoice.Log.class, "InvoiceLog")' in source
-    assert "public static Invoice.Log get(String id)" in source
-    assert "public static Generator<Invoice.Log> query()" in source
-    assert "public static Invoice.Log.Page page()" in source
-    assert "public List<ErrorElement> errors;" in source
-    assert "import com.starkbank.error.ErrorElement;" in source
+    assert "public static Log get(String id)" in source
+    assert "public static Generator<Log> query()" in source
+    assert "public static Log.Page page()" in source
+    assert "public String[] errors;" in source
+    assert "ErrorElement" not in source
     assert "public Invoice invoice;" in source
 
 
@@ -851,7 +851,7 @@ def test_generatedResourceWithLogAndPdfDocumentsEveryOperation(builtOnce):
     pdf = _javadocBefore(source, "public static InputStream pdf(String id, User user)")
     assert pdf[0] == "Retrieve a specific Transfer pdf file"
     assert USER_LINE in pdf
-    logQuery = _javadocBefore(source, "public static Generator<Transfer.Log> query(Map<String, Object> params) ")
+    logQuery = _javadocBefore(source, "public static Generator<Log> query(Map<String, Object> params) ")
     assert any(line.startswith("types [list of strings, default null]") for line in logQuery)
 
 

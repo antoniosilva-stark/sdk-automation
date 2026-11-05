@@ -523,6 +523,7 @@ _RESOURCE_SECTIONS = [
     ("javaConstructorOrder", "javaConstructorOrder:\n  {name}: [id]\n", "javaConstructorOrder"),
     ("javaConstructorTypes", "javaConstructorTypes:\n  {name}:\n    amount: int\n", "javaConstructorTypes"),
     ("javaInnerClasses", "javaInnerClasses:\n  {name}: {{}}\n", "javaInnerClasses"),
+    ("javaLogs", "javaLogs:\n  {name}: {{names: short, errors: none}}\n", "javaLogShape"),
 ]
 
 

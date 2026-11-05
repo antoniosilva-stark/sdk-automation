@@ -365,7 +365,6 @@ PRIMITIVE_CAST = "o real le `amount` com cast direto (int), que trunca; o gerado
 LIST_PARAM = "excecao da 6b: o nome do parametro de lista vem do plural do recurso; o real usa nome proprio"
 DEPRECATED = ("excecao da 6b: @Deprecated do real nao vem do docstring Python (Transaction.create: v2.31.0 no Python,"
               " v2.24.0 no Java); o corpo do real so lanca, sem chamar Rest")
-LOG_ERRORS = "excecao da 6b: Log.errors sai List<ErrorElement> (7 de 24 Log); o real mais frequente usa String[] (14 de 24)"
 DOCSTRING_EXTRA = "o docstring Python tem conteudo que o Javadoc do real nao tem"
 DOCSTRING_MISSING = "conteudo ausente do docstring Python que o real tem"
 DOCSTRING_ORDER = "a ordem dos campos do real difere do docstring Python, que e a fonte do schema"
@@ -392,9 +391,6 @@ BALANCE_IMPORTS = "o real importa o que nao usa (Generator, List, HashMap, Array
 RULE = ("tipo-perdido",
         "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
         " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
-LOG_QUALIFIED = ("cosmetico",
-                 "Entrega 9: o gerador qualifica `Transfer.Log` onde o real usa `Log` (13 de 23 `List<Log>` contra 10"
-                 " `List<X.Log>`)")
 BALANCE_GET = ("runtime-errado",
                "Entrega 9: Balance e singleton: o real tem `get()` e `get(User)` com Rest.getStream; o gerador emite"
                " `get(String id)` com Rest.getId. A guarda de build-resource bloqueia a criacao")
@@ -420,7 +416,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "doc|sections -[Attributes:] +[Attributes (return-only):]|Log.Log(all-args)":
             LOG_ATTRIBUTES,
         "fields|order|moved=[Log.type, Log.errors, Log.profile]":
-            LOG_ERRORS,
+            LOG_FIELD_ORDER,
         "imports|real=Rest,Resource,Generator,SubResource,ErrorElement | Map,List,HashMap,ArrayList gen=Generator,Resource,Rest,SubResource,ErrorElement | ArrayList,HashMap,List,Map":
             IMPORT_ORDER,
     },
@@ -449,8 +445,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
         "allArgs|Transfer(all-args)|order|moved=[id]":
             ID_POSITION,
-        "allArgs|Log.Log(all-args)|type|errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "doc|tags -[] +[param:displayDescription]|Transfer(all-args)":
             DOCSTRING_EXTRA,
         "doc|sections -[Parameters (optional):] +[]|Transfer(Map<String, Object>)":
@@ -463,8 +457,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
         "fields|extra|displayDescription":
             DOCSTRING_EXTRA,
-        "fields|type|Log.errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "mapctor|displayDescription real=None gen=cast:String":
             DOCSTRING_EXTRA,
     },
@@ -530,27 +522,17 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             RULE,
         "allArgs|Transfer(all-args)|type|rules real=List<Rule> gen=List<Object>":
             RULE,
-        "allArgs|Log.Page.Page(all-args)|type|logs real=List<Log> gen=List<Transfer.Log>":
-            LOG_QUALIFIED,
         "annotations|-[] +[SuppressWarnings]|Transfer(Map<String, Object>)":
             RULE,
-        "signature|returns public static Log -> public static Transfer.Log|Log.get(String), Log.get(String, User)":
-            LOG_QUALIFIED,
-        "signature|returns public static Generator<Log> -> public static Generator<Transfer.Log>|Log.query(Map<String, Object>), Log.query(User), Log.query(), Log.query(Map<String, Object>, User)":
-            LOG_QUALIFIED,
-        "signature|returns public static Log.Page -> public static Transfer.Log.Page|Log.page(Map<String, Object>), Log.page(User), Log.page(), Log.page(Map<String, Object>, User)":
-            LOG_QUALIFIED,
         "fields|missing|Rule.key":
             RULE,
         "fields|missing|Rule.value":
             RULE,
         "fields|type|rules real=List<Rule> gen=List<Object>":
             RULE,
-        "fields|type|Log.Page.logs real=List<Log> gen=List<Transfer.Log>":
-            LOG_QUALIFIED,
         "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
             RULE,
-        "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource,ErrorElement | InputStream,ArrayList,HashMap,List,Map":
+        "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource | InputStream,ArrayList,HashMap,List,Map":
             RULE,
     },
     "Balance": {

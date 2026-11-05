@@ -188,8 +188,8 @@ files for six resources and keeps a closed registry of divergences.
 Creating these is refused with `formato nao suportado` instead of emitting code that compiles and
 calls the API wrongly: a `create` that returns a single object and takes `expand` (CorporateCard) and
 a singleton `get` without an id (Balance, CorporateBalance). Webhook, MerchantSession, MerchantPurchase,
-CorporateWithdrawal, CorporateInvoice and Workspace are generated. Sub-objects such as `Transfer.Rule`, untyped
-`metadata` and a qualified `Transfer.Log` are known limits reported by the golden by severity.
+CorporateWithdrawal, CorporateInvoice and Workspace are generated. Sub-objects such as `Transfer.Rule` and untyped
+`metadata` are known limits reported by the golden by severity.
 All of this is the scope of the next phase (full-Java parity).
 
 ## Spec status — read this before trusting resource counts

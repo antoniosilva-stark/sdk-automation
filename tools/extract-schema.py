@@ -18,6 +18,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
 SCHEMAS_DIR = REPO_ROOT / "apis/schemas"
 
+# Valores aceitos do javaLogs; o default e a saida do template antes da secao existir e vale para recurso sem entrada
+JAVA_LOG_VALUES = {"names": ("short", "qualified"), "errors": ("String[]", "List<ErrorElement>", "none")}
+JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>"}
+
 VENDORED_ROOT = Path("_references/sdk-python")
 
 SECTION_REQUIRED = "required"
@@ -127,6 +131,26 @@ def javaInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dic
     classes = loadConventions(Path(conventions)).get("javaInnerClasses") or {}
     checkKnownResources("javaInnerClasses", classes)
     return classes.get(resource) or {}
+
+
+def javaLogShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    shapes = loadConventions(Path(conventions)).get("javaLogs") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaLogs deve ser um mapa recurso -> {names, errors}")
+    checkKnownResources("javaLogs", shapes)
+    for name, shape in shapes.items():
+        checkLogShape(name, shape)
+    return shapes.get(resource) or JAVA_LOG_DEFAULT
+
+
+def checkLogShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaLogs deve ser um mapa {{names, errors}}, veio {shape!r}")
+    for field, allowed in JAVA_LOG_VALUES.items():
+        if field not in shape:
+            raise ValueError(f"{resource}: javaLogs.{field} ausente")
+        if not isinstance(shape[field], str) or shape[field] not in allowed:
+            raise ValueError(f"{resource}: javaLogs.{field} invalido: {shape[field]!r}, esperado um de {list(allowed)}")
 
 
 @lru_cache(maxsize=None)

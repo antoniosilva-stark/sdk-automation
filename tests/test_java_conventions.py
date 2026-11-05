@@ -284,7 +284,6 @@ def test_theImportBlockOfAFullResourceListsEveryGroupInTheMeasuredOrder(generate
         "import com.starkbank.utils.Resource;\n"
         "import com.starkbank.utils.Rest;\n"
         "import com.starkcore.utils.SubResource;\n"
-        "import com.starkbank.error.ErrorElement;\n"
         "\n"
         "import java.io.InputStream;\n"
         "import java.util.ArrayList;\n"

@@ -4,8 +4,8 @@ package {{package}};
 {{/usesGenerator}}{{^vendorExtensions.x-sdk-subresource}}import com.starkbank.utils.Resource;
 {{/vendorExtensions.x-sdk-subresource}}{{#usesRest}}import com.starkbank.utils.Rest;
 {{/usesRest}}{{#usesSubResource}}import com.starkcore.utils.SubResource;
-{{/usesSubResource}}{{#vendorExtensions.x-sdk-log}}import com.starkbank.error.ErrorElement;
-{{/vendorExtensions.x-sdk-log}}
+{{/usesSubResource}}{{#vendorExtensions.x-sdk-java-code.log.usesErrorElement}}import com.starkbank.error.ErrorElement;
+{{/vendorExtensions.x-sdk-java-code.log.usesErrorElement}}
 
 {{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
 {{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
@@ -323,14 +323,15 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-cancel}}
 {{#vendorExtensions.x-sdk-log}}
+{{#vendorExtensions.x-sdk-java-code.log}}
 
     public final static class Log extends Resource {
         static ClassData data = new ClassData({{classname}}.Log.class, "{{classname}}Log");
 
         public String created;
         public String type;
-        public List<ErrorElement> errors;
-        public {{classname}} {{vendorExtensions.x-sdk-log-entity}};
+{{#hasErrors}}        public {{{errorsType}}} errors;
+{{/hasErrors}}        public {{classname}} {{vendorExtensions.x-sdk-log-entity}};
 
         /**
          * {{classname}} Log object
@@ -342,16 +343,16 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
          * Attributes (return-only):
          * @param id [string]: unique id returned when the log is created
          * @param {{vendorExtensions.x-sdk-log-entity}} [{{classname}}]: {{classname}} entity to which the log refers to
-         * @param errors [list of strings]: list of errors linked to this {{classname}} event
-         * @param type [string]: type of the {{classname}} event which triggered the log creation
+{{#hasErrors}}         * @param errors [list of strings]: list of errors linked to this {{classname}} event
+{{/hasErrors}}         * @param type [string]: type of the {{classname}} event which triggered the log creation
          * @param created [string]: creation datetime for the log
          */
-        public Log(String created, String type, List<ErrorElement> errors, {{classname}} {{vendorExtensions.x-sdk-log-entity}}, String id) {
+        public Log(String created, String type, {{#hasErrors}}{{{errorsType}}} errors, {{/hasErrors}}{{classname}} {{vendorExtensions.x-sdk-log-entity}}, String id) {
             super(id);
             this.created = created;
             this.type = type;
-            this.errors = errors;
-            this.{{vendorExtensions.x-sdk-log-entity}} = {{vendorExtensions.x-sdk-log-entity}};
+{{#hasErrors}}            this.errors = errors;
+{{/hasErrors}}            this.{{vendorExtensions.x-sdk-log-entity}} = {{vendorExtensions.x-sdk-log-entity}};
         }
 
         public Log() {
@@ -361,50 +362,50 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
         /**
 {{#vendorExtensions.x-sdk-java-docs.logGetPlain}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logGetPlain}}         */
-        public static {{classname}}.Log get(String id) throws Exception {
+        public static {{typeName}} get(String id) throws Exception {
             return Log.get(id, null);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logGetUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logGetUser}}         */
-        public static {{classname}}.Log get(String id, User user) throws Exception {
+        public static {{typeName}} get(String id, User user) throws Exception {
             return Rest.getId(data, id, user);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logQueryParams}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logQueryParams}}         */
-        public static Generator<{{classname}}.Log> query(Map<String, Object> params) throws Exception {
+        public static Generator<{{typeName}}> query(Map<String, Object> params) throws Exception {
             return Log.query(params, null);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logQueryUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logQueryUser}}         */
-        public static Generator<{{classname}}.Log> query(User user) throws Exception {
+        public static Generator<{{typeName}}> query(User user) throws Exception {
             return Log.query(new HashMap<>(), user);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logQueryPlain}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logQueryPlain}}         */
-        public static Generator<{{classname}}.Log> query() throws Exception {
+        public static Generator<{{typeName}}> query() throws Exception {
             return Log.query(new HashMap<>(), null);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logQueryParamsUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logQueryParamsUser}}         */
-        public static Generator<{{classname}}.Log> query(Map<String, Object> params, User user) throws Exception {
+        public static Generator<{{typeName}}> query(Map<String, Object> params, User user) throws Exception {
             return Rest.getStream(data, params, user);
         }
 
         public final static class Page {
-            public List<{{classname}}.Log> logs;
+            public List<{{typeName}}> logs;
             public String cursor;
 
-            public Page(List<{{classname}}.Log> logs, String cursor) {
+            public Page(List<{{typeName}}> logs, String cursor) {
                 this.logs = logs;
                 this.cursor = cursor;
             }
@@ -413,36 +414,37 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
         /**
 {{#vendorExtensions.x-sdk-java-docs.logPageParams}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPageParams}}         */
-        public static {{classname}}.Log.Page page(Map<String, Object> params) throws Exception {
+        public static {{pageName}} page(Map<String, Object> params) throws Exception {
             return Log.page(params, null);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logPageUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPageUser}}         */
-        public static {{classname}}.Log.Page page(User user) throws Exception {
+        public static {{pageName}} page(User user) throws Exception {
             return Log.page(new HashMap<>(), user);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logPagePlain}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPagePlain}}         */
-        public static {{classname}}.Log.Page page() throws Exception {
+        public static {{pageName}} page() throws Exception {
             return Log.page(new HashMap<>(), null);
         }
 
         /**
 {{#vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.logPageParamsUser}}         */
-        public static {{classname}}.Log.Page page(Map<String, Object> params, User user) throws Exception {
+        public static {{pageName}} page(Map<String, Object> params, User user) throws Exception {
             com.starkcore.utils.Page page = Rest.getPage(data, params, user);
-            List<{{classname}}.Log> logs = new ArrayList<>();
+            List<{{typeName}}> logs = new ArrayList<>();
             for (SubResource log: page.entities) {
                 logs.add((Log) log);
             }
-            return new Page(logs, page.cursor);
+            return new {{newPageName}}(logs, page.cursor);
         }
     }
+{{/vendorExtensions.x-sdk-java-code.log}}
 {{/vendorExtensions.x-sdk-log}}
 {{#vendorExtensions.x-sdk-java-code.innerClasses}}
 

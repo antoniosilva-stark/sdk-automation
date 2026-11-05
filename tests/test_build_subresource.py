@@ -81,7 +81,8 @@ ALL_OPERATIONS = ("create", "put", "get", "query", "page", "update", "delete", "
 
 def _generatedWithEveryOperation(buildResource, tmpPath, monkeypatch) -> str:
     entry = {f"x-sdk-{operation}": True for operation in ALL_OPERATIONS}
-    entry |= {"x-sdk-java-create": {"isList": True}, "x-sdk-log-entity": "widget", "type": "object", "properties": {
+    log = buildResource.loadTool("java-code").renderLog("Widget", buildResource.loadTool("extract-schema").JAVA_LOG_DEFAULT)
+    entry |= {"x-sdk-java-create": {"isList": True}, "x-sdk-java-code": {"log": log}, "x-sdk-log-entity": "widget", "type": "object", "properties": {
         "id": {"type": "string", "x-sdk-id": True},
         "data": {"type": "object"},
         "amount": {"type": "integer"},

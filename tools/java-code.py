@@ -42,21 +42,42 @@ def renderJavaCode(
     ctorTypes: dict | None = None,
     innerClasses: dict | None = None,
     resourceNames: frozenset = frozenset(),
+    logShape: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
     construtor all-args, que no real e dado do Java. `open`: a classe externa nao e `final`. `innerClasses`: as classes
     internas simples do real, ja com os construtores e o corpo do Map-ctor prontos. `resourceNames`: os recursos
     geradores, para o override `List<Recurso>`; esse tipo e o `List<ClasseInterna>` saem do Map-ctor por um auxiliar
-    `parseX` (`ctorMapParsers`), como no real."""
+    `parseX` (`ctorMapParsers`), como no real. `log`: so para recurso com Log, os nomes e o tipo de `errors` do Log
+    interno, ja resolvidos a partir da forma (`javaLogs`)."""
     fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
-    return {
+    code = {
         "fields": fields,
         "ctorFields": ctorFields,
         "open": isOpen,
         "innerClasses": renderInnerClasses(resource, innerClasses or {}, profile),
         **renderMapConstructor(entity, fields, profile, innerClasses or {}),
+    }
+    if logShape is not None:
+        code["log"] = renderLog(resource, logShape)
+    return code
+
+
+def renderLog(resource: str, shape: dict) -> dict:
+    """Nomes do Log interno prontos para o Mustache. `short` e como o real escreve dentro do proprio Log; o `new Page`
+    qualificado nao se escreve (`Page` resolve para a Page do Log, a mesma classe)."""
+    isShort = shape["names"] == "short"
+    typeName = "Log" if isShort else f"{resource}.Log"
+    hasErrors = shape["errors"] != "none"
+    return {
+        "typeName": typeName,
+        "pageName": f"{typeName}.Page",
+        "newPageName": "Log.Page" if isShort else "Page",
+        "errorsType": shape["errors"] if hasErrors else "",
+        "hasErrors": hasErrors,
+        "usesErrorElement": shape["errors"] == "List<ErrorElement>",
     }
 
 
