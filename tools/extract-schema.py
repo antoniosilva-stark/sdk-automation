@@ -123,8 +123,19 @@ def javaConstructorTypes(resource: str, conventions: Path = CONVENTIONS_FILE) ->
     return types.get(resource) or {}
 
 
+@lru_cache(maxsize=None)
+def schemaResourceNames() -> frozenset:
+    """Nomes canonicos: no arquivo ha tambem `<Recurso>Create`, e o recurso e a chave que casa com o nome do arquivo."""
+    names = set()
+    for path in SCHEMAS_DIR.glob("*.yaml"):
+        schemas = (loadFast(path.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
+        names.update(name for name in schemas if name.lower() == path.stem)
+    return frozenset(names)
+
+
 def checkKnownResources(section: str, resources) -> None:
-    unknown = sorted(name for name in resources if not (SCHEMAS_DIR / f"{name.lower()}.yaml").is_file())
+    known = schemaResourceNames()
+    unknown = [name for name in resources if not isinstance(name, str) or name not in known]
     if unknown:
         raise ValueError(f"{unknown[0]}: {section} cita recurso que nao existe em apis/schemas")
 

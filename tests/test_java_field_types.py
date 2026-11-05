@@ -196,7 +196,7 @@ def test_unknownResourceInTheOpenListFailsNamingIt(extractSchema, tmpPath):
     conventions = tmpPath / "type-conventions.yaml"
     conventions.write_text("javaOpenClasses:\n  - Balance\n  - Transferr\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Transferr"):
+    with pytest.raises(ValueError, match="Transferr.*javaOpenClasses"):
         extractSchema.javaOpenClass("Balance", conventions)
 
 
@@ -433,7 +433,7 @@ def test_unknownResourceInAConstructorSectionFailsNamingIt(extractSchema, tmpPat
     conventions = tmpPath / "type-conventions.yaml"
     conventions.write_text(section, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Transferr"):
+    with pytest.raises(ValueError, match=f"Transferr.*{loader}"):
         getattr(extractSchema, loader)("Balance", conventions)
 
 
@@ -504,3 +504,47 @@ def test_entriesOfAnotherResourceLeaveTheGeneratedClassIdentical(buildResource, 
     )
 
     assert other == plain
+
+
+_RESOURCE_SECTIONS = [
+    ("javaOpenClasses", "javaOpenClasses:\n  - {name}\n", "javaOpenClass"),
+    ("javaConstructorOrder", "javaConstructorOrder:\n  {name}: [id]\n", "javaConstructorOrder"),
+    ("javaConstructorTypes", "javaConstructorTypes:\n  {name}:\n    amount: int\n", "javaConstructorTypes"),
+]
+
+
+@pytest.mark.parametrize("name", ["balance", "BALANCE"])
+@pytest.mark.parametrize("section, template, loader", _RESOURCE_SECTIONS)
+def test_resourceNameInAWrongCaseFailsNamingTheNameAndTheSection(
+    extractSchema, tmpPath, name, section, template, loader
+):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text(template.format(name=name), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"{name}: {section} cita recurso"):
+        getattr(extractSchema, loader)("Balance", conventions)
+
+
+@pytest.mark.parametrize("section, template, loader", _RESOURCE_SECTIONS)
+def test_nonStringResourceNameFailsNamingTheValueAndTheSection(extractSchema, tmpPath, section, template, loader):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text(template.format(name="123"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"123: {section} cita recurso"):
+        getattr(extractSchema, loader)("Balance", conventions)
+
+
+def test_listAsResourceNameFailsWithValueErrorToo(extractSchema, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text("javaOpenClasses:\n  - [Balance]\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="javaOpenClasses cita recurso"):
+        extractSchema.javaOpenClass("Balance", conventions)
+
+
+def test_everyResourceNameOfTheRealTablesIsAccepted(extractSchema):
+    sections = _constructorSection
+
+    assert all(extractSchema.javaOpenClass(name) for name in yaml.safe_load(_realConventionsText())["javaOpenClasses"])
+    assert all(extractSchema.javaConstructorOrder(name) for name in sections("javaConstructorOrder"))
+    assert all(extractSchema.javaConstructorTypes(name) for name in sections("javaConstructorTypes"))
