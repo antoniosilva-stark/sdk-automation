@@ -106,3 +106,47 @@ javaOpenClasses:
   - PaymentPreview
   - Split
   - SplitReceiver
+
+# Ordem dos parametros do construtor all-args (id incluido) e tipo do parametro quando difere do campo. O real nao a
+# deriva do docstring Python: e dado do Java, medido contra sdk-java f60902a no construtor publico mais longo de
+# cada classe externa. Recurso sem entrada usa a ordem e o tipo do campo no schema, que e o default para recurso novo.
+# Valida-se contra o real em tests/test_java_field_types.py (cada entrada e o real; todo recurso de mesmo conjunto de
+# nomes que o real esta coberto). Fora: CorporateWithdrawal (ctor package-private) e os de conjunto de nomes diferente.
+javaConstructorOrder:
+  Balance: [amount, currency, updated, id]
+  Boleto: [amount, name, taxId, streetLine1, streetLine2, district, city, stateCode, zipCode, due, fine,
+    interest, overdueLimit, receiverName, receiverTaxId, tags, descriptions, discounts, id, fee, line,
+    barCode, status, transactionIds, workspaceId, created, ourNumber]
+  BoletoPayment: [amount, taxId, tags, description, scheduled, line, barCode, id, fee, transactionIds, status, created]
+  BrcodePayment: [brcode, taxId, description, amount, scheduled, name, tags, rules, id, status, type, transactionIds,
+    fee, updated, created]
+  CorporateCard: [holderName, displayName, rules, tags, streetLine1, streetLine2, district, city, stateCode, zipCode,
+    id, holderId, type, status, number, securityCode, expiration, updated, created]
+  CorporateHolder: [id, name, centerId, permissions, status, rules, tags, updated, created]
+  CorporateInvoice: [id, name, brcode, due, link, amount, taxId, status, corporateTransactionId, tags, updated, created]
+  CorporateRule: [id, name, amount, interval, schedule, purposes, currencyCode, categories, countries, methods,
+    counterAmount, currencySymbol, currencyName]
+  DarfPayment: [id, description, revenueCode, taxId, competence, nominalAmount, fineAmount, interestAmount, due,
+    referenceNumber, scheduled, tags, status, amount, fee, transactionIds, updated, created]
+  DictKey: [id, type, accountType, name, taxId, ownerType, bankName, ispb, branchCode, accountNumber, status]
+  DynamicBrcode: [amount, expiration, tags, id, uuid, pictureUrl, displayDescription, rules, updated, created]
+  Invoice: [amount, due, taxId, name, expiration, fine, interest, descriptions, discounts, rules, splits, pdf,
+    link, tags, nominalAmount, fineAmount, interestAmount, discountAmount, id, brcode, fee,
+    transactionIds, status, created, updated]
+  MerchantInstallment: [id, amount, created, due, fee, fundingType, network, purchaseId, status, tags, transactionIds,
+    updated]
+  PaymentRequest: [id, centerId, payment, type, due, tags, amount, description, status, actions, updated, created]
+  SplitReceiver: [name, taxId, bankCode, branchCode, accountNumber, accountType, id, tags, status, created, updated]
+  TaxPayment: [id, line, barCode, description, tags, scheduled, status, amount, fee, transactionIds, type, updated,
+    created]
+  Transaction: [amount, description, externalId, receiverId, senderId, tags, fee, created, source, balance, id]
+  UtilityPayment: [amount, tags, description, scheduled, line, barCode, id, fee, type, transactionIds, status, created,
+    updated]
+  VerifiedAccount: [id, bankCode, bankName, branchCode, created, keyId, name, number, status, tags, taxId, type, updated]
+  Workspace: [username, name, allowedTaxIds, status, id, organizationId, pictureUrl, created]
+
+javaConstructorTypes:
+  CorporateRule:
+    counterAmount: Long
+  Transaction:
+    fee: int

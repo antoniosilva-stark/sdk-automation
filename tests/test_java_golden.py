@@ -361,7 +361,6 @@ def _compared(real: dict, generated: dict) -> tuple[int, int]:
 #     golden nao fica verde escondendo isso: o relatorio imprime a contagem por severidade.
 SEVERITIES = ("runtime-errado", "tipo-perdido", "cosmetico")
 
-PRIMITIVE = "tipo primitivo do real (long/int, 15 de 55 arquivos); o gerador emite o boxed, porque o Python nao tem primitivo"
 PRIMITIVE_CAST = "o real le `amount` com cast direto (int), que trunca; o gerador le Number.longValue (RF9)"
 LIST_PARAM = "excecao da 6b: o nome do parametro de lista vem do plural do recurso; o real usa nome proprio"
 DEPRECATED = ("excecao da 6b: @Deprecated do real nao vem do docstring Python (Transaction.create: v2.31.0 no Python,"
@@ -430,10 +429,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             QUERY_ORDER,
         "rest|create real={} gen={'post': 1}":
             DEPRECATED,
-        "allArgs|Transaction(all-args)|order|moved=[senderId, fee, balance, created]":
-            DOCSTRING_ORDER,
-        "allArgs|Transaction(all-args)|type|fee real=int gen=Integer":
-            PRIMITIVE,
         "doc|sections -[Parameters (required):, Parameters (optional):] +[]|Transaction(Map<String, Object>)":
             REQUIRED_OPTIONAL,
         "doc|filters -[receivedId, id] +[receiverId]|Transaction(Map<String, Object>)":
@@ -474,8 +469,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
     },
     "Balance": {
-        "allArgs|Balance(all-args)|order|moved=[id]":
-            ID_POSITION,
         "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
             BALANCE_IMPORTS,
     },

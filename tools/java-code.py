@@ -1,3 +1,6 @@
+from collections import Counter
+
+
 # Perfil do alvo em dados: a proxima linguagem troca este dicionario, nao o codigo abaixo.
 # Contagens da ME 4 (46 recursos do sdk-java real) em cada regra.
 JAVA_CODE_PROFILE = {
@@ -34,11 +37,15 @@ def renderJavaCode(
     overrides: dict,
     profile: dict = JAVA_CODE_PROFILE,
     isOpen: bool = False,
+    ctorOrder: list | None = None,
+    ctorTypes: dict | None = None,
 ) -> dict:
-    """`x-sdk-java-code` do recurso: `fields` (declaracao e construtor all-args) e o corpo do Map-ctor, os dois
-    sobre o mesmo tipo por campo, para o cast nunca divergir da declaracao. `open`: a classe externa nao e `final`."""
+    """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
+    campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
+    construtor all-args, que no real e dado do Java. `open`: a classe externa nao e `final`."""
     fields = renderFields(schema, resource, overrides, profile)
-    return {"fields": fields, "open": isOpen, **renderMapConstructor(entity, fields, profile)}
+    ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
+    return {"fields": fields, "ctorFields": ctorFields, "open": isOpen, **renderMapConstructor(entity, fields, profile)}
 
 
 def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = JAVA_CODE_PROFILE) -> list:
@@ -58,6 +65,40 @@ def renderFields(schema: dict, resource: str, overrides: dict, profile: dict = J
             checkOverrideType(resource, name, javaType, profile)
         fields.append({"name": name, "javaType": javaType, "isId": isId})
     return fields
+
+
+def renderConstructorFields(fields: list, resource: str, order: list | None, types: dict, profile: dict) -> list:
+    """Sem entrada o construtor segue a ordem e os tipos do campo; a ordem so aceita permutacao exata dos campos, senao
+    uma posicao faltando geraria um construtor que nao atribui um campo."""
+    checkConstructorTypes(fields, resource, types, profile)
+    typed = [{**field, "javaType": types.get(field["name"], field["javaType"])} for field in fields]
+    if order is None:
+        return typed
+    checkConstructorOrder(fields, resource, order)
+    typedByName = {field["name"]: field for field in typed}
+    return [typedByName[name] for name in order]
+
+
+def checkConstructorOrder(fields: list, resource: str, order: list) -> None:
+    names = {field["name"] for field in fields}
+    missing = sorted(names - set(order))
+    extra = sorted(set(order) - names)
+    repeated = sorted(name for name, count in Counter(order).items() if count > 1)
+    if missing or extra or repeated:
+        raise ValueError(
+            f"{resource}: ordem do construtor nao e permutacao dos campos "
+            f"(faltam: {', '.join(missing)}; sobram: {', '.join(extra)}; repetidos: {', '.join(repeated)})"
+        )
+
+
+def checkConstructorTypes(fields: list, resource: str, types: dict, profile: dict) -> None:
+    fieldByName = {field["name"]: field for field in fields}
+    for name, javaType in types.items():
+        if name not in fieldByName:
+            raise ValueError(f"{resource}.{name}: tipo de construtor de campo que o schema nao tem")
+        if fieldByName[name]["isId"]:
+            raise ValueError(f"{resource}.{name}: tipo de construtor de campo id, que o template emite como String")
+        checkOverrideType(resource, name, javaType, profile)
 
 
 def checkOverrideType(resource: str, name: str, javaType, profile: dict) -> None:

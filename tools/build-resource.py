@@ -112,7 +112,15 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
     isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
-    code = javaCode.renderJavaCode(schema, entity, resource, overrides, isOpen=isOpen)
+    code = javaCode.renderJavaCode(
+        schema,
+        entity,
+        resource,
+        overrides,
+        isOpen=isOpen,
+        ctorOrder=extractSchema.javaConstructorOrder(resource, conventionsFile),
+        ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
+    )
 
     shutil.copytree(apisDir, stagedDir / "apis")
     entryLine = f"\n    {resource}:\n"

@@ -107,10 +107,26 @@ def javaTypeOverrides(resource: str, conventions: Path = CONVENTIONS_FILE) -> di
 
 def javaOpenClass(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
     openClasses = loadConventions(Path(conventions)).get("javaOpenClasses") or []
-    unknown = sorted(name for name in openClasses if not (SCHEMAS_DIR / f"{name.lower()}.yaml").is_file())
-    if unknown:
-        raise ValueError(f"{unknown[0]}: javaOpenClasses cita recurso que nao existe em apis/schemas")
+    checkKnownResources("javaOpenClasses", openClasses)
     return resource in openClasses
+
+
+def javaConstructorOrder(resource: str, conventions: Path = CONVENTIONS_FILE) -> list | None:
+    orders = loadConventions(Path(conventions)).get("javaConstructorOrder") or {}
+    checkKnownResources("javaConstructorOrder", orders)
+    return orders.get(resource)
+
+
+def javaConstructorTypes(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    types = loadConventions(Path(conventions)).get("javaConstructorTypes") or {}
+    checkKnownResources("javaConstructorTypes", types)
+    return types.get(resource) or {}
+
+
+def checkKnownResources(section: str, resources) -> None:
+    unknown = sorted(name for name in resources if not (SCHEMAS_DIR / f"{name.lower()}.yaml").is_file())
+    if unknown:
+        raise ValueError(f"{unknown[0]}: {section} cita recurso que nao existe em apis/schemas")
 
 
 def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
