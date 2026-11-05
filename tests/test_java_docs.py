@@ -434,15 +434,22 @@ MAP_DOC = _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("subscripti
                [_param("widgets", "list of Widget objects"), EXPAND_PARAM]),
 ])
 def test_createFormIsListWhenTheDocIsAbsentEmptyOrReturnsAList(javaDocs, doc):
-    assert javaDocs.createForm(doc) == "list"
+    assert javaDocs.createForm("Widget", doc) == "list"
 
 
-def test_createFormIsObjectWhenTheFirstRequiredParamIsAnObjectOfTheClass(javaDocs):
-    assert javaDocs.createForm(OBJECT_DOC) == "object"
+def test_createFormIsObjectWhenTheOnlyRequiredParamIsAnObjectOfTheClass(javaDocs):
+    assert javaDocs.createForm("Widget", OBJECT_DOC) == "object"
 
 
 def test_createFormIsMapWhenTheRequiredParamsAreScalars(javaDocs):
-    assert javaDocs.createForm(MAP_DOC) == "map"
+    assert javaDocs.createForm("Widget", MAP_DOC) == "map"
+
+
+def test_createFormKeepsTheMapFormWhenOnlyTheOptionalParamsBeyondTheUserAreListed(javaDocs):
+    doc = _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("tags", "list of strings", "optional"),
+                                     USER_PARAM])
+
+    assert javaDocs.createForm("Widget", doc) == "map"
 
 
 @pytest.mark.parametrize("doc", [
@@ -450,9 +457,13 @@ def test_createFormIsMapWhenTheRequiredParamsAreScalars(javaDocs):
     _createDoc(SINGLE_RETURN, [_param("url", "string"), EXPAND_PARAM]),
     _createDoc(SINGLE_RETURN, [USER_PARAM]),
     _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("widget", "Widget object")]),
+    _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), _param("count", "integer")]),
+    _createDoc(SINGLE_RETURN, [_param("other", "Other object"), USER_PARAM]),
+    _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), _param("tags", "list of strings", "optional")]),
+    _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("widgets", "list of Widget objects")]),
 ])
 def test_createFormIsUnsupportedForASingleReturnThatMatchesNoForm(javaDocs, doc):
-    assert javaDocs.createForm(doc) == "unsupported"
+    assert javaDocs.createForm("Widget", doc) == "unsupported"
 
 
 @pytest.mark.parametrize("resource,expected", [
@@ -464,7 +475,19 @@ def test_createFormOfTheRealDocstrings(javaDocs, buildResource, resource, expect
     spec = buildResource.loadFast((REPO_ROOT / buildResource.SPEC_FILE).read_text(encoding="utf-8"))
     docs = buildResource.resolveRef(spec, resource, REPO_ROOT / "apis").get("x-sdk-docs") or {}
 
-    assert javaDocs.createForm(docs.get("create")) == expected
+    assert javaDocs.createForm(resource, docs.get("create")) == expected
+
+
+def test_userLineOfAnObjectCreateStaysUserEvenWhenTheDocstringSaysOrganization(javaDocs):
+    organizationUser = _param("user", "Organization object, default None", "optional")
+    doc = _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), organizationUser])
+    entity = {"description": "", "fields": []}
+
+    lines = javaDocs.renderDocs("Widget", {"create": doc}, {"x-sdk-create"}, entity)["lines"]["createUser"]
+
+    assert javaDocs.createPlan("Widget", doc)["userType"] == "Organization"
+    userLines = [line for line in lines if line.startswith("@param user")]
+    assert len(userLines) == 1 and userLines[0].startswith("@param user [Organization/Project object")
 
 
 def test_createPlanOfAListWithExpandAsksForTheParamsOverloads(javaDocs):

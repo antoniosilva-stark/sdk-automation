@@ -925,6 +925,20 @@ def test_theSingleObjectCreatesPassTheShapeGuard(buildResource, resource):
     assert buildResource.unsupportedShape(resource) is None
 
 
+@pytest.mark.parametrize("params", [
+    [("widget", "Widget object"), ("count", "integer")],
+    [("other", "Other object")],
+    [("widget", "Widget object"), ("tags", "list of strings", "optional")],
+    [("url", "string"), ("widgets", "list of Widget objects")],
+])
+def test_aSingleCreateThatMatchesNoFormIsBarredWithTheNoMatchMotive(buildResource, params):
+    createDoc = {"returns": ["Widget object with updated attributes"], "params": [
+        {"name": name, "type": kind, "section": (rest or ["required"])[0]} for name, kind, *rest in params]}
+
+    assert buildResource.unsupportedCreateMotive("Widget", createDoc) == (
+        "create de objeto unico (Widget): o docstring nao casa com create(X) nem create(Map)")
+
+
 def test_aSingleObjectCreateWithExpandIsBarredWithItsMotive(buildResource):
     assert buildResource.unsupportedShape("CorporateCard") == CORPORATE_CARD_MOTIVE
 

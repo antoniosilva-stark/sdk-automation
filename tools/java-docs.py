@@ -58,7 +58,7 @@ OPERATION_KINDS = {
     "query": "filters", "page": "filters",
     "log.get": "id", "log.query": "filters", "log.page": "filters",
 }
-OBJECT_TYPE = re.compile(r"^\w+ object$")
+OBJECT_LIST_TYPE = re.compile(r"^list of \w+ objects$")
 LOG_OPERATIONS = ("log.get", "log.query", "log.page")
 PAGE_OPERATIONS = ("page", "log.page")
 VARIANTS_PLAIN = (("Plain", False, False), ("User", False, True))
@@ -253,29 +253,27 @@ def returnsList(doc: dict) -> bool:
     return not returns or returns[0].startswith("list of")
 
 
-def createForm(doc: dict | None) -> str:
+def createForm(className: str, doc: dict | None) -> str:
     """Forma do create no Java, decidida so pelo docstring: `list` (devolve lista ou nao diz), `object` (devolve
-    um objeto e recebe um `X object`), `map` (devolve um objeto e recebe escalares) ou `unsupported` (o que nao
-    casa, ou tem `expand`: o real escreve o corpo a mao)."""
+    um objeto e recebe so um `X object`, sem opcional alem de `user`), `map` (devolve um objeto e recebe escalares)
+    ou `unsupported` (o que nao casa, ou tem `expand`: o real escreve o corpo a mao). O que a assinatura nao
+    carrega nao vira forma: um campo descartado em silencio compilaria e chamaria a API errado."""
     doc = doc or {}
     if returnsList(doc):
         return "list"
     if hasParam(doc, "expand"):
         return "unsupported"
     required = requiredParams(doc)
-    objects = [param for param in required if OBJECT_TYPE.match(param.get("type") or "")]
-    if required and not objects:
-        return "map"
-    if objects and objects[0] is required[0] and len(objects) == 1:
-        return "object"
-    return "unsupported"
+    if len(required) == 1 and required[0].get("type") == f"{className} object":
+        return "object" if not optionalParams(doc) else "unsupported"
+    return "map" if required and all(isScalarType(param.get("type") or "") for param in required) else "unsupported"
 
 
 def createPlan(className: str, doc: dict | None) -> dict:
     """O que o Mustache precisa para escolher o create: booleanos por forma e os dois nomes que o corpo usa.
     `unsupported` cai na forma lista (so o modo advisory a emite; a guarda de build-resource a barra)."""
     doc = doc or {}
-    form = createForm(doc)
+    form = createForm(className, doc)
     paramName = ""
     if form == "object":
         paramName = requiredParams(doc)[0]["name"]
@@ -291,6 +289,10 @@ def createPlan(className: str, doc: dict | None) -> dict:
     }
 
 
+def isScalarType(docType: str) -> bool:
+    return not docType.endswith(" object") and not OBJECT_LIST_TYPE.match(docType)
+
+
 def isSingle(plan: dict | None) -> bool:
     return bool(plan) and (plan["isObject"] or plan["isMap"])
 
@@ -301,6 +303,11 @@ def hasParam(doc: dict, name: str) -> bool:
 
 def requiredParams(doc: dict) -> list:
     return [param for param in doc.get("params") or [] if param.get("section") == "required"]
+
+
+def optionalParams(doc: dict) -> list:
+    return [param for param in doc.get("params") or []
+            if param.get("section") != "required" and param.get("name") != "user"]
 
 
 def isOrganizationUser(doc: dict) -> bool:
@@ -406,7 +413,7 @@ def paramText(context: dict, param: dict) -> str:
 
 
 def userLine(profile: dict, plan: dict | None = None) -> str:
-    isOrganization = bool(plan) and plan["userType"] == "Organization" and isSingle(plan)
+    isOrganization = bool(plan) and plan["isMap"] and plan["userType"] == "Organization"
     user = profile["organizationUser"] if isOrganization else profile["user"]
     return f"@param {user['name']} [{user['type']}]: {user['description']}"
 

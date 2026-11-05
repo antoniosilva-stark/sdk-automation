@@ -272,7 +272,7 @@ def docstrings(resource: str) -> dict:
 
 
 def createFormOf(resource: str) -> str:
-    return loadTool("java-docs").createForm(docstrings(resource).get("create"))
+    return loadTool("java-docs").createForm(resource, docstrings(resource).get("create"))
 
 
 def unsupportedShape(resource: str) -> str | None:
@@ -284,7 +284,7 @@ def unsupportedShape(resource: str) -> str | None:
     flags = declaredFlags(resource)
     if "x-sdk-put" in flags and not javaDocs.returnsList(docs.get("put") or {}):
         return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
-    if "x-sdk-create" in flags and javaDocs.createForm(docs.get("create")) == "unsupported":
+    if "x-sdk-create" in flags and javaDocs.createForm(resource, docs.get("create")) == "unsupported":
         return unsupportedCreateMotive(resource, docs["create"])
     getDoc = docs.get("get")
     # `uuid` (DynamicBrcode) tambem identifica: singleton e o get que so recebe `user`
