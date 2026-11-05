@@ -171,19 +171,37 @@ public final class {{classname}} extends {{#vendorExtensions.x-sdk-subresource}}
     }
 {{/vendorExtensions.x-sdk-page}}
 {{#vendorExtensions.x-sdk-create}}
+{{#vendorExtensions.x-sdk-java-create.isList}}
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
     public static List<{{classname}}> create(List<?> {{classVarName}}s) throws Exception {
-        return {{classname}}.create({{classVarName}}s, null);
+        return {{classname}}.create({{classVarName}}s, null{{#vendorExtensions.x-sdk-java-create.hasExpand}}, null{{/vendorExtensions.x-sdk-java-create.hasExpand}});
+    }
+{{#vendorExtensions.x-sdk-java-create.hasExpand}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createParams}}     */
+    public static List<{{classname}}> create(List<?> {{classVarName}}s, Map<String, Object> params) throws Exception {
+        return {{classname}}.create({{classVarName}}s, params, null);
     }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.createUser}}     */
-    @SuppressWarnings("unchecked")
     public static List<{{classname}}> create(List<?> {{classVarName}}s, User user) throws Exception {
+        return {{classname}}.create({{classVarName}}s, null, user);
+    }
+{{/vendorExtensions.x-sdk-java-create.hasExpand}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-create.hasExpand}}{{#vendorExtensions.x-sdk-java-docs.createParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createParamsUser}}{{/vendorExtensions.x-sdk-java-create.hasExpand}}{{^vendorExtensions.x-sdk-java-create.hasExpand}}{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createUser}}{{/vendorExtensions.x-sdk-java-create.hasExpand}}     */
+    @SuppressWarnings("unchecked")
+    public static List<{{classname}}> create(List<?> {{classVarName}}s, {{#vendorExtensions.x-sdk-java-create.hasExpand}}Map<String, Object> params, {{/vendorExtensions.x-sdk-java-create.hasExpand}}User user) throws Exception {
         List<{{classname}}> {{classVarName}}List = new ArrayList<>();
         for (Object {{classVarName}} : {{classVarName}}s) {
             if ({{classVarName}} instanceof Map) {
@@ -196,8 +214,41 @@ public final class {{classname}} extends {{#vendorExtensions.x-sdk-subresource}}
             }
             throw new Exception("Unknown type \"" + {{classVarName}}.getClass() + "\", use {{classname}} or HashMap");
         }
-        return Rest.post({{classDataName}}, {{classVarName}}List, user);
+        return Rest.post({{classDataName}}, {{classVarName}}List, {{#vendorExtensions.x-sdk-java-create.hasExpand}}params, {{/vendorExtensions.x-sdk-java-create.hasExpand}}user);
     }
+{{/vendorExtensions.x-sdk-java-create.isList}}
+{{#vendorExtensions.x-sdk-java-create.isObject}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
+    public static {{classname}} create({{classname}} {{vendorExtensions.x-sdk-java-create.paramName}}) throws Exception {
+        return {{classname}}.create({{vendorExtensions.x-sdk-java-create.paramName}}, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createUser}}     */
+    public static {{classname}} create({{classname}} {{vendorExtensions.x-sdk-java-create.paramName}}, User user) throws Exception {
+        return Rest.postSingle({{classDataName}}, {{vendorExtensions.x-sdk-java-create.paramName}}, user);
+    }
+{{/vendorExtensions.x-sdk-java-create.isObject}}
+{{#vendorExtensions.x-sdk-java-create.isMap}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createPlain}}     */
+    public static {{classname}} create(Map<String, Object> {{vendorExtensions.x-sdk-java-create.paramName}}) throws Exception {
+        return {{classname}}.create({{vendorExtensions.x-sdk-java-create.paramName}}, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.createUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.createUser}}     */
+    public static {{classname}} create(Map<String, Object> {{vendorExtensions.x-sdk-java-create.paramName}}, {{vendorExtensions.x-sdk-java-create.userType}} user) throws Exception {
+        return Rest.postSingle({{classDataName}}, new {{classname}}({{vendorExtensions.x-sdk-java-create.paramName}}), user);
+    }
+{{/vendorExtensions.x-sdk-java-create.isMap}}
 {{/vendorExtensions.x-sdk-create}}
 {{#vendorExtensions.x-sdk-update}}
 

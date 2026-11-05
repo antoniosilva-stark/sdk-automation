@@ -16,13 +16,21 @@ JAVA_PROFILE = {
     },
     # after/before sem ":" apos o colchete: 244 contra 124 (eixo E2)
     "noColonParams": ("after", "before"),
+    # Workspace e o unico create que o Java real tipa como Organization; o Javadoc diz o mesmo que a assinatura
+    "organizationUser": {
+        "name": "user",
+        "type": "Organization object, default null",
+        "description": "Organization object. Not necessary if starkbank.Settings.user was set before function call",
+    },
     "mapParamText": {
+        "create": "map of parameters",
         "query": "map of parameters for the query",
         "page": "parameters of the query",
         "log.query": "map of parameters for the query",
         "log.page": "parameters of the query",
     },
     "patchText": "map of parameters to patch",
+    "createMapText": "parameters for the creation of the {x}",
     "ctorMapText": "map of properties for the creation of the {X}",
     "titles": {
         "get": "Retrieve a specific {X}",
@@ -50,6 +58,7 @@ OPERATION_KINDS = {
     "query": "filters", "page": "filters",
     "log.get": "id", "log.query": "filters", "log.page": "filters",
 }
+OBJECT_TYPE = re.compile(r"^\w+ object$")
 LOG_OPERATIONS = ("log.get", "log.query", "log.page")
 PAGE_OPERATIONS = ("page", "log.page")
 VARIANTS_PLAIN = (("Plain", False, False), ("User", False, True))
@@ -87,7 +96,10 @@ def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: di
             doc = genericDoc(operation, className)
         lines.update(renderOperation(context, operation, doc))
     lines = {key: [neutralizeComment(line) for line in block] for key, block in lines.items()}
-    return {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
+    rendered = {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
+    if "x-sdk-create" in flags:
+        rendered["create"] = createPlan(className, operationDoc(docs, "create") or genericDoc("create", className))
+    return rendered
 
 
 def describeEntity(schema: dict, createSchema: dict | None, profile: dict = JAVA_PROFILE) -> dict:
@@ -219,15 +231,17 @@ def operationKey(operation: str, variant: str) -> str:
 
 def renderOperation(context: dict, operation: str, doc: dict) -> dict:
     kind = OPERATION_KINDS[operation]
-    doc = listFormDoc(operation, context["className"], doc) if kind == "list" else doc
-    variants = VARIANTS_FILTERS if kind == "filters" else VARIANTS_PLAIN
+    plan = createPlan(context["className"], doc) if operation == "create" else None
+    doc = listFormDoc(operation, context["className"], doc) if kind == "list" and not isSingle(plan) else doc
+    hasParamsOverloads = kind == "filters" or bool(plan and plan["hasExpand"])
+    variants = VARIANTS_FILTERS if hasParamsOverloads else VARIANTS_PLAIN
     description = [contextText(context, line) for line in doc.get("description") or []]
-    title = operationTitle(context, operation, doc)
+    title = singleTitle(context, doc) if isSingle(plan) else operationTitle(context, operation, doc)
     returns = returnLines(context, operation, doc)
     rendered = {}
     for variant, withParams, withUser in variants:
-        parameters = parameterLines(context, operation, kind, doc, withParams)
-        parameters += [userLine(context["profile"])] if withUser else []
+        parameters = parameterLines(context, operation, kind, doc, withParams, plan)
+        parameters += [userLine(context["profile"], plan)] if withUser else []
         rendered[operationKey(operation, variant)] = blockLines(context["profile"], title, description,
                                                                 parameters, returns)
     return rendered
@@ -237,6 +251,61 @@ def returnsList(doc: dict) -> bool:
     """O create/put documentado devolve lista (ou nao diz): a forma que o template Java emite."""
     returns = doc.get("returns") or []
     return not returns or returns[0].startswith("list of")
+
+
+def createForm(doc: dict | None) -> str:
+    """Forma do create no Java, decidida so pelo docstring: `list` (devolve lista ou nao diz), `object` (devolve
+    um objeto e recebe um `X object`), `map` (devolve um objeto e recebe escalares) ou `unsupported` (o que nao
+    casa, ou tem `expand`: o real escreve o corpo a mao)."""
+    doc = doc or {}
+    if returnsList(doc):
+        return "list"
+    if hasParam(doc, "expand"):
+        return "unsupported"
+    required = requiredParams(doc)
+    objects = [param for param in required if OBJECT_TYPE.match(param.get("type") or "")]
+    if required and not objects:
+        return "map"
+    if objects and objects[0] is required[0] and len(objects) == 1:
+        return "object"
+    return "unsupported"
+
+
+def createPlan(className: str, doc: dict | None) -> dict:
+    """O que o Mustache precisa para escolher o create: booleanos por forma e os dois nomes que o corpo usa.
+    `unsupported` cai na forma lista (so o modo advisory a emite; a guarda de build-resource a barra)."""
+    doc = doc or {}
+    form = createForm(doc)
+    paramName = ""
+    if form == "object":
+        paramName = requiredParams(doc)[0]["name"]
+    if form == "map":
+        paramName = f"{className[:1].lower()}{className[1:]}Data"
+    return {
+        "isList": form in ("list", "unsupported"),
+        "isObject": form == "object",
+        "isMap": form == "map",
+        "hasExpand": form == "list" and hasParam(doc, "expand"),
+        "paramName": paramName,
+        "userType": "Organization" if isOrganizationUser(doc) else "User",
+    }
+
+
+def isSingle(plan: dict | None) -> bool:
+    return bool(plan) and (plan["isObject"] or plan["isMap"])
+
+
+def hasParam(doc: dict, name: str) -> bool:
+    return any(param.get("name") == name for param in doc.get("params") or [])
+
+
+def requiredParams(doc: dict) -> list:
+    return [param for param in doc.get("params") or [] if param.get("section") == "required"]
+
+
+def isOrganizationUser(doc: dict) -> bool:
+    user = next((param for param in doc.get("params") or [] if param.get("name") == "user"), {})
+    return (user.get("type") or "").startswith("Organization object")
 
 
 def listFormDoc(operation: str, className: str, doc: dict) -> dict:
@@ -254,6 +323,10 @@ def blockLines(profile: dict, title: str, description: list, parameters: list, r
     return lines + ["<p>", profile["returnTitle"], *returns, profile["throwsLine"]]
 
 
+def singleTitle(context: dict, doc: dict) -> str:
+    return contextText(context, doc.get("summary") or f"Create {context['className']}")
+
+
 def operationTitle(context: dict, operation: str, doc: dict) -> str:
     className, profile = context["className"], context["profile"]
     template = profile["titles"].get(operation)
@@ -267,11 +340,16 @@ def operationTitle(context: dict, operation: str, doc: dict) -> str:
     return template.replace("{Xs}", plural or "").replace("{X}", className).replace("{a}", article(className))
 
 
-def parameterLines(context: dict, operation: str, kind: str, doc: dict, withParams: bool) -> list:
+def parameterLines(context: dict, operation: str, kind: str, doc: dict, withParams: bool,
+                   plan: dict | None = None) -> list:
     profile = context["profile"]
     pythonParams = [param for param in doc.get("params") or [] if param.get("name") != "user"]
+    if kind == "list" and plan and plan["isObject"]:
+        return [f"@param {paramText(context, pythonParams[0])}"]
+    if kind == "list" and plan and plan["isMap"]:
+        return mapCreateLines(context, plan, pythonParams)
     if kind == "list":
-        return [entityListLine(context, operation, pythonParams)]
+        return listLines(context, operation, pythonParams, withParams)
     if kind == "id":
         return [idLine(context, pythonParams)]
     if kind == "patch":
@@ -282,6 +360,21 @@ def parameterLines(context: dict, operation: str, kind: str, doc: dict, withPara
         return []
     return [f"@param params {profile['mapParamText'][operation]}",
             *[paramText(context, param) for param in pythonParams]]
+
+
+def listLines(context: dict, operation: str, pythonParams: list, withParams: bool) -> list:
+    lines = [entityListLine(context, operation, pythonParams)]
+    if not withParams:
+        return lines
+    expand = [param for param in pythonParams if param["name"] == "expand"]
+    return lines + [f"@param params {context['profile']['mapParamText'][operation]}",
+                    *[paramText(context, param) for param in expand]]
+
+
+def mapCreateLines(context: dict, plan: dict, pythonParams: list) -> list:
+    className = context["className"]
+    text = context["profile"]["createMapText"].replace("{x}", f"{className[:1].lower()}{className[1:]}")
+    return [f"@param {plan['paramName']} {text}", *[paramText(context, param) for param in pythonParams]]
 
 
 def entityListLine(context: dict, operation: str, pythonParams: list) -> str:
@@ -312,8 +405,9 @@ def paramText(context: dict, param: dict) -> str:
     return f"{head}{separator}{description}"
 
 
-def userLine(profile: dict) -> str:
-    user = profile["user"]
+def userLine(profile: dict, plan: dict | None = None) -> str:
+    isOrganization = bool(plan) and plan["userType"] == "Organization" and isSingle(plan)
+    user = profile["organizationUser"] if isOrganization else profile["user"]
     return f"@param {user['name']} [{user['type']}]: {user['description']}"
 
 

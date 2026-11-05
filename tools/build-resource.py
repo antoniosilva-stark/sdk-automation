@@ -52,6 +52,7 @@ GENERATORS = {
 }
 
 
+SINGLE_CREATE_FORMS = ("object", "map")
 GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
 LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
 SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log", "x-sdk-subresource")
@@ -117,23 +118,25 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
+    docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
     stagedSpec = stagedDir / SPEC_FILE
     stagedSpec.write_text(specText.replace(entryLine, f"{entryLine}{docsLine}", 1), encoding="utf-8")
     return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}
 
 
-def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
+def javaImports(flags: set[str], objectArray: bool = False, createForm: str = "list") -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
     Só o que vale entra: additional-property chega como string, e "false" é
-    verdadeiro no Mustache.
+    verdadeiro no Mustache. O create de objeto único (`object`/`map`) não monta lista.
     """
     properties = []
     if flags & set(GENERATOR_USERS):
         properties.append("usesGenerator=true")
     if objectArray:
         properties.append("usesObjectList=true")
-    if flags & set(LIST_USERS):
+    listUsers = set(LIST_USERS) - ({"x-sdk-create"} if createForm in SINGLE_CREATE_FORMS else set())
+    if flags & listUsers:
         properties.append("usesList=true")
     if flags & set(SUBRESOURCE_USERS):
         properties.append("usesSubResource=true")
@@ -210,7 +213,11 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
     extra = list(run["extra"])
     properties = []
     if run["generator"] == "java":
-        properties = javaImports(declaredFlags(resource, specFile), hasObjectArray(resource, specFile))
+        properties = javaImports(
+            declaredFlags(resource, specFile),
+            hasObjectArray(resource, specFile),
+            createForm=createFormOf(resource),
+        )
         properties.append(classDataProperty(resource, specFile))
     if properties:
         extra.extend(["--additional-properties", ",".join(properties)])
@@ -259,21 +266,37 @@ def gapBucket(resource: str) -> str | None:
     return None
 
 
-def unsupportedShape(resource: str) -> str | None:
-    """Formato que o template Java nao sabe emitir: create de objeto unico (sai create(List) com Rest.post) e get
-    sem id (singleton, sai get(String id)). Quem decide e o docstring, o mesmo predicado da documentacao."""
-    javaDocs = loadTool("java-docs")
+def docstrings(resource: str) -> dict:
     spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
-    docs = resolveRef(spec, resource, REPO_ROOT / "apis").get("x-sdk-docs") or {}
+    return (resolveRef(spec, resource, REPO_ROOT / "apis") or {}).get("x-sdk-docs") or {}
+
+
+def createFormOf(resource: str) -> str:
+    return loadTool("java-docs").createForm(docstrings(resource).get("create"))
+
+
+def unsupportedShape(resource: str) -> str | None:
+    """Formato que o template Java nao sabe emitir: put de objeto unico (sai put(List) com Rest.post), create de
+    objeto unico que nao casa com `object`/`map` e get sem id (singleton, sai get(String id)). Quem decide e o
+    docstring: `createForm` para o create e `returnsList` para o put, o mesmo predicado da documentacao."""
+    javaDocs = loadTool("java-docs")
+    docs = docstrings(resource)
     flags = declaredFlags(resource)
-    for operation in ("create", "put"):
-        if f"x-sdk-{operation}" in flags and not javaDocs.returnsList(docs.get(operation) or {}):
-            return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
+    if "x-sdk-put" in flags and not javaDocs.returnsList(docs.get("put") or {}):
+        return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
+    if "x-sdk-create" in flags and javaDocs.createForm(docs.get("create")) == "unsupported":
+        return unsupportedCreateMotive(resource, docs["create"])
     getDoc = docs.get("get")
     # `uuid` (DynamicBrcode) tambem identifica: singleton e o get que so recebe `user`
     if "x-sdk-get" in flags and getDoc and {param["name"] for param in getDoc.get("params") or []} <= {"user"}:
         return f"get sem id (singleton) ({resource})"
     return None
+
+
+def unsupportedCreateMotive(resource: str, createDoc: dict) -> str:
+    if loadTool("java-docs").hasParam(createDoc, "expand"):
+        return f"create de objeto unico com expand ({resource}): corpo manuscrito, ME 9.8"
+    return f"create de objeto unico ({resource}): o docstring nao casa com create(X) nem create(Map)"
 
 
 def announceIntent(resource: str, language: str, absent: int, total: int) -> None:

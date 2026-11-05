@@ -169,7 +169,7 @@ def test_theMapConstructorIsAnnotatedOnlyWhenItCastsAGenericList(generated):
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ("Transfer", "Webhook", "VerifiedTransfer"))
+@pytest.mark.parametrize("resource", ("Transfer", "Invoice", "VerifiedTransfer"))
 def test_theCreateLoopHasBracesContinueAndNoElseIf(generated, resource):
     source = generated(resource)
 

@@ -900,12 +900,14 @@ def test_styleWarningsOfACreatedResourceAreCountedAndDoNotBlockTheBuild(builtOnc
     assert (target / JAVA_SOURCES / "Transfer.java").is_file()
 
 
+CORPORATE_CARD_MOTIVE = "create de objeto unico com expand (CorporateCard): corpo manuscrito, ME 9.8"
 UNSUPPORTED_SHAPES = [
-    ("Webhook", "create de objeto unico (Webhook): o template emite create(List) com Rest.post"),
+    ("CorporateCard", CORPORATE_CARD_MOTIVE),
     ("Balance", "get sem id (singleton) (Balance)"),
     ("CorporateBalance", "get sem id (singleton) (CorporateBalance)"),
-    ("MerchantSession", "create de objeto unico (MerchantSession): o template emite create(List) com Rest.post"),
 ]
+SINGLE_CREATES = ("MerchantPurchase", "MerchantSession", "CorporateWithdrawal", "CorporateInvoice", "Webhook",
+                  "Workspace")
 
 
 def _unsupportedResources(buildResource) -> list[str]:
@@ -915,10 +917,25 @@ def _unsupportedResources(buildResource) -> list[str]:
 
 
 def test_unsupportedShapeNamesExactlyTheResourcesTheTemplateCannotEmit(buildResource):
-    assert _unsupportedResources(buildResource) == sorted([
-        "Webhook", "MerchantSession", "MerchantPurchase", "CorporateCard", "CorporateWithdrawal",
-        "CorporateInvoice", "Workspace", "Balance", "CorporateBalance",
-    ])
+    assert _unsupportedResources(buildResource) == sorted(["CorporateCard", "Balance", "CorporateBalance"])
+
+
+@pytest.mark.parametrize("resource", SINGLE_CREATES)
+def test_theSingleObjectCreatesPassTheShapeGuard(buildResource, resource):
+    assert buildResource.unsupportedShape(resource) is None
+
+
+def test_aSingleObjectCreateWithExpandIsBarredWithItsMotive(buildResource):
+    assert buildResource.unsupportedShape("CorporateCard") == CORPORATE_CARD_MOTIVE
+
+
+def test_onlyAListOrAnUnsupportedCreateKeepsTheListImports(buildResource):
+    asks = lambda form: "usesList=true" in buildResource.javaImports({"x-sdk-create"}, createForm=form)
+
+    assert asks("list") is True and asks("unsupported") is True
+    assert asks("object") is False and asks("map") is False
+    assert "usesList=true" in buildResource.javaImports({"x-sdk-create", "x-sdk-page"}, createForm="object")
+    assert "usesRest=true" in buildResource.javaImports({"x-sdk-create"}, createForm="map")
 
 
 @requiresGenerator
@@ -932,7 +949,7 @@ def test_creatingAnUnsupportedShapeFailsClosedAndPlacesNothing(builtOnce, resour
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["Webhook", "Balance"])
+@pytest.mark.parametrize("resource", ["CorporateCard", "Balance"])
 def test_anExistingResourceWithAnUnsupportedShapeIsStillTheParityReport(tmpPath, resource):
     code, out = runTool("build-resource.py", resource, "--lang", "java", "--into", str(_target(tmpPath)))
 
@@ -941,7 +958,7 @@ def test_anExistingResourceWithAnUnsupportedShapeIsStillTheParityReport(tmpPath,
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["Webhook", "Balance"])
+@pytest.mark.parametrize("resource", ["CorporateCard", "Balance"])
 def test_advisoryDoesNotRunTheShapeGuard(builtOnce, resource):
     code, out, _ = builtOnce(resource, "java", "--advisory")
 
@@ -949,8 +966,104 @@ def test_advisoryDoesNotRunTheShapeGuard(builtOnce, resource):
     assert "formato nao suportado" not in out
 
 
+def _created(builtOnce, resource: str) -> str:
+    code, out, target = builtOnce(resource, "java")
+    assert code == 0, out
+    return (target / JAVA_SOURCES / f"{resource}.java").read_text(encoding="utf-8")
+
+
+BOLETO_CREATE = """    public static List<Boleto> create(List<?> boletos) throws Exception {
+        return Boleto.create(boletos, null);
+    }
+"""
+BOLETO_CREATE_USER = """    @SuppressWarnings("unchecked")
+    public static List<Boleto> create(List<?> boletos, User user) throws Exception {
+        List<Boleto> boletoList = new ArrayList<>();
+        for (Object boleto : boletos) {
+            if (boleto instanceof Map) {
+                boletoList.add(new Boleto((Map<String, Object>) boleto));
+                continue;
+            }
+            if (boleto instanceof Boleto) {
+                boletoList.add((Boleto) boleto);
+                continue;
+            }
+            throw new Exception("Unknown type \\"" + boleto.getClass() + "\\", use Boleto or HashMap");
+        }
+        return Rest.post(data, boletoList, user);
+    }
+"""
+
+
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["SplitProfile", "Transfer", "VerifiedTransfer", "Transaction"])
+def test_aListCreateWithoutExpandIsEmittedExactlyAsBefore(builtOnce):
+    source = _created(builtOnce, "Boleto")
+
+    assert BOLETO_CREATE in source
+    assert BOLETO_CREATE_USER in source
+    assert "Map<String, Object> params, User user" not in source.split("public static List<Boleto> create")[1]
+    assert source.count("public static List<Boleto> create(") == 2
+
+
+@requiresGenerator
+def test_aListCreateWithExpandEmitsTheFourOverloadsAndPostsTheParams(builtOnce):
+    source = _created(builtOnce, "CorporateHolder")
+
+    signatures = re.findall(r"public static List<CorporateHolder> create\(([^)]*)\)", source)
+    assert signatures == [
+        "List<?> corporateHolders",
+        "List<?> corporateHolders, Map<String, Object> params",
+        "List<?> corporateHolders, User user",
+        "List<?> corporateHolders, Map<String, Object> params, User user",
+    ]
+    assert "return CorporateHolder.create(corporateHolders, null, null);" in source
+    assert "return CorporateHolder.create(corporateHolders, params, null);" in source
+    assert "return CorporateHolder.create(corporateHolders, null, user);" in source
+    assert "return Rest.post(data, corporateHolderList, params, user);" in source
+    assert source.count("corporateHolderList = new ArrayList<>()") == 1
+
+
+@requiresGenerator
+def test_anObjectCreatePostsTheSingleObjectWithTheParamNamedByTheDocstring(builtOnce):
+    source = _created(builtOnce, "MerchantPurchase")
+
+    assert re.findall(r"public static MerchantPurchase create\(([^)]*)\)", source) == [
+        "MerchantPurchase merchantPurchase", "MerchantPurchase merchantPurchase, User user"]
+    assert "return MerchantPurchase.create(merchantPurchase, null);" in source
+    assert "return Rest.postSingle(data, merchantPurchase, user);" in source
+    assert "List<MerchantPurchase> create" not in source
+
+
+@requiresGenerator
+def test_anObjectCreateNamesTheParamAfterTheDocstringNotTheClass(builtOnce):
+    assert "create(CorporateWithdrawal withdrawal, User user)" in _created(builtOnce, "CorporateWithdrawal")
+    assert "create(CorporateInvoice invoice, User user)" in _created(builtOnce, "CorporateInvoice")
+
+
+@requiresGenerator
+def test_aMapCreateBuildsTheEntityFromTheMapAndPostsIt(builtOnce):
+    source = _created(builtOnce, "Webhook")
+
+    assert re.findall(r"public static Webhook create\(([^)]*)\)", source) == [
+        "Map<String, Object> webhookData", "Map<String, Object> webhookData, User user"]
+    assert "return Webhook.create(webhookData, null);" in source
+    assert "return Rest.postSingle(data, new Webhook(webhookData), user);" in source
+    assert "@param webhookData parameters for the creation of the webhook" in source
+
+
+@requiresGenerator
+def test_onlyTheWorkspaceCreateTakesAnOrganizationUser(builtOnce):
+    source = _created(builtOnce, "Workspace")
+
+    assert "public static Workspace create(Map<String, Object> workspaceData, Organization user)" in source
+    assert "return Rest.postSingle(data, new Workspace(workspaceData), user);" in source
+    assert source.count("Organization user") == 1
+    assert "@param user [Organization object, default null]" in source
+
+
+@requiresGenerator
+@pytest.mark.parametrize("resource", ["SplitProfile", "Transfer", "VerifiedTransfer", "Transaction",
+                                      *SINGLE_CREATES, "CorporateHolder"])
 def test_supportedShapesAreStillCreated(builtOnce, resource):
     code, out, target = builtOnce(resource, "java")
 

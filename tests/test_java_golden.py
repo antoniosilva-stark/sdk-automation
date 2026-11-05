@@ -401,9 +401,6 @@ BALANCE_GET = ("runtime-errado",
                " `get(String id)` com Rest.getId. A guarda de build-resource bloqueia a criacao")
 BALANCE_MAP_CTOR = ("cosmetico",
                     "Entrega 9: Balance nao tem ctor Map no real; o gerador emite o ctor (superficie publica a mais)")
-SINGLE_CREATE = ("runtime-errado",
-                 "Entrega 9: create de objeto unico: o real tem `create(Map)` com Rest.postSingle; o gerador emite"
-                 " `create(List)` com Rest.post. A guarda de build-resource bloqueia a criacao")
 
 EXPECTED: dict[str, dict[str, str]] = {
     "SplitProfile": {
@@ -583,18 +580,7 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
         "mapctor|updated real=None gen=null":
             BALANCE_MAP_CTOR,
     },
-    "Webhook": {
-        "methods|missing|create(Map<String, Object>)":
-            SINGLE_CREATE,
-        "methods|missing|create(Map<String, Object>, User)":
-            SINGLE_CREATE,
-        "methods|extra|create(List<?>)":
-            SINGLE_CREATE,
-        "methods|extra|create(List<?>, User)":
-            SINGLE_CREATE,
-        "rest|create real={'postSingle': 1} gen={'post': 1}":
-            SINGLE_CREATE,
-    },
+    "Webhook": {},
     "VerifiedTransfer": {
         "methods|missing|parseRules(List<Object>)":
             RULE,
@@ -608,10 +594,10 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
 }
 
 
-# A guarda de build-resource bloqueia a criacao de Webhook (create de objeto unico) e de Balance (singleton), entao o
-# golden os gera com --advisory, que nao a roda: aqui se mede a estrutura contra o real, e a guarda prova o bloqueio
-# (tests/test_build_resource.py). Os dois nao se sobrepoem de proposito.
-GOLDEN_FLAGS = {"Webhook": ("--advisory",), "Balance": ("--advisory",)}
+# A guarda de build-resource bloqueia a criacao de Balance (singleton), entao o golden o gera com --advisory, que nao
+# a roda: aqui se mede a estrutura contra o real, e a guarda prova o bloqueio (tests/test_build_resource.py). Os dois
+# nao se sobrepoem de proposito.
+GOLDEN_FLAGS = {"Balance": ("--advisory",)}
 
 
 def _structures(builtOnce, assertGenerated, resource: str, generated: str | None = None) -> tuple[dict, dict, str]:
