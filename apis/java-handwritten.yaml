@@ -1,19 +1,229 @@
-# Dispensa estreita e versionada dos membros que o sdk-java real ESCREVE A MAO: logica que nao segue nenhum molde
-# gerado (CRUD, create lista/objeto/mapa, get, query, page, log, pdf, parse padrao). Lida so por tools/compare-with-real.py
-# (`make compare`); a geracao nao a le, e o comparador nunca a usa para medir similaridade.
+# Dispensa estreita e versionada dos membros que o sdk-java real ESCREVE A MAO: o corpo e logica que nao segue nenhum
+# molde gerado (CRUD, create lista/objeto/mapa, get, query, page, log, pdf, parse padrao), mesmo quando o sdk-python tem
+# o equivalente. Lida so por tools/compare-with-real.py (`make compare`); a geracao nao a le, e o comparador nunca a
+# usa para medir similaridade. Medida no pin f60902a (sdk-java) e validada nos dois sentidos em tests/test_java_handwritten.py:
+# todo membro existe no real e todo gap dispensado ainda e gap hoje.
 #
 # Recurso -> lista de dispensas (o recurso e o nome canonico de apis/schemas, com a caixa exata):
 #   - kind: signature | field | constructor | require | inner
 #     text: o texto EXATO do gap como o comparador o imprime (a mensagem inteira, ja com o prefixo
-#           `signature ausente: ...`, `field divergente: ...`); sem padrao nem regex, um texto quase igual nao dispensa
-#     count: opcional, default 1; quantas vezes o mesmo gap pode aparecer no recurso (ex.: duas classes internas sem
-#            `public String confirmationMode;`). Os gaps sao um multiconjunto: cada entrada consome ate `count`
-#     reason: por que e escrito a mao, citando o arquivo do sdk-java real
+#           `signature ausente: ...`); sem padrao nem regex, um texto quase igual nao dispensa
+#     count: opcional, default 1; quantas vezes o mesmo gap pode aparecer no recurso. Os gaps sao um multiconjunto:
+#            cada entrada consome ate `count` (o contrato do comparador e plano: `public String confirmationMode;` do
+#            MerchantSession e do Purchase tem o mesmo texto, e so o do Purchase e dispensado)
+#     reason: o que no real o torna manuscrito (classe/metodo, o que faz, linhas no pin)
 #
 # Regras:
 #   - O gap dispensado nunca some: o relatorio o lista a parte, com a razao, e o resumo conta separado os recursos
 #     "sem gaps" dos "sem gaps (com dispensa)".
 #   - Entrada obsoleta (consome menos que `count`, inclusive zero) faz `make compare` sair com 1: a lista so encolhe.
 #     So vale para recurso comparado na corrida; `make compare ARGS=Recurso` nao cobra os demais.
-#   - A classe Event NAO entra aqui: sera gerada.
-#   - Arquivo ausente = sem dispensas; arquivo malformado = erro (saida 2). `--no-waivers` mostra os gaps brutos.
+#   - Nao entra: Event (sera gerado), nada que o gerador possa produzir (Page, Log padrao, pdf, get/query/CRUD padrao,
+#     tipo, nome ou estilo), nem import sem uso no real. Um import so entra quando todo uso dele esta num membro dispensado.
+
+CorporateCard:
+  - kind: require
+    text: 'require ausente: import com.google.gson.Gson;'
+    reason: 'com.google.gson.Gson is used only inside the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java line 205, 207, 210, within 204-216).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonObject;'
+    reason: 'com.google.gson.JsonObject is used only inside the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java line 207, 212, 214, within 204-216).'
+  - kind: require
+    text: 'require ausente: import com.starkcore.utils.GsonEvent;'
+    reason: 'com.starkcore.utils.GsonEvent is used only inside the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java line 205, within 204-216).'
+  - kind: require
+    text: 'require ausente: import java.lang.reflect.Type;'
+    reason: 'java.lang.reflect.Type is used only inside the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java line 209, 215, within 204-216).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.reflect.TypeToken;'
+    reason: 'com.google.gson.reflect.TypeToken is used only inside the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java line 209, within 204-216).'
+  - kind: signature
+    text: 'signature ausente: public static CorporateCard create(CorporateCard card, Map<String, Object> params, User user)'
+    reason: 'CorporateCard.create with expand (sdk-java f60902a, CorporateCard.java:204-216) is hand-written: it serializes the card with Gson, posts to Api.endpoint(data) + /token through Rest.postRaw(path, map, params, user) and unwraps the response with GsonEvent and Api.getLastName(data); tools/build-resource.py unsupportedShape flags it as create de objeto unico com expand, corpo manuscrito.'
+  - kind: signature
+    text: 'signature ausente: public static CorporateCard create(CorporateCard card, User user)'
+    reason: 'Overload of the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java:204): it only delegates to it with null for the missing argument (CorporateCard.java:232-234); the create mould has no params argument.'
+  - kind: signature
+    text: 'signature ausente: public static CorporateCard create(CorporateCard card, Map<String, Object> params)'
+    reason: 'Overload of the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java:204): it only delegates to it with null for the missing argument (CorporateCard.java:251-253); the create mould has no params argument.'
+  - kind: signature
+    text: 'signature ausente: public static CorporateCard create(CorporateCard card)'
+    reason: 'Overload of the hand-written CorporateCard.create(card, params, user) (sdk-java f60902a, CorporateCard.java:204): it only delegates to it with null for the missing argument (CorporateCard.java:268-270); the create mould has no params argument.'
+
+CorporatePurchase:
+  - kind: require
+    text: 'require ausente: import com.google.gson.Gson;'
+    reason: 'com.google.gson.Gson is used only inside the hand-written CorporatePurchase.response (sdk-java f60902a, CorporatePurchase.java line 503).'
+  - kind: require
+    text: 'require ausente: import com.starkbank.utils.Parse;'
+    reason: 'com.starkbank.utils.Parse is used only inside the hand-written CorporatePurchase.parse overloads (sdk-java f60902a, CorporatePurchase.java line 465, 486).'
+  - kind: signature
+    text: 'signature ausente: public static CorporatePurchase parse(String content, String signature, User user)'
+    reason: 'CorporatePurchase.parse(content, signature, user) (sdk-java f60902a, CorporatePurchase.java:464) verifies the webhook signature and builds the authorization request with Parse.parseAndVerify(data, content, signature, user) (line 465); the generated moulds have no parse operation.'
+  - kind: signature
+    text: 'signature ausente: public static CorporatePurchase parse(String content, String signature)'
+    reason: 'CorporatePurchase.parse(content, signature) (sdk-java f60902a, CorporatePurchase.java:485) delegates to Parse.parseAndVerify with a null user (line 486); the generated moulds have no parse operation.'
+  - kind: signature
+    text: 'signature ausente: public static String response(Map<String, Object> params)'
+    reason: 'CorporatePurchase.response(params) (sdk-java f60902a, CorporatePurchase.java:502) dumps the sub-issuer answer to the authorization request with new Gson().toJson(params) (line 504); the generated moulds have no such operation.'
+
+Invoice:
+  - kind: field
+    text: 'field ausente: static ClassData data = new ClassData(Payment.class, "Payment");'
+    reason: 'Invoice.Payment.data (sdk-java f60902a, Invoice.java:761) is used only as the argument of the hand-written payment() (Invoice.java:670, Rest.getSubResource); the inner Payment class is generated and no mould emits a ClassData for it.'
+  - kind: signature
+    text: 'signature ausente: public static Payment payment(String id)'
+    reason: 'Invoice.payment is the GET of the Invoice.Payment sub-resource of a paid Invoice (sdk-java f60902a, Invoice.java:652): the (String id) overload only delegates to payment(id, null) (line 653). No generated mould emits a sub-resource GET (the moulds act on the resource itself).'
+  - kind: signature
+    text: 'signature ausente: public static Payment payment(String id, User user)'
+    reason: 'Invoice.payment is the GET of the Invoice.Payment sub-resource of a paid Invoice (sdk-java f60902a, Invoice.java:669): it calls Rest.getSubResource(data, id, Payment.data, user, new HashMap<>()) (line 670). No generated mould emits a sub-resource GET (the moulds act on the resource itself).'
+
+MerchantSession:
+  - kind: constructor
+    text: 'constructor ausente: public Purchase(String id, Long amount, Integer installmentCount, String cardId, String cardExpiration, String cardNumber, String cardSecurityCode, String holderName, String holderEmail, String holderPhone, String holderId, String softDescriptor, String fundingType, String billingCountryCode, String billingCity, String billingStateCode, String billingStreetLine1, String billingStreetLine2, String billingZipCode, String challengeMode, String confirmationMode, Map<String, Object> metadata)'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones: the all-args constructor (MerchantSession.java:249) calls super(id) and takes 22 parameters, omitting network, source, status, tags, created and updated.'
+  - kind: constructor
+    text: 'constructor ausente: public Purchase(Map<String, Object> data) throws Exception'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones: the Map constructor (MerchantSession.java:274) calls super(null), reads only 20 keys and nulls challengeMode, confirmationMode, network, source, status, created and updated instead of reading them.'
+  - kind: field
+    text: 'field ausente: static ClassData data = new ClassData(Purchase.class, "Purchase");'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; this is its ClassData (MerchantSession.java:219).'
+  - kind: field
+    text: 'field ausente: public Long amount;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:221.'
+  - kind: field
+    text: 'field ausente: public Integer installmentCount;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:222.'
+  - kind: field
+    text: 'field ausente: public String cardId;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:223.'
+  - kind: field
+    text: 'field ausente: public String cardExpiration;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:224.'
+  - kind: field
+    text: 'field ausente: public String cardNumber;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:225.'
+  - kind: field
+    text: 'field ausente: public String cardSecurityCode;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:226.'
+  - kind: field
+    text: 'field ausente: public String holderName;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:227.'
+  - kind: field
+    text: 'field ausente: public String holderEmail;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:228.'
+  - kind: field
+    text: 'field ausente: public String holderPhone;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:229.'
+  - kind: field
+    text: 'field ausente: public String fundingType;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:232.'
+  - kind: field
+    text: 'field ausente: public String billingCountryCode;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:233.'
+  - kind: field
+    text: 'field ausente: public String billingCity;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:234.'
+  - kind: field
+    text: 'field ausente: public String billingStateCode;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:235.'
+  - kind: field
+    text: 'field ausente: public String billingStreetLine1;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:236.'
+  - kind: field
+    text: 'field ausente: public String billingStreetLine2;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:237.'
+  - kind: field
+    text: 'field ausente: public String billingZipCode;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:238.'
+  - kind: field
+    text: 'field ausente: public String confirmationMode;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:240. The same text is also the field of MerchantSession itself (MerchantSession.java:27), which stays a gap: count 1 waives only this Purchase declaration, and when the generator emits the outer field both occurrences disappear and this entry goes obsolete.'
+  - kind: field
+    text: 'field ausente: public Map<String, Object> metadata;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:241.'
+  - kind: field
+    text: 'field ausente: public String network;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:242.'
+  - kind: field
+    text: 'field ausente: public String source;'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:243.'
+  - kind: inner
+    text: 'inner ausente: public final static class Purchase extends Resource'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones (declaration at MerchantSession.java:217).'
+  - kind: signature
+    text: 'signature ausente: public static Purchase purchase(String uuid, Purchase purchase)'
+    reason: 'MerchantSession.purchase(uuid, purchase) (sdk-java f60902a, MerchantSession.java:128) is @Deprecated since v2.27.0 and delegates to the User overload, which only throws; no mould emits a deprecated operation.'
+  - kind: signature
+    text: 'signature ausente: public static Purchase purchase(String uuid, Purchase purchase, User user)'
+    reason: 'MerchantSession.purchase(uuid, purchase, user) (sdk-java f60902a, MerchantSession.java:149) is @Deprecated since v2.27.0 and its body is only throw new Exception(Function deprecated since v2.27.0) (line 150); no mould emits a deprecated operation.'
+
+PaymentRequest:
+  - kind: constructor
+    text: 'constructor ausente: public Log(String created, String updated, String type, String[] errors, PaymentRequest request, PaymentRequest.Log.User user, String id)'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:505.'
+  - kind: constructor
+    text: 'constructor ausente: public Log()'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:515.'
+  - kind: constructor
+    text: 'constructor ausente: public User(String email, String id, String name, String pictureUrl, String status, String type)'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:527.'
+  - kind: constructor
+    text: 'constructor ausente: public User()'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:536.'
+  - kind: field
+    text: 'field ausente: static ClassData data = new ClassData(Log.class, "PaymentRequestLog");'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; Log ClassData at PaymentRequest.java:480.'
+  - kind: field
+    text: 'field ausente: public String[] errors;'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:485.'
+  - kind: field
+    text: 'field ausente: public PaymentRequest request;'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:486.'
+  - kind: field
+    text: 'field ausente: public PaymentRequest.Log.User user;'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:487.'
+  - kind: field
+    text: 'field ausente: public String email;'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:520.'
+  - kind: field
+    text: 'field ausente: public String pictureUrl;'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:523.'
+  - kind: inner
+    text: 'inner ausente: public static class Deserializer implements JsonDeserializer<PaymentRequest>'
+    reason: 'PaymentRequest.Deserializer (sdk-java f60902a, PaymentRequest.java:167-214) is a Gson JsonDeserializer: it removes the payment element, rebuilds the right Resource by switching on request.type (transfer, transaction, boleto-payment, ...) and re-reads the actions list from LinkedTreeMaps; no generated mould emits a deserializer.'
+  - kind: inner
+    text: 'inner ausente: public final static class Log extends Resource'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource (Log declaration at line 479).'
+  - kind: inner
+    text: 'inner ausente: public final static class User extends SubResource'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource (User declaration at line 519).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.internal.LinkedTreeMap;'
+    reason: 'com.google.gson.internal.LinkedTreeMap is used only inside PaymentRequest.Deserializer (sdk-java f60902a, PaymentRequest.java line 203, within 167-214).'
+  - kind: require
+    text: 'require ausente: import java.lang.reflect.Type;'
+    reason: 'java.lang.reflect.Type is used only inside PaymentRequest.Deserializer (sdk-java f60902a, PaymentRequest.java line 169, within 167-214).'
+
+Transfer:
+  - kind: inner
+    text: 'inner ausente: public static class Deserializer implements JsonDeserializer<Rule>'
+    reason: 'Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java:847-873) is a Gson JsonDeserializer that reads key and decodes value by JSON type (boolean to Boolean, number to Number, anything else to null); no generated mould emits a deserializer.'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonDeserializationContext;'
+    reason: 'com.google.gson.JsonDeserializationContext is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 849, within 847-873).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonDeserializer;'
+    reason: 'com.google.gson.JsonDeserializer is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 847, within 847-873).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonElement;'
+    reason: 'com.google.gson.JsonElement is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 849, 855, within 847-873).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonObject;'
+    reason: 'com.google.gson.JsonObject is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 850, within 847-873).'
+  - kind: require
+    text: 'require ausente: import com.google.gson.JsonParseException;'
+    reason: 'com.google.gson.JsonParseException is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 849, within 847-873).'
+  - kind: require
+    text: 'require ausente: import java.lang.reflect.Type;'
+    reason: 'java.lang.reflect.Type is used only inside Transfer.Rule.Deserializer (sdk-java f60902a, Transfer.java line 849, within 847-873).'
