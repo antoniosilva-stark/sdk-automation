@@ -44,6 +44,7 @@ def renderJavaCode(
     resourceNames: frozenset = frozenset(),
     logShape: dict | None = None,
     pageShape: dict | None = None,
+    logEntity: str | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -51,7 +52,7 @@ def renderJavaCode(
     internas simples do real, ja com os construtores e o corpo do Map-ctor prontos. `resourceNames`: os recursos
     geradores, para o override `List<Recurso>`; esse tipo e o `List<ClasseInterna>` saem do Map-ctor por um auxiliar
     `parseX` (`ctorMapParsers`), como no real. `log`: so para recurso com Log, os nomes e o tipo de `errors` do Log
-    interno, ja resolvidos a partir da forma (`javaLogs`). `page`: so para recurso com Page externa, o nome da lista e o
+    interno, ja resolvidos a partir da forma (`javaLogs`) e do nome da entidade do Log (`logEntity`). `page`: so para recurso com Page externa, o nome da lista e o
     tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`)."""
     fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
@@ -63,7 +64,7 @@ def renderJavaCode(
         **renderMapConstructor(entity, fields, profile, innerClasses or {}),
     }
     if logShape is not None:
-        code["log"] = renderLog(resource, logShape)
+        code["log"] = renderLog(resource, logShape, logEntity)
     if pageShape is not None:
         code["page"] = {
             "listName": pageShape["listName"],
@@ -72,10 +73,12 @@ def renderJavaCode(
     return code
 
 
-def renderLog(resource: str, shape: dict) -> dict:
+def renderLog(resource: str, shape: dict, entity: str) -> dict:
     """Nomes do Log interno prontos para o Mustache. `short` e como o real escreve dentro do proprio Log; o `new Page`
     qualificado nao se escreve (`Page` resolve para a Page do Log, a mesma classe). `classData` e um eixo proprio: o
-    real escreve `new ClassData(Log.class, ...)` ou `new ClassData(Recurso.Log.class, ...)` independente dos nomes."""
+    real escreve `new ClassData(Log.class, ...)` ou `new ClassData(Recurso.Log.class, ...)` independente dos nomes.
+    `extraFields` sao campos String alem dos padroes, declarados, atribuidos e documentados; o ctor all-args e `ctor` ou,
+    sem ele, created, type, [errors], entidade, id e os extras, que e o que o template emitia."""
     isShort = shape["names"] == "short"
     typeName = "Log" if isShort else f"{resource}.Log"
     hasErrors = shape["errors"] != "none"
@@ -87,7 +90,28 @@ def renderLog(resource: str, shape: dict) -> dict:
         "errorsType": shape["errors"] if hasErrors else "",
         "hasErrors": hasErrors,
         "usesErrorElement": shape["errors"] == "List<ErrorElement>",
+        "extraFields": [{"name": name, "description": text} for name, text in (shape.get("extraFields") or {}).items()],
+        "ctorSignature": renderLogCtorSignature(resource, shape, entity),
     }
+
+
+def renderLogCtorSignature(resource: str, shape: dict, entity: str) -> str:
+    extraNames = list(shape.get("extraFields") or {})
+    if entity in extraNames:
+        raise ValueError(f"{resource}: javaLogs.extraFields.{entity} e o nome da entidade do Log")
+    types = {"created": "String", "type": "String", "id": "String", entity: resource, **dict.fromkeys(extraNames, "String")}
+    standard = ["created", "type", entity, "id", *extraNames]
+    if shape["errors"] != "none":
+        types["errors"] = shape["errors"]
+        standard.insert(2, "errors")
+    order = shape.get("ctor") or standard
+    for name in order:
+        if name not in types:
+            raise ValueError(f"{resource}: javaLogs.ctor cita {name!r}, que nao e parametro do Log")
+    for name in standard:
+        if name not in order:
+            raise ValueError(f"{resource}: javaLogs.ctor omite {name!r}")
+    return ", ".join(f"{types[name]} {name}" for name in order)
 
 
 INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData", "classDataType"}

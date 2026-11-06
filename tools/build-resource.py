@@ -153,6 +153,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         resourceNames=extractSchema.schemaResourceNames(),
         logShape=logShape if "x-sdk-log" in flags else None,
         pageShape=pageShape,
+        logEntity=spec["components"]["schemas"][resource].get("x-sdk-log-entity"),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

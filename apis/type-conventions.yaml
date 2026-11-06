@@ -235,24 +235,43 @@ javaInnerClasses:
       fields: {name: String, action: String, type: String, id: String}
       constructors: [[name, action, type, id], []]
 
-# Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias. O real nao e uniforme
-# (medido contra sdk-java f60902a, 24 recursos com Log; 20 aqui, os 4 de forma propria ficam fora, ver LOG_EXCLUSIONS em
-# tests/test_java_logs.py):
+# Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias, mais duas opcionais. O real nao e
+# uniforme (medido contra sdk-java f60902a, 24 recursos com Log; 22 aqui, os 2 de forma propria ficam fora, ver
+# LOG_EXCLUSIONS em tests/test_java_logs.py):
 #   names:  `short` escreve `Log get(String id)`, `Generator<Log>`, `Log.Page page()`, `List<Log> logs` e `new Log.Page(...)`
-#           (12 de 20); `qualified` escreve `Recurso.Log`, `Recurso.Log.Page` e `new Page(...)` (8 de 20), que e o que o
+#           (13 de 22); `qualified` escreve `Recurso.Log`, `Recurso.Log.Page` e `new Page(...)` (9 de 22), que e o que o
 #           template emitia antes e segue valendo para recurso sem entrada.
-#   errors: tipo do campo e do parametro do construtor all-args do Log: `String[]` (13 de 20), `List<ErrorElement>` (5) ou
-#           `none` (2), sem campo, sem parametro e sem `@param errors`. So `List<ErrorElement>` importa ErrorElement.
-#   classData: a linha `static ClassData data = new ClassData(<X>.class, ...)` do Log: `short` escreve `Log.class` (10 de 20) e
-#           `qualified` `Recurso.Log.class` (10 de 20, o que o template emitia). E um eixo a parte dos nomes: DarfPayment e
+#   errors: tipo do campo e do parametro do construtor all-args do Log: `String[]` (13 de 22), `List<ErrorElement>` (6) ou
+#           `none` (3), sem campo, sem parametro e sem `@param errors`. So `List<ErrorElement>` importa ErrorElement.
+#   classData: a linha `static ClassData data = new ClassData(<X>.class, ...)` do Log: `short` escreve `Log.class` (11 de 22) e
+#           `qualified` `Recurso.Log.class` (11 de 22, o que o template emitia). E um eixo a parte dos nomes: DarfPayment e
 #           TaxPayment usam nomes `short` e `Recurso.Log.class`.
-# Valida-se contra o real em tests/test_java_logs.py (cada entrada e o real; todo Log simples do real esta aqui).
+#   extraFields: (opcional) campo String do Log alem de created, type, errors, entidade e id, nome -> texto da linha `@param`
+#           do Javadoc do ctor (a descricao vem do docstring do Log no sdk-python). Declarado depois da entidade e
+#           atribuido pelo ctor all-args (BoletoHolmes `updated`, CorporatePurchase `description` e `corporateTransactionId`).
+#   ctor:   (opcional) ordem dos parametros do ctor all-args, uma permutacao de created, type, [errors], nome da entidade,
+#           id e dos extras. Sem a chave vale created, type, [errors], entidade, id e os extras, o que o template emitia.
+# Valida-se contra o real em tests/test_java_logs.py (cada entrada e o real, extras e ordem do ctor inclusos; todo Log do real
+# que o modelo escreve esta aqui).
 javaLogs:
   Boleto: {names: short, errors: "String[]", classData: short}
+  BoletoHolmes:
+    names: short
+    errors: none
+    classData: short
+    extraFields: {updated: latest update datetime for the log}
   BoletoPayment: {names: short, errors: "String[]", classData: short}
   BrcodePayment: {names: short, errors: "String[]", classData: short}
   CorporateCard: {names: qualified, errors: none, classData: qualified}
   CorporateHolder: {names: qualified, errors: none, classData: qualified}
+  CorporatePurchase:
+    names: qualified
+    errors: "List<ErrorElement>"
+    classData: qualified
+    extraFields:
+      description: 'purchase descriptions. ex: "my_description"'
+      corporateTransactionId: transaction ID related to the CorporateCard.
+    ctor: [created, type, errors, purchase, description, id, corporateTransactionId]
   DarfPayment: {names: short, errors: "String[]", classData: qualified}
   Deposit: {names: short, errors: "String[]", classData: short}
   Invoice: {names: short, errors: "String[]", classData: short}

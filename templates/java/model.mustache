@@ -355,6 +355,9 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
         public String type;
 {{#hasErrors}}        public {{{errorsType}}} errors;
 {{/hasErrors}}        public {{classname}} {{vendorExtensions.x-sdk-log-entity}};
+{{#extraFields}}
+        public String {{name}};
+{{/extraFields}}
 
         /**
          * {{classname}} Log object
@@ -369,13 +372,19 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{#hasErrors}}         * @param errors [list of strings]: list of errors linked to this {{classname}} event
 {{/hasErrors}}         * @param type [string]: type of the {{classname}} event which triggered the log creation
          * @param created [string]: creation datetime for the log
+{{#extraFields}}
+         * @param {{name}} [string]: {{{description}}}
+{{/extraFields}}
          */
-        public Log(String created, String type, {{#hasErrors}}{{{errorsType}}} errors, {{/hasErrors}}{{classname}} {{vendorExtensions.x-sdk-log-entity}}, String id) {
+        public Log({{{ctorSignature}}}) {
             super(id);
             this.created = created;
             this.type = type;
 {{#hasErrors}}            this.errors = errors;
 {{/hasErrors}}            this.{{vendorExtensions.x-sdk-log-entity}} = {{vendorExtensions.x-sdk-log-entity}};
+{{#extraFields}}
+            this.{{name}} = {{name}};
+{{/extraFields}}
         }
 
         public Log() {

@@ -25,6 +25,9 @@ JAVA_LOG_VALUES = {
     "classData": ("short", "qualified"),
 }
 JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"}
+# Opcionais: ausentes, o Log e o de hoje. `data` e o ClassData estatico do Log, nome que um campo extra nao pode tomar.
+JAVA_LOG_OPTIONAL_KEYS = ("extraFields", "ctor")
+JAVA_LOG_RESERVED_FIELDS = frozenset({"created", "type", "errors", "id", "data"})
 
 # Chaves e valores do javaPages; o default (campo `<recurso>s`, retorno `Page`) e a saida do template antes da secao existir.
 # Os nomes reservados sao locais de page(Map, User) e o campo `cursor`, que um listName igual nao compilaria.
@@ -169,6 +172,42 @@ def checkLogShape(resource: str, shape) -> None:
             raise ValueError(f"{resource}: javaLogs.{field} ausente")
         if not isinstance(shape[field], str) or shape[field] not in allowed:
             raise ValueError(f"{resource}: javaLogs.{field} invalido: {shape[field]!r}, esperado um de {list(allowed)}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_LOG_VALUES) - set(JAVA_LOG_OPTIONAL_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaLogs chave desconhecida: {unknown[0]}")
+    if "extraFields" in shape:
+        checkLogExtraFields(resource, shape["extraFields"])
+    if "ctor" in shape:
+        checkLogCtor(resource, shape["ctor"])
+
+
+def checkLogExtraFields(resource: str, extraFields) -> None:
+    if not isinstance(extraFields, dict):
+        raise ValueError(f"{resource}: javaLogs.extraFields deve ser um mapa nome -> descricao, veio {extraFields!r}")
+    reserved = JAVA_LOG_RESERVED_FIELDS | JAVA_RESERVED_WORDS
+    for name, description in extraFields.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", name) or name in reserved:
+            raise ValueError(
+                f"{resource}: javaLogs.extraFields nome invalido: {name!r}, esperado um identificador lowerCamel fora de "
+                f"{sorted(JAVA_LOG_RESERVED_FIELDS)} e das palavras reservadas do Java"
+            )
+        # a descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia
+        if not isinstance(description, str) or not description.strip() or len(description.splitlines()) != 1 or "*/" in description:
+            raise ValueError(
+                f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, esperado texto de uma linha sem '*/'"
+            )
+
+
+def checkLogCtor(resource: str, order) -> None:
+    if not isinstance(order, list) or not order:
+        raise ValueError(f"{resource}: javaLogs.ctor deve ser uma lista nao vazia de nomes de parametro, veio {order!r}")
+    seen = set()
+    for name in order:
+        if not isinstance(name, str):
+            raise ValueError(f"{resource}: javaLogs.ctor nome invalido: {name!r}, esperado texto")
+        if name in seen:
+            raise ValueError(f"{resource}: javaLogs.ctor repete {name!r}")
+        seen.add(name)
 
 
 def javaPageShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:

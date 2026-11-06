@@ -5,11 +5,10 @@ import pytest
 from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresJavac
 from test_java_field_types import REAL_SOURCES, SCHEMAS, _generated, _realConventionsText, _splitParameters
 
-# Logs do real que NAO tem o formato simples (created, type, [errors], entidade, id): ficam fora do javaLogs e seguem a
-# saida de hoje do template. O teste prova que cada um segue diferente do simples no real, entao a lista nao envelhece.
+# Logs do real que o modelo do javaLogs (created, type, [errors], entidade, id, mais campos extras String, numa ordem de
+# ctor dada) NAO consegue escrever: ficam fora do javaLogs e seguem a saida de hoje do template. O teste prova que cada um
+# segue fora do modelo no real, entao a lista nao envelhece.
 LOG_EXCLUSIONS = {
-    "BoletoHolmes": "campo extra `updated` e ctor created,type,holmes,id,updated",
-    "CorporatePurchase": "campos extras description e corporateTransactionId e ctor all-args de 7 parametros",
     "MerchantInstallment": "o parametro do ctor e `merchantInstallment` e o campo e `installment`",
     "PaymentRequest": "Log escrito a mao com a classe interna User (ME 9.8)",
 }
@@ -60,32 +59,45 @@ def _classDataClass(block: str) -> str:
     return re.search(r"^        static ClassData data = new ClassData\((.+?), ", block, re.M).group(1)
 
 
-def _realSimpleShape(resource: str) -> dict | None:
+def _realLogShape(resource: str) -> dict | None:
+    """A entrada do javaLogs que escreve o Log do real, ou None quando o modelo nao o alcanca. Os extras saem na ordem do
+    ctor; `ctor` so aparece quando difere de created, type, [errors], entidade, id, extras."""
     block = _realLogBlock(resource)
     if block is None or not re.search(r"^        public Log\(", block, re.M):
         return None
     constructor = _logConstructor(block)
     names = [name for _, name in constructor]
     types = dict((name, javaType) for javaType, name in constructor)
-    entity = names[-2] if len(names) > 1 else None
+    fields = _logFields(block)
+    entities = [name for name, javaType in fields.items() if javaType == resource]
     hasErrors = "errors" in names
-    isSimple = (
-        names == ["created", "type", *(["errors"] if hasErrors else []), entity, "id"]
-        and types.get(entity) == resource
-        and set(_logFields(block)) == set(names) - {"id"}
-    )
-    if not isSimple:
+    if len(entities) != 1 or set(fields) != set(names) - {"id"} or len(set(names)) != len(names):
+        return None
+    standard = ["created", "type", *(["errors"] if hasErrors else []), entities[0], "id"]
+    extras = [name for name in names if name not in standard]
+    if not set(standard) <= set(names) or any(types[name] != "String" for name in extras):
         return None
     returns = {returned for returned, _, _ in _logSignatures(block)}
     qualified = {f"{resource}.Log", f"Generator<{resource}.Log>", f"{resource}.Log.Page"}
     if returns not in (SHORT_RETURNS, qualified):
         return None
-    classData = "short" if _classDataClass(block) == "Log.class" else "qualified"
-    return {
+    shape = {
         "names": "short" if returns == SHORT_RETURNS else "qualified",
         "errors": types.get("errors", "none"),
-        "classData": classData,
+        "classData": "short" if _classDataClass(block) == "Log.class" else "qualified",
     }
+    if extras:
+        shape["extraFields"] = extras
+    if names != [*standard, *extras]:
+        shape["ctor"] = names
+    return shape
+
+
+def _entryAsComparable(entry: dict) -> dict:
+    """O mapa extraFields carrega a descricao do Javadoc, que o real nao tem como dado: compara-se a lista de nomes."""
+    if "extraFields" not in entry:
+        return entry
+    return {**entry, "extraFields": list(entry["extraFields"])}
 
 
 def _realLogResources(buildResource) -> list:
@@ -96,7 +108,7 @@ def _realLogResources(buildResource) -> list:
 @requiresJavaSdk
 @pytest.mark.parametrize("resource", sorted(_logEntries()))
 def test_everyJavaLogsEntryEqualsTheShapeOfTheRealLog(resource):
-    assert _realSimpleShape(resource) == _logEntries()[resource]
+    assert _realLogShape(resource) == _entryAsComparable(_logEntries()[resource])
 
 
 @requiresJavaSdk
@@ -106,8 +118,8 @@ def test_everyRealClassDataOfAListedLogIsLogClassOrTheQualifiedForm(buildResourc
 
 
 @requiresJavaSdk
-def test_everyRealLogWithTheSimpleShapeIsInJavaLogsUnlessExcluded(buildResource):
-    simple = {resource for resource in _realLogResources(buildResource) if _realSimpleShape(resource)}
+def test_everyRealLogTheModelCanWriteIsInJavaLogsUnlessExcluded(buildResource):
+    simple = {resource for resource in _realLogResources(buildResource) if _realLogShape(resource)}
 
     assert simple == set(_logEntries())
 
@@ -119,9 +131,9 @@ def test_everyRealLogIsEitherInJavaLogsOrInTheNamedExclusionSet(buildResource):
 
 @requiresJavaSdk
 @pytest.mark.parametrize("resource", sorted(LOG_EXCLUSIONS))
-def test_excludedResourceStillDiffersFromTheSimpleShapeInTheReal(resource):
+def test_excludedResourceStillFallsOutsideTheShapeTheModelCanWrite(resource):
     assert _realLogBlock(resource) is not None
-    assert _realSimpleShape(resource) is None
+    assert _realLogShape(resource) is None
     assert resource not in _logEntries()
 
 
@@ -287,6 +299,48 @@ def test_entryOfAnotherResourceLeavesTheGeneratedClassIdentical(buildResource, t
     assert other == plain
 
 
+HOLMES_EXTRAS = 'javaLogs:\n  BoletoHolmes: {names: short, errors: none, classData: short, extraFields: {updated: "latest update datetime for the log"}}\n'
+TRANSFER_PREFIX = "javaLogs:\n  Transfer: {names: short, errors: \"String[]\", classData: short"
+
+
+@requiresGenerator
+def test_extraFieldIsDeclaredAssignedByTheAllArgsCtorAndDocumentedWithItsDescription(buildResource, tmpPath):
+    block = _logBlock(_generated(buildResource, tmpPath, "BoletoHolmes", HOLMES_EXTRAS))
+
+    assert "        public BoletoHolmes holmes;\n        public String updated;\n" in block
+    assert "public Log(String created, String type, BoletoHolmes holmes, String id, String updated) {" in block
+    assert "            this.holmes = holmes;\n            this.updated = updated;\n        }\n" in block
+    assert "         * @param created [string]: creation datetime for the log\n" \
+           "         * @param updated [string]: latest update datetime for the log\n         */\n" in block
+    assert "errors" not in block
+
+
+@requiresGenerator
+def test_ctorKeyReordersTheParametersOfTheAllArgsCtorOnly(buildResource, tmpPath):
+    conventions = f"{TRANSFER_PREFIX}, extraFields: {{note: \"a note\"}}, ctor: [note, id, transfer, errors, type, created]}}\n"
+    block = _logBlock(_generated(buildResource, tmpPath, "Transfer", conventions))
+
+    assert "public Log(String note, String id, Transfer transfer, String[] errors, String type, String created) {" in block
+    assert "            this.created = created;\n            this.type = type;\n            this.errors = errors;\n" in block
+
+
+@requiresGenerator
+def test_extraFieldsWithoutCtorKeyGoAfterTheIdInTheCtor(buildResource, tmpPath):
+    conventions = f"{TRANSFER_PREFIX}, extraFields: {{note: \"a note\", flag: \"a flag\"}}}}\n"
+    block = _logBlock(_generated(buildResource, tmpPath, "Transfer", conventions))
+
+    assert "public Log(String created, String type, String[] errors, Transfer transfer, String id, String note, String flag) {" in block
+
+
+@requiresGenerator
+def test_ctorKeyEqualToTheStandardOrderLeavesTheLogByteIdentical(buildResource, tmpPath):
+    plain = _generated(buildResource, tmpPath / "plain", "Transfer", f"{TRANSFER_PREFIX}}}\n")
+    explicit = _generated(buildResource, tmpPath / "explicit", "Transfer",
+                          f"{TRANSFER_PREFIX}, ctor: [created, type, errors, transfer, id]}}\n")
+
+    assert explicit == plain
+
+
 @requiresGenerator
 @requiresJavac
 @pytest.mark.parametrize("resource, declaration", [
@@ -294,6 +348,9 @@ def test_entryOfAnotherResourceLeavesTheGeneratedClassIdentical(buildResource, t
     ("Invoice", "public Log(String created, String type, String[] errors, Invoice invoice, String id) {"),
     ("Transfer", "public Log(String created, String type, String[] errors, Transfer transfer, String id) {"),
     ("CorporateHolder", "public Log(String created, String type, CorporateHolder holder, String id) {"),
+    ("BoletoHolmes", "public Log(String created, String type, BoletoHolmes holmes, String id, String updated) {"),
+    ("CorporatePurchase", "public Log(String created, String type, List<ErrorElement> errors, CorporatePurchase purchase, "
+                          "String description, String id, String corporateTransactionId) {"),
 ])
 def test_resourceWithALogShapeEntryPassesTheJavacGate(builtOnce, resource, declaration):
     code, out, target = builtOnce(resource, "java")
@@ -343,6 +400,40 @@ def test_invalidJavaLogsDataFailsNamingTheResourceTheFieldAndTheValue(extractSch
         _loadLogs(extractSchema, tmpPath, text)
 
 
+@pytest.mark.parametrize("extra, message", [
+    ("extraFields: [updated]", "Balance: javaLogs.extraFields.*mapa.*\\['updated'\\]"),
+    ("extraFields: {Updated: x}", "Balance: javaLogs.extraFields.*'Updated'"),
+    ("extraFields: {1up: x}", "Balance: javaLogs.extraFields.*'1up'"),
+    ("extraFields: {class: x}", "Balance: javaLogs.extraFields.*'class'"),
+    ("extraFields: {created: x}", "Balance: javaLogs.extraFields.*'created'"),
+    ("extraFields: {data: x}", "Balance: javaLogs.extraFields.*'data'"),
+    ("extraFields: {updated: \"\"}", "Balance: javaLogs.extraFields.updated.*''"),
+    ("extraFields: {updated: 3}", "Balance: javaLogs.extraFields.updated.*3"),
+    ("extraFields: {updated: \"a */ b\"}", "Balance: javaLogs.extraFields.updated.*a \\*/ b"),
+    ("extraFields: {updated: \"a\\nb\"}", "Balance: javaLogs.extraFields.updated"),
+    ("ctor: created", "Balance: javaLogs.ctor.*lista.*'created'"),
+    ("ctor: [created, 3]", "Balance: javaLogs.ctor.*3"),
+    ("ctor: [created, created]", "Balance: javaLogs.ctor repete 'created'"),
+    ("ctor: []", "Balance: javaLogs.ctor.*vazia"),
+    ("tail: [x]", "Balance: javaLogs chave desconhecida: tail"),
+])
+def test_invalidExtraFieldsAndCtorFailNamingTheResourceTheKeyAndTheValue(extractSchema, tmpPath, extra, message):
+    text = f"javaLogs:\n  Balance: {{names: short, errors: none, classData: short, {extra}}}\n"
+
+    with pytest.raises(ValueError, match=message):
+        _loadLogs(extractSchema, tmpPath, text)
+
+
+def test_javaLogShapeKeepsTheOptionalKeysOfTheEntry(extractSchema, tmpPath):
+    text = ("javaLogs:\n  Balance: {names: short, errors: none, classData: short, "
+            "extraFields: {updated: \"when\"}, ctor: [created, type, balance, id, updated]}\n")
+
+    assert _loadLogs(extractSchema, tmpPath, text) == {
+        "names": "short", "errors": "none", "classData": "short",
+        "extraFields": {"updated": "when"}, "ctor": ["created", "type", "balance", "id", "updated"],
+    }
+
+
 def test_javaLogsWithoutAMappingFailsToo(extractSchema, tmpPath):
     with pytest.raises(ValueError, match="javaLogs"):
         _loadLogs(extractSchema, tmpPath, "javaLogs:\n  - Balance\n")
@@ -365,19 +456,49 @@ def test_renderJavaCodeCarriesNoLogWithoutAShape(javaCode, javaDocs):
 @pytest.mark.parametrize("shape, expected", [
     ({"names": "short", "errors": "String[]", "classData": "short"},
      {"typeName": "Log", "pageName": "Log.Page", "newPageName": "Log.Page", "classDataClass": "Log",
-      "errorsType": "String[]", "hasErrors": True, "usesErrorElement": False}),
+      "errorsType": "String[]", "hasErrors": True, "usesErrorElement": False, "extraFields": [],
+      "ctorSignature": "String created, String type, String[] errors, Balance balance, String id"}),
     ({"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"},
      {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page", "classDataClass": "Balance.Log",
-      "errorsType": "List<ErrorElement>", "hasErrors": True, "usesErrorElement": True}),
+      "errorsType": "List<ErrorElement>", "hasErrors": True, "usesErrorElement": True, "extraFields": [],
+      "ctorSignature": "String created, String type, List<ErrorElement> errors, Balance balance, String id"}),
     ({"names": "qualified", "errors": "none", "classData": "qualified"},
      {"typeName": "Balance.Log", "pageName": "Balance.Log.Page", "newPageName": "Page", "classDataClass": "Balance.Log",
-      "errorsType": "", "hasErrors": False, "usesErrorElement": False}),
+      "errorsType": "", "hasErrors": False, "usesErrorElement": False, "extraFields": [],
+      "ctorSignature": "String created, String type, Balance balance, String id"}),
     ({"names": "short", "errors": "none", "classData": "qualified"},
      {"typeName": "Log", "pageName": "Log.Page", "newPageName": "Log.Page", "classDataClass": "Balance.Log",
-      "errorsType": "", "hasErrors": False, "usesErrorElement": False}),
+      "errorsType": "", "hasErrors": False, "usesErrorElement": False, "extraFields": [],
+      "ctorSignature": "String created, String type, Balance balance, String id"}),
 ])
 def test_renderJavaCodeResolvesTheLogNamesAndErrorsFromTheShape(javaCode, javaDocs, shape, expected):
-    assert _balanceCode(javaCode, javaDocs, logShape=shape)["log"] == expected
+    assert _balanceCode(javaCode, javaDocs, logShape=shape, logEntity="balance")["log"] == expected
+
+
+def test_renderJavaCodeResolvesExtraFieldsAndTheCtorOrderFromTheShape(javaCode, javaDocs):
+    shape = {"names": "short", "errors": "none", "classData": "short",
+             "extraFields": {"note": "a note", "flag": "a flag"}, "ctor": ["flag", "created", "balance", "type", "id", "note"]}
+    log = _balanceCode(javaCode, javaDocs, logShape=shape, logEntity="balance")["log"]
+
+    assert log["extraFields"] == [{"name": "note", "description": "a note"}, {"name": "flag", "description": "a flag"}]
+    assert log["ctorSignature"] == "String flag, String created, Balance balance, String type, String id, String note"
+
+
+@pytest.mark.parametrize("shape, message", [
+    ({"errors": "none", "ctor": ["created", "type", "balance", "id", "errors"]}, "Balance: javaLogs.ctor cita 'errors'"),
+    ({"errors": "none", "ctor": ["created", "type", "balance"]}, "Balance: javaLogs.ctor omite 'id'"),
+    ({"errors": "String[]", "ctor": ["created", "type", "balance", "id"]}, "Balance: javaLogs.ctor omite 'errors'"),
+    ({"errors": "none", "extraFields": {"note": "n"}, "ctor": ["created", "type", "balance", "id"]},
+     "Balance: javaLogs.ctor omite 'note'"),
+    ({"errors": "none", "extraFields": {"balance": "n"}}, "Balance: javaLogs.extraFields.balance e o nome da entidade"),
+])
+def test_ctorThatIsNotAPermutationOfTheKnownParametersFailsNamingTheResourceTheKeyAndTheValue(
+    javaCode, javaDocs, shape, message
+):
+    full = {"names": "short", "classData": "short", **shape}
+
+    with pytest.raises(ValueError, match=message):
+        _balanceCode(javaCode, javaDocs, logShape=full, logEntity="balance")
 
 
 def _specLogResources(extractSchema, specFile) -> set:
