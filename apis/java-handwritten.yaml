@@ -68,9 +68,6 @@ CorporatePurchase:
     reason: 'CorporatePurchase.response(params) (sdk-java f60902a, CorporatePurchase.java:502) dumps the sub-issuer answer to the authorization request with new Gson().toJson(params) (line 504); the generated moulds have no such operation.'
 
 Invoice:
-  - kind: field
-    text: 'field ausente: static ClassData data = new ClassData(Payment.class, "Payment");'
-    reason: 'Invoice.Payment.data (sdk-java f60902a, Invoice.java:761) is used only as the argument of the hand-written payment() (Invoice.java:670, Rest.getSubResource); the inner Payment class is generated and no mould emits a ClassData for it.'
   - kind: signature
     text: 'signature ausente: public static Payment payment(String id)'
     reason: 'Invoice.payment is the GET of the Invoice.Payment sub-resource of a paid Invoice (sdk-java f60902a, Invoice.java:652): the (String id) overload only delegates to payment(id, null) (line 653). No generated mould emits a sub-resource GET (the moulds act on the resource itself).'
@@ -87,7 +84,7 @@ MerchantSession:
     reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones: the Map constructor (MerchantSession.java:274) calls super(null), reads only 20 keys and nulls challengeMode, confirmationMode, network, source, status, created and updated instead of reading them.'
   - kind: field
     text: 'field ausente: static ClassData data = new ClassData(Purchase.class, "Purchase");'
-    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; this is its ClassData (MerchantSession.java:219).'
+    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; this is its ClassData (MerchantSession.java:219), `static ClassData` of a Resource: the inner-class mould only writes the SubResource ClassData of SubResource classes.'
   - kind: field
     text: 'field ausente: public Long amount;'
     reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:221.'
@@ -173,7 +170,7 @@ PaymentRequest:
     reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:536.'
   - kind: field
     text: 'field ausente: static ClassData data = new ClassData(Log.class, "PaymentRequestLog");'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; Log ClassData at PaymentRequest.java:480.'
+    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; Log ClassData at PaymentRequest.java:480. The generator emits no Log for PaymentRequest (no x-sdk-log) and the generated Log mould would add the get/query/page operations that this real Log does not have.'
   - kind: field
     text: 'field ausente: public String[] errors;'
     reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:485.'

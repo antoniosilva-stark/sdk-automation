@@ -649,6 +649,19 @@ def test_innerClassEntryDeclaresTheClassDataOnlyWhenTheRealDoes(resource, name, 
     assert (real.group(1) if real else None) == definition.get("classData")
 
 
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryWritesTheClassDataTypeTheRealWrites(resource, name, definition):
+    block = _realInnerBlock(resource, name)
+
+    real = re.search(r"static (SubResource\.)?ClassData data = new (SubResource\.)?ClassData\(", block)
+
+    assert (real is not None) is ("classData" in definition)
+    if real:
+        assert real.group(1) == real.group(2)
+        assert ("qualified" if real.group(1) else "short") == definition["classDataType"]
+
+
 _NOT_SIMPLE_INNER = {("Transfer", "Rule"), ("MerchantSession", "Purchase"), ("PaymentRequest", "Deserializer")}
 _NOT_SIMPLE_FILES = {"Event"}
 
@@ -685,6 +698,7 @@ _SYNTHETIC_INNER = """javaInnerClasses:
       constructors: [[key], [key, amount, tags], []]
       map: [key, tags]
       classData: Pairs
+      classDataType: qualified
     Slot:
       fields: {size: long}
       constructors: [[size]]
@@ -733,6 +747,15 @@ def test_innerClassDataIsEmittedOnlyWhenDeclared(buildResource, tmpPath):
     pair = source.split("class Pair")[1].split("class Slot")[0]
 
     assert '        static SubResource.ClassData data = new SubResource.ClassData(Pair.class, "Pairs");\n' in pair
+
+
+@requiresGenerator
+def test_innerClassDataTypeShortEmitsTheUnqualifiedLine(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _SYNTHETIC_INNER.replace("classDataType: qualified", "classDataType: short"))
+    pair = source.split("class Pair")[1].split("class Slot")[0]
+
+    assert '        static ClassData data = new ClassData(Pair.class, "Pairs");\n' in pair
+    assert "SubResource.ClassData" not in pair
 
 
 @requiresGenerator
@@ -805,7 +828,11 @@ _PAIR = {"fields": {"key": "String", "amount": "Integer"}, "constructors": [["ke
      "Balance.Pair: map omite o primitivo size"),
     ({"Pair": {**_PAIR, "map": ["key", "key"]}}, "Balance.Pair: map repete campo: key"),
     ({"Pair": {**_PAIR, "final": "no"}}, "Balance.Pair: final deve ser booleano"),
-    ({"Pair": {**_PAIR, "classData": "bad name"}}, "Balance.Pair: classData invalido: 'bad name'"),
+    ({"Pair": {**_PAIR, "classData": "bad name", "classDataType": "short"}}, "Balance.Pair: classData invalido: 'bad name'"),
+    ({"Pair": {**_PAIR, "classData": "Pairs"}}, "Balance.Pair: classDataType ausente"),
+    ({"Pair": {**_PAIR, "classData": "Pairs", "classDataType": "full"}},
+     "Balance.Pair: classDataType invalido: 'full', esperado um de ['short', 'qualified']"),
+    ({"Pair": {**_PAIR, "classDataType": "short"}}, "Balance.Pair: classDataType sem classData"),
     ({"Pair": {**_PAIR, "extra": 1}}, "Balance.Pair: chave desconhecida: extra"),
     ({"Pair": {"constructors": [["key"]]}}, "Balance.Pair: fields ausente ou vazio"),
     ({"pair": _PAIR}, "Balance.pair: nome de classe interna invalido"),
@@ -1134,3 +1161,18 @@ def test_aListOfAGeneratedResourceIsBuiltByItsMapConstructor(listRun):
 def test_primitiveFieldsOfAnInnerClassAreReadAsNumberWhateverTheNumericType(listRun):
     assert "session installment 0 -> 1000 2" in listRun
     assert "session installment 1 -> 3000 3" in listRun
+
+
+@requiresGenerator
+@requiresJavac
+@pytest.mark.parametrize("resource, expected", [
+    ("Invoice", 'static ClassData data = new ClassData(Payment.class, "Payment");'),
+    ("MerchantSession", 'static SubResource.ClassData data = new SubResource.ClassData(AllowedInstallment.class, "AllowedInstallments");'),
+])
+def test_generatedInnerClassDataFollowsTheRealQualifierAndCompilesWithTheSdk(listRun, builtOnce, resource, expected):
+    code, out, target = builtOnce(resource, "java")
+    assert code == 0, out
+    source = (target / f"src/main/java/com/starkbank/{resource}.java").read_text(encoding="utf-8")
+
+    assert f"        {expected}\n" in source
+    assert (REAL_SOURCES / f"{resource}.java").read_text(encoding="utf-8").count(expected) == 1

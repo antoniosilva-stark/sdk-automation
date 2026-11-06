@@ -83,7 +83,9 @@ def renderLog(resource: str, shape: dict) -> dict:
     }
 
 
-INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData"}
+INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData", "classDataType"}
+# o real escreve `ClassData` (short) em Invoice.Payment e `SubResource.ClassData` (qualified) em MerchantSession.AllowedInstallment
+INNER_CLASS_DATA_TYPES = ("short", "qualified")
 # `Log` e `Page` o template ja emite dentro da classe externa; repetir o nome nao compilaria
 TEMPLATE_INNER_CLASSES = ("Log", "Page")
 MAP_CONSTRUCTOR_SIGNATURE = "Map<String, Object>"
@@ -106,7 +108,7 @@ def renderInnerClass(resource: str, name: str, definition: dict, profile: dict) 
         "fields": [{"name": field, "javaType": javaType} for field, javaType in fields.items()],
     }
     if "classData" in definition:
-        rendered["classDataLine"] = innerClassDataLine(name, definition["classData"])
+        rendered["classDataLine"] = innerClassDataLine(name, definition["classData"], definition["classDataType"])
     rendered["constructors"] = [renderInnerConstructor(names, fields) for names in definition.get("constructors") or []]
     if "map" in definition:
         rendered["map"] = renderInnerMapConstructor(definition["map"], fields, profile)
@@ -135,6 +137,22 @@ def checkInnerClass(where: str, name, definition, resource: str, profile: dict) 
         raise ValueError(f"{where}: final deve ser booleano")
     if "classData" in definition and not isIdentifier(definition["classData"], "[A-Z]"):
         raise ValueError(f"{where}: classData invalido: {definition['classData']!r}")
+    checkInnerClassDataType(where, definition)
+
+
+def checkInnerClassDataType(where: str, definition: dict) -> None:
+    if "classData" not in definition:
+        if "classDataType" in definition:
+            raise ValueError(f"{where}: classDataType sem classData")
+        return
+
+    if "classDataType" not in definition:
+        raise ValueError(f"{where}: classDataType ausente")
+
+    if definition["classDataType"] not in INNER_CLASS_DATA_TYPES:
+        raise ValueError(
+            f"{where}: classDataType invalido: {definition['classDataType']!r}, esperado um de {list(INNER_CLASS_DATA_TYPES)}"
+        )
 
 
 def isIdentifier(value, firstCharacter: str) -> bool:
@@ -180,8 +198,10 @@ def checkInnerClassSignatures(where: str, constructors: list, fields: dict, hasM
         raise ValueError(f"{where}: dois construtores com a mesma assinatura")
 
 
-def innerClassDataLine(name: str, classData: str) -> str:
-    return f'static SubResource.ClassData data = new SubResource.ClassData({name}.class, "{classData}");'
+def innerClassDataLine(name: str, classData: str, classDataType: str) -> str:
+    # a classe interna estende SubResource e herda o tipo membro ClassData: as duas formas compilam
+    qualifier = "SubResource." if classDataType == "qualified" else ""
+    return f'static {qualifier}ClassData data = new {qualifier}ClassData({name}.class, "{classData}");'
 
 
 def renderInnerConstructor(names: list, fields: dict) -> dict:

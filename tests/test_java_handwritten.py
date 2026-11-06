@@ -1,3 +1,5 @@
+import re
+
 import pytest
 import yaml
 
@@ -8,6 +10,10 @@ from conftest import REPO_ROOT, requiresGenerator, requiresJavaSdk
 WAIVERS_PATH = REPO_ROOT / "apis/java-handwritten.yaml"
 PIN = "f60902a"
 NEVER_WAIVED_METHODS = {"get", "query", "page", "pdf", "update", "delete", "put"}
+
+
+def loadTool(name: str):
+    return compare.loadTool(name)
 
 
 def realWaivers() -> dict:
@@ -89,12 +95,52 @@ def test_everyWaivedTextIsAMissingMemberNotADivergentOne():
             assert entry["text"].startswith(f"{entry['kind']} ausente: "), (resource, entry["text"])
 
 
-def test_everyWaivedRequireIsUsedInTheRealFile():
-    for resource, entries in realWaivers().items():
-        source = realSource(resource)
-        for entry in [entry for entry in entries if entry["kind"] == "require"]:
-            simpleName = entry["text"].rstrip(";").rsplit(".", 1)[1]
-            assert source.count(simpleName) >= 2, (resource, entry["text"])
+def declarationRange(lines: list[str], declaration: str) -> tuple[int, int]:
+    """Linhas (1-based) do membro que começa em `declaration`, até a chave que fecha o corpo."""
+    start = next(number for number, line in enumerate(lines, 1) if line.strip().startswith(declaration))
+    depth, opened = 0, False
+    for number in range(start, len(lines) + 1):
+        depth += lines[number - 1].count("{") - lines[number - 1].count("}")
+        opened = opened or "{" in lines[number - 1]
+        if opened and depth == 0:
+            return (start, number)
+    raise AssertionError(f"{declaration}: corpo sem fechamento")
+
+
+def usesOutsideWaivedMembers(resource: str, entries: list[dict]) -> dict[str, list[int]]:
+    """Por require dispensado, as linhas de código do real que usam o nome fora dos membros dispensados."""
+    lines = loadTool("derive-contract").withoutNoise(realSource(resource))
+    ranges = [
+        declarationRange(lines, entry["text"].split(": ", 1)[1])
+        for entry in entries
+        if entry["kind"] in ("signature", "inner", "constructor")
+    ]
+    outside = {}
+    for entry in [entry for entry in entries if entry["kind"] == "require"]:
+        simpleName = entry["text"].rstrip(";").rsplit(".", 1)[1]
+        uses = [
+            number for number, line in enumerate(lines, 1)
+            if not line.lstrip().startswith("import ") and re.search(rf"\b{simpleName}\b", line)
+        ]
+        outside[entry["text"]] = [number for number in uses if not any(low <= number <= high for low, high in ranges)]
+        assert uses, (resource, entry["text"], "o import nao e usado no real")
+    return outside
+
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource", sorted(realWaivers()))
+def test_everyWaivedRequireIsUsedOnlyInsideTheWaivedMembers(resource):
+    outside = usesOutsideWaivedMembers(resource, realWaivers()[resource])
+    assert {text: lines for text, lines in outside.items() if lines} == {}
+
+
+@requiresJavaSdk
+def test_aRequireAlsoUsedByAGeneratableMemberIsFlagged():
+    entries = realWaivers()["CorporatePurchase"]
+    extra = {"kind": "require", "text": "require ausente: import java.util.Map;", "count": 1, "reason": "x"}
+    outside = usesOutsideWaivedMembers("CorporatePurchase", [*entries, extra])
+    assert outside["require ausente: import java.util.Map;"]
+    assert not outside["require ausente: import com.google.gson.Gson;"]
 
 
 @requiresJavaSdk
