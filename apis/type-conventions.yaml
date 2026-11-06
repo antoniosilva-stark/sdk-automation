@@ -152,6 +152,7 @@ javaConstructorOrder:
     referenceNumber, scheduled, tags, status, amount, fee, transactionIds, updated, created]
   DictKey: [id, type, accountType, name, taxId, ownerType, bankName, ispb, branchCode, accountNumber, status]
   DynamicBrcode: [amount, expiration, tags, id, uuid, pictureUrl, displayDescription, rules, updated, created]
+  Event: [created, isDelivered, subscription, id, workspaceId]
   Invoice: [amount, due, taxId, name, expiration, fine, interest, descriptions, discounts, rules, splits, pdf,
     link, tags, nominalAmount, fineAmount, interestAmount, discountAmount, id, brcode, fee,
     transactionIds, status, created, updated]
@@ -166,6 +167,13 @@ javaConstructorOrder:
     updated]
   VerifiedAccount: [id, bankCode, bankName, branchCode, created, keyId, name, number, status, tags, taxId, type, updated]
   Workspace: [username, name, allowedTaxIds, status, id, organizationId, pictureUrl, created]
+
+# Campo do schema que o Java nao declara na classe externa, Recurso -> lista de campos. A spec e compartilhada com as
+# outras linguagens e descreve o campo; o real o tira da classe e do construtor, por isso o campo some da declaracao, do
+# construtor all-args, do Map-ctor e do Javadoc. O Event do real nao tem `log` na base: cada subclasse declara o seu
+# (javaEvents). Nao vale para o id, que o template sempre emite. Campo que o schema nao tem falha na geracao.
+javaOmittedFields:
+  Event: [log]
 
 javaConstructorTypes:
   CorporateRule:
@@ -322,3 +330,20 @@ javaPages:
   TaxPayment: {listName: payments, names: short}
   UtilityPayment: {listName: payments, names: short}
   VerifiedAccount: {listName: verifiedAccounts, names: qualified}
+
+# Subclasses e Deserializer do Event, Recurso -> {subscriptions, gson}. O real escreve, para cada `subscription` do
+# webhook, uma classe `<Recurso>Event` (campo `log` do tipo `<Recurso>.Log`, construtor all-args e sem argumentos) e um
+# `case` no Deserializer; o dado e a lista ordenada das subscriptions em kebab-case, e o nome do recurso, da classe e do
+# tipo do log saem dela (`boleto-holmes` -> BoletoHolmes -> BoletoHolmesEvent, BoletoHolmes.Log), entao cada
+# subscription tem de dar um recurso gerado e nenhum nome se repete. A classe `Unknown<Recurso>` (log `JsonObject`) e o
+# `default` do switch sao fixos. Os parametros do construtor das subclasses sao os da base (javaConstructorOrder).
+#   subscriptions: (obrigatorio) as subscriptions na ordem do switch do real, sem repeticao.
+#   gson:          (opcional) as subscriptions que o real deserializa com `GsonEvent.getInstance().fromJson(...)` em vez de
+#                  `context.deserialize(...)`; subconjunto de subscriptions (payment-request).
+# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. Fora: `parse` e o Attempt do Event.
+javaEvents:
+  Event:
+    subscriptions: [transfer, boleto, boleto-payment, utility-payment, boleto-holmes, invoice, deposit, brcode-payment,
+      tax-payment, darf-payment, invoice-pull-subscription, invoice-pull-request, verified-account, payment-request,
+      merchant-purchase, merchant-session, merchant-installment, merchant-card]
+    gson: [payment-request]

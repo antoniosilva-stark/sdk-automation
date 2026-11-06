@@ -45,6 +45,7 @@ def renderJavaCode(
     logShape: dict | None = None,
     pageShape: dict | None = None,
     logEntity: str | None = None,
+    eventShape: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -53,7 +54,8 @@ def renderJavaCode(
     geradores, para o override `List<Recurso>`; esse tipo e o `List<ClasseInterna>` saem do Map-ctor por um auxiliar
     `parseX` (`ctorMapParsers`), como no real. `log`: so para recurso com Log, os nomes e o tipo de `errors` do Log
     interno, ja resolvidos a partir da forma (`javaLogs`) e do nome da entidade do Log (`logEntity`). `page`: so para recurso com Page externa, o nome da lista e o
-    tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`)."""
+    tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`). `events`: so para recurso com `javaEvents`,
+    o Deserializer e as subclasses, derivados das subscriptions e dos parametros do construtor all-args."""
     fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
     code = {
@@ -70,7 +72,60 @@ def renderJavaCode(
             "listName": pageShape["listName"],
             "typeName": "Page" if pageShape["names"] == "short" else f"{resource}.Page",
         }
+    if eventShape is not None:
+        code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames)
     return code
+
+
+def omitFields(schema: dict, resource: str, omitted: list) -> dict:
+    """O schema sem os campos que o Java nao declara (`javaOmittedFields`); o resto, `x-sdk-docs` incluso, fica igual. O
+    campo tem de existir e nao ser o id, senao um typo viraria no-op calado."""
+    if not omitted:
+        return schema
+    properties = schema.get("properties") or {}
+    for name in omitted:
+        if name not in properties:
+            raise ValueError(f"{resource}.{name}: javaOmittedFields cita campo que o schema nao tem")
+        if properties[name].get("x-sdk-id"):
+            raise ValueError(f"{resource}.{name}: javaOmittedFields cita o campo id, que o template sempre emite")
+    return {**schema, "properties": {name: prop for name, prop in properties.items() if name not in omitted}}
+
+
+def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: frozenset) -> dict:
+    """Deserializer e subclasses prontos para o Mustache. Da subscription (`boleto-holmes`) saem o recurso do log
+    (BoletoHolmes), a subclasse (`<Recurso><Evento>`, BoletoHolmesEvent) e o tipo do `log` (BoletoHolmes.Log); a subclasse
+    de `subscription` desconhecida tem `log` JsonObject. Os parametros do construtor das subclasses sao os da base."""
+    gson = set(shape["gson"])
+    cases = []
+    subclasses = []
+    for subscription in shape["subscriptions"]:
+        logResource = eventLogResource(resource, subscription, resourceNames)
+        className = f"{logResource}{resource}"
+        cases.append({"subscription": subscription, "className": className, "isGson": subscription in gson})
+        subclasses.append({"className": className, "logType": f"{logResource}.Log"})
+    unknownClassName = f"Unknown{resource}"
+    subclasses.append({"className": unknownClassName, "logType": "JsonObject"})
+    return {
+        "cases": cases,
+        "subclasses": subclasses,
+        "unknownClassName": unknownClassName,
+        "baseParameters": ", ".join(
+            f"{'String' if field['isId'] else field['javaType']} {field['name']}" for field in ctorFields
+        ),
+        "superArguments": ", ".join(field["name"] for field in ctorFields),
+        "usesGsonEvent": bool(gson),
+    }
+
+
+def eventLogResource(resource: str, subscription: str, resourceNames: frozenset) -> str:
+    logResource = "".join(word.capitalize() for word in subscription.split("-"))
+    if logResource == resource:
+        raise ValueError(f"{resource}: javaEvents.subscriptions {subscription!r} cita o proprio recurso")
+    if logResource not in resourceNames:
+        raise ValueError(
+            f"{resource}: javaEvents.subscriptions {subscription!r} cita o recurso {logResource}, que nao existe em apis/schemas"
+        )
+    return logResource
 
 
 def renderLog(resource: str, shape: dict, entity: str) -> dict:

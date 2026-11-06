@@ -125,11 +125,15 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     specPath = REPO_ROOT / SPEC_FILE
     specText = specPath.read_text(encoding="utf-8")
     spec = loadFast(specText)
-    schema = resolveRef(spec, resource, apisDir)
+    conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
+    schema = javaCode.omitFields(
+        resolveRef(spec, resource, apisDir),
+        resource,
+        extractSchema.javaOmittedFields(resource, conventionsFile),
+    )
     createSchema = resolveRef(spec, f"{resource}Create", apisDir)
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
-    conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
     pageShape = extractSchema.javaPageShape(resource, conventionsFile) if "x-sdk-page" in flags else None
     rendered = javaDocs.renderDocs(
         resource,
@@ -154,6 +158,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         logShape=logShape if "x-sdk-log" in flags else None,
         pageShape=pageShape,
         logEntity=spec["components"]["schemas"][resource].get("x-sdk-log-entity"),
+        eventShape=extractSchema.javaEventShape(resource, conventionsFile),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

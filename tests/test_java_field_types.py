@@ -276,8 +276,15 @@ def _schemaOf(resource: str) -> tuple:
     return schemas[resource], schemas[f"{resource}Create"]
 
 
-def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> list:
+def _generatedSchemaOf(resource: str) -> tuple:
+    """O schema como o Java o declara: sem os campos de javaOmittedFields (o `log` da base do Event)."""
     schema, createSchema = _schemaOf(resource)
+    omitted = (yaml.safe_load(_realConventionsText()).get("javaOmittedFields") or {}).get(resource) or []
+    return {**schema, "properties": {name: prop for name, prop in schema["properties"].items() if name not in omitted}}, createSchema
+
+
+def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> list:
+    schema, createSchema = _generatedSchemaOf(resource)
     return javaCode.renderJavaCode(
         schema,
         javaDocs.describeEntity(schema, createSchema),
@@ -292,13 +299,13 @@ def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> li
 
 def _resourcesWithTheRealNameSet(buildResource) -> dict:
     """Recurso -> construtor publico mais longo do real, so quando tem os mesmos nomes que o schema; os demais
-    (Event, Transfer...) divergem em nomes e sao da ME 9.7."""
+    (Transfer...) divergem em nomes e sao da ME 9.7."""
     matching = {}
     for resource in buildResource.loadTool("parity-report").schemaResources():
         if not (REAL_SOURCES / f"{resource}.java").is_file():
             continue
         real = _realLongestPublicConstructor(resource)
-        if {name for _, name in real} == set(_schemaOf(resource)[0]["properties"]):
+        if {name for _, name in real} == set(_generatedSchemaOf(resource)[0]["properties"]):
             matching[resource] = real
     return matching
 
@@ -312,9 +319,9 @@ def test_everyConstructorOrderEntryIsTheNameOrderOfTheLongestPublicRealConstruct
     assert divergent == []
 
 
-def test_everyConstructorOrderEntryHoldsExactlyTheSchemaFields():
+def test_everyConstructorOrderEntryHoldsExactlyTheSchemaFieldsTheJavaDeclares():
     for resource, order in _constructorSection("javaConstructorOrder").items():
-        assert sorted(order) == sorted(_schemaOf(resource)[0]["properties"]), resource
+        assert sorted(order) == sorted(_generatedSchemaOf(resource)[0]["properties"]), resource
 
 
 @requiresJavaSdk

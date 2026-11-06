@@ -43,6 +43,11 @@ JAVA_RESERVED_WORDS = frozenset({
     "void", "volatile", "while", "true", "false", "null",
 })
 
+# Chaves do javaEvents e o formato de uma subscription (kebab-case minusculo: dele sai o nome do recurso, `boleto-holmes`
+# -> BoletoHolmes). O default de `gson` e nenhuma subscription.
+JAVA_EVENT_KEYS = ("subscriptions", "gson")
+JAVA_EVENT_SUBSCRIPTION = re.compile(r"[a-z]+(?:-[a-z]+)*")
+
 VENDORED_ROOT = Path("_references/sdk-python")
 
 SECTION_REQUIRED = "required"
@@ -210,6 +215,69 @@ def checkLogCtor(resource: str, order) -> None:
         if name in seen:
             raise ValueError(f"{resource}: javaLogs.ctor repete {name!r}")
         seen.add(name)
+
+
+def javaOmittedFields(resource: str, conventions: Path = CONVENTIONS_FILE) -> list:
+    omitted = loadConventions(Path(conventions)).get("javaOmittedFields") or {}
+    if not isinstance(omitted, dict):
+        raise ValueError("javaOmittedFields deve ser um mapa recurso -> lista de campos")
+    checkKnownResources("javaOmittedFields", omitted)
+    for name, fields in omitted.items():
+        checkOmittedFields(name, fields)
+    return omitted.get(resource) or []
+
+
+def checkOmittedFields(resource: str, fields) -> None:
+    if not isinstance(fields, list) or not fields:
+        raise ValueError(f"{resource}: javaOmittedFields deve ser uma lista nao vazia de campos, veio {fields!r}")
+    seen = set()
+    for field in fields:
+        if not isinstance(field, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", field):
+            raise ValueError(f"{resource}: javaOmittedFields campo invalido: {field!r}, esperado um identificador lowerCamel")
+        if field in seen:
+            raise ValueError(f"{resource}: javaOmittedFields repete {field!r}")
+        seen.add(field)
+
+
+def javaEventShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    shapes = loadConventions(Path(conventions)).get("javaEvents") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaEvents deve ser um mapa recurso -> {subscriptions, gson}")
+    checkKnownResources("javaEvents", shapes)
+    normalized = {name: checkEventShape(name, shape) for name, shape in shapes.items()}
+    return normalized.get(resource)
+
+
+def checkEventShape(resource: str, shape) -> dict:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaEvents deve ser um mapa {{subscriptions, gson}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_EVENT_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaEvents chave desconhecida: {unknown[0]}")
+    if "subscriptions" not in shape:
+        raise ValueError(f"{resource}: javaEvents.subscriptions ausente")
+    subscriptions = checkEventSubscriptions(resource, "subscriptions", shape["subscriptions"], isRequired=True)
+    gson = checkEventSubscriptions(resource, "gson", shape.get("gson", []), isRequired=False)
+    outside = [subscription for subscription in gson if subscription not in subscriptions]
+    if outside:
+        raise ValueError(f"{resource}: javaEvents.gson {outside[0]!r} nao esta em subscriptions")
+    return {"subscriptions": subscriptions, "gson": gson}
+
+
+def checkEventSubscriptions(resource: str, key: str, subscriptions, isRequired: bool) -> list:
+    if not isinstance(subscriptions, list) or (isRequired and not subscriptions):
+        qualifier = "nao vazia " if isRequired else ""
+        raise ValueError(f"{resource}: javaEvents.{key} deve ser uma lista {qualifier}de subscriptions, veio {subscriptions!r}")
+    seen = set()
+    for subscription in subscriptions:
+        if not isinstance(subscription, str) or not JAVA_EVENT_SUBSCRIPTION.fullmatch(subscription):
+            raise ValueError(
+                f"{resource}: javaEvents.{key} subscription invalida: {subscription!r}, esperado kebab-case minusculo"
+            )
+        if subscription in seen:
+            raise ValueError(f"{resource}: javaEvents.{key} repete {subscription!r}")
+        seen.add(subscription)
+    return subscriptions
 
 
 def javaPageShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
