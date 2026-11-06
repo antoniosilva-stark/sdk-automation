@@ -31,6 +31,14 @@ JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>", "class
 JAVA_PAGE_KEYS = ("listName", "names")
 JAVA_PAGE_NAMES = ("short", "qualified")
 JAVA_PAGE_RESERVED = frozenset({"cursor", "page", "params", "user"})
+# Palavras reservadas e literais do Java: como campo, parametro ou local so falhariam no javac, sem nomear a chave.
+JAVA_RESERVED_WORDS = frozenset({
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const", "continue", "default",
+    "do", "double", "else", "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import",
+    "instanceof", "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return",
+    "short", "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try",
+    "void", "volatile", "while", "true", "false", "null",
+})
 
 VENDORED_ROOT = Path("_references/sdk-python")
 
@@ -183,10 +191,11 @@ def checkPageShape(resource: str, shape) -> None:
         if key not in shape:
             raise ValueError(f"{resource}: javaPages.{key} ausente")
     listName = shape["listName"]
-    reserved = JAVA_PAGE_RESERVED | {lowerFirst(resource)}
+    reserved = JAVA_PAGE_RESERVED | JAVA_RESERVED_WORDS | {lowerFirst(resource)}
     if not isinstance(listName, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", listName) or listName in reserved:
         raise ValueError(
-            f"{resource}: javaPages.listName invalido: {listName!r}, esperado um identificador fora de {sorted(reserved)}"
+            f"{resource}: javaPages.listName invalido: {listName!r}, esperado um identificador fora de "
+            f"{sorted(JAVA_PAGE_RESERVED | {lowerFirst(resource)})} e das palavras reservadas do Java"
         )
     if not isinstance(shape["names"], str) or shape["names"] not in JAVA_PAGE_NAMES:
         raise ValueError(f"{resource}: javaPages.names invalido: {shape['names']!r}, esperado um de {list(JAVA_PAGE_NAMES)}")

@@ -326,6 +326,20 @@ def test_invalidJavaPagesDataFailsNamingTheResourceTheKeyAndTheValue(extractSche
         _loadPages(extractSchema, tmpPath, text)
 
 
+@pytest.mark.parametrize("word", [
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const", "continue", "default",
+    "do", "double", "else", "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import",
+    "instanceof", "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return",
+    "short", "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try",
+    "void", "volatile", "while", "true", "false", "null",
+])
+def test_javaPagesListNameThatIsAJavaReservedWordFailsNamingTheResourceTheKeyAndTheValue(extractSchema, tmpPath, word):
+    text = f"javaPages:\n  Balance: {{listName: '{word}', names: short}}\n"
+
+    with pytest.raises(ValueError, match=f"Balance: javaPages.listName invalido: '{word}'"):
+        _loadPages(extractSchema, tmpPath, text)
+
+
 def test_javaPagesWithoutAMappingFailsToo(extractSchema, tmpPath):
     with pytest.raises(ValueError, match="javaPages"):
         _loadPages(extractSchema, tmpPath, "javaPages:\n  - Balance\n")
