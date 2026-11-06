@@ -62,7 +62,7 @@ the App secret: the jobs that hold the token only run this repo's tools and pinn
 - `tools/parity-report.py` — scoreboard: how many generated Java resources pass the strict gate against sdk-java (`make parity`)
 - `tools/make-replica.py` — base de replicação: sdk-java sem os 42 recursos, `make replica`
 - `tools/replicate-all.py` — replica os recursos Java da spec num alvo sem eles e mede o que o pipeline gera, `make replicate`
-- `tools/compare-with-real.py` — compara o Java gerado pelo `make replicate` com o sdk-java real (gaps, similaridade, imports, ordem, Javadoc), `make compare`
+- `tools/compare-with-real.py` — compara o Java gerado pelo `make replicate` com o sdk-java real (gaps, similaridade, imports, ordem, Javadoc), `make compare`; `apis/java-handwritten.yaml` dispensa, a parte e com razao, so os membros que o real escreve a mao (`--no-waivers` mostra os gaps brutos)
 
 **Node.js 18+ locally, 22 in CI** — generation engine and JS tests
 - OpenAPI Generator CLI: npm wrapper `^2.41.0`, core JAR pinned to `7.0.1` in

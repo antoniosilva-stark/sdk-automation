@@ -1,0 +1,19 @@
+# Dispensa estreita e versionada dos membros que o sdk-java real ESCREVE A MAO: logica que nao segue nenhum molde
+# gerado (CRUD, create lista/objeto/mapa, get, query, page, log, pdf, parse padrao). Lida so por tools/compare-with-real.py
+# (`make compare`); a geracao nao a le, e o comparador nunca a usa para medir similaridade.
+#
+# Recurso -> lista de dispensas (o recurso e o nome canonico de apis/schemas, com a caixa exata):
+#   - kind: signature | field | constructor | require | inner
+#     text: o texto EXATO do gap como o comparador o imprime (a mensagem inteira, ja com o prefixo
+#           `signature ausente: ...`, `field divergente: ...`); sem padrao nem regex, um texto quase igual nao dispensa
+#     count: opcional, default 1; quantas vezes o mesmo gap pode aparecer no recurso (ex.: duas classes internas sem
+#            `public String confirmationMode;`). Os gaps sao um multiconjunto: cada entrada consome ate `count`
+#     reason: por que e escrito a mao, citando o arquivo do sdk-java real
+#
+# Regras:
+#   - O gap dispensado nunca some: o relatorio o lista a parte, com a razao, e o resumo conta separado os recursos
+#     "sem gaps" dos "sem gaps (com dispensa)".
+#   - Entrada obsoleta (consome menos que `count`, inclusive zero) faz `make compare` sair com 1: a lista so encolhe.
+#     So vale para recurso comparado na corrida; `make compare ARGS=Recurso` nao cobra os demais.
+#   - A classe Event NAO entra aqui: sera gerada.
+#   - Arquivo ausente = sem dispensas; arquivo malformado = erro (saida 2). `--no-waivers` mostra os gaps brutos.

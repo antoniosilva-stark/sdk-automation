@@ -8,7 +8,13 @@ from collections import Counter
 from difflib import SequenceMatcher
 from importlib.util import spec_from_file_location, module_from_spec
 
+import yaml
+
 TOOLS_DIR = Path(__file__).resolve().parent
+WAIVERS_FILE = TOOLS_DIR.parent / "apis/java-handwritten.yaml"
+WAIVER_SECTION = "java-handwritten"
+WAIVER_KINDS = ("signature", "field", "constructor", "require", "inner")
+WAIVER_KEYS = ("kind", "text", "count", "reason")
 
 LANGUAGE = "java"
 ROLE = "main"
@@ -18,6 +24,7 @@ DETAIL_WIDTH = 100
 
 STATE_EQUAL = "igual"
 STATE_NO_GAPS = "sem gaps"
+STATE_NO_GAPS_WAIVED = "sem gaps (com dispensa)"
 STATE_GAPS = "com gaps"
 STATE_NOT_GENERATED = "nao gerado"
 STATE_ABSENT = "ausente no real"
@@ -187,12 +194,116 @@ def measureResource(resource: str, generatedRoot: Path, sourceRoot: Path) -> dic
     )
 
 
+def checkWaiverEntry(resource: str, index: int, entry) -> dict:
+    where = f"{resource}[{index}]"
+    if not isinstance(entry, dict):
+        raise ValueError(f"{where}: dispensa deve ser um mapa {{kind, text, count, reason}}, veio {entry!r}")
+
+    unknown = [key for key in entry if key not in WAIVER_KEYS]
+    if unknown:
+        raise ValueError(f"{where}.{unknown[0]}: chave desconhecida, esperado uma de {list(WAIVER_KEYS)}")
+
+    if entry.get("kind") not in WAIVER_KINDS:
+        raise ValueError(f"{where}.kind invalido: {entry.get('kind')!r}, esperado um de {list(WAIVER_KINDS)}")
+
+    for key in ("text", "reason"):
+        value = entry.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{where}.{key} invalido: {value!r}, esperado texto nao vazio")
+
+    count = entry.get("count", 1)
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise ValueError(f"{where}.count invalido: {count!r}, esperado inteiro >= 1")
+    return {"kind": entry["kind"], "text": entry["text"], "count": count, "reason": entry["reason"]}
+
+
+def checkWaiverEntries(resource: str, entries) -> list[dict]:
+    if not isinstance(entries, list):
+        raise ValueError(f"{resource}: {WAIVER_SECTION} deve ser uma lista de dispensas, veio {entries!r}")
+
+    checked = [checkWaiverEntry(resource=resource, index=index, entry=entry) for index, entry in enumerate(entries)]
+    seen = set()
+    for entry in checked:
+        key = (entry["kind"], entry["text"])
+        if key in seen:
+            raise ValueError(f"{resource}: dispensa duplicada {key[0]} {key[1]!r}; some no count em vez de repetir")
+        seen.add(key)
+    return checked
+
+
+def loadWaivers(path) -> dict[str, list[dict]]:
+    """Ausente é sem dispensas; arquivo malformado é erro, nunca dispensa parcial."""
+    path = Path(path)
+    if not path.is_file():
+        return {}
+
+    extractSchema = loadTool("extract-schema")
+    try:
+        data = extractSchema.loadFast(path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError) as error:
+        raise ValueError(f"{path.name}: {WAIVER_SECTION} ilegivel: {error}") from error
+
+    if data is None:
+        return {}
+
+    if not isinstance(data, dict):
+        raise ValueError(f"{WAIVER_SECTION}: esperado um mapa recurso -> lista de dispensas, veio {data!r}")
+
+    extractSchema.checkKnownResources(WAIVER_SECTION, data)
+    return {resource: checkWaiverEntries(resource=resource, entries=entries) for resource, entries in data.items()}
+
+
+def waiveResource(item: dict, entries: list[dict]) -> tuple[dict, list[dict]]:
+    """Multiconjunto: cada entrada dispensa o gap exato (kind, texto) até `count` vezes."""
+    budget = {(entry["kind"], entry["text"]): entry["count"] for entry in entries}
+    reasons = {(entry["kind"], entry["text"]): entry["reason"] for entry in entries}
+    remaining, waived = [], []
+    for gap in item["gaps"]:
+        key = tuple(gap)
+        if budget.get(key, 0) == 0:
+            remaining.append(gap)
+            continue
+
+        budget[key] -= 1
+        waived.append({"kind": key[0], "text": key[1], "reason": reasons[key]})
+
+    obsolete = [
+        {
+            "resource": item["resource"],
+            "kind": entry["kind"],
+            "text": entry["text"],
+            "count": entry["count"],
+            "consumed": entry["count"] - budget[(entry["kind"], entry["text"])],
+            "reason": entry["reason"],
+        }
+        for entry in entries
+        if budget[(entry["kind"], entry["text"])] > 0
+    ]
+    state = STATE_NO_GAPS_WAIVED if waived and not remaining else item["state"]
+    return {**item, "gaps": remaining, "waived": waived, "state": state}, obsolete
+
+
+def applyWaivers(results: list[dict], waivers: dict[str, list[dict]]) -> tuple[list[dict], list[dict]]:
+    """Só recurso medido nesta corrida cobra obsolescência: corrida parcial não falha por quem não comparou."""
+    applied, obsolete = [], []
+    for item in results:
+        entries = waivers.get(item["resource"])
+        if not entries or item["similarity"] is None:
+            applied.append(item)
+            continue
+
+        waivedItem, unused = waiveResource(item=item, entries=entries)
+        applied.append(waivedItem)
+        obsolete.extend(unused)
+    return applied, obsolete
+
+
 def sortKey(entry: dict) -> tuple:
     similarity = 2.0 if entry["similarity"] is None else entry["similarity"]
     return (-entry["gapCount"], similarity, entry["resource"])
 
 
-def buildReport(results: list[dict], sha: str) -> dict:
+def buildReport(results: list[dict], sha: str, obsolete: list[dict] = ()) -> dict:
     resources = [
         {
             "resource": result["resource"],
@@ -200,6 +311,8 @@ def buildReport(results: list[dict], sha: str) -> dict:
             "detail": result["detail"],
             "gaps": [list(gap) for gap in result["gaps"]],
             "gapCount": len(result["gaps"]),
+            "waived": result.get("waived", []),
+            "waivedCount": len(result.get("waived", [])),
             "similarity": result["similarity"],
             "importsMissing": result["importsMissing"],
             "importsExtra": result["importsExtra"],
@@ -219,7 +332,11 @@ def buildReport(results: list[dict], sha: str) -> dict:
         "sha": sha,
         "total": len(resources),
         "compared": len(compared),
-        "zeroGaps": sum(1 for entry in compared if entry["gapCount"] == 0),
+        "zeroGaps": sum(1 for entry in compared if entry["gapCount"] == 0 and entry["waivedCount"] == 0),
+        "zeroGapsWithWaiver": sum(1 for entry in compared if entry["gapCount"] == 0 and entry["waivedCount"] > 0),
+        "waivedTotal": sum(entry["waivedCount"] for entry in resources),
+        "gapsTotal": sum(entry["gapCount"] for entry in resources),
+        "obsoleteWaivers": list(obsolete),
         "identical": sum(1 for entry in resources if entry["state"] == STATE_EQUAL),
         "meanSimilarity": round(mean, RATIO_DIGITS),
         "gapsByKind": dict(sorted(byKind.items(), key=lambda item: (-item[1], item[0]))),
@@ -231,13 +348,41 @@ def percent(value: float | None) -> str:
     return "-" if value is None else f"{value * 100:.1f}%"
 
 
+def waiverSummary(report: dict) -> list[str]:
+    if not report["waivedTotal"] and not report["obsoleteWaivers"]:
+        return []
+
+    return [
+        f"[INFO] dispensa de membros escritos à mão: {report['zeroGapsWithWaiver']} sem gaps só pela dispensa; "
+        f"{report['waivedTotal']} gaps dispensados; {report['gapsTotal']} gaps restantes"
+    ]
+
+
+def waiverDetails(report: dict) -> list[str]:
+    lines = []
+    waivedEntries = [entry for entry in report["resources"] if entry["waived"]]
+    if waivedEntries:
+        lines += ["", f"[INFO] gaps dispensados (escritos à mão no real; ver {WAIVERS_FILE.name}):"]
+    for entry in waivedEntries:
+        lines += [
+            f"  {entry['resource']}  {waived['text']}  [{waived['reason']}]" for waived in entry["waived"]
+        ]
+    lines += [
+        f"[ERROR] dispensa obsoleta em {item['resource']} [{item['kind']}] {item['text']} "
+        f"(count {item['count']}, consumida {item['consumed']}): remova ou reduza a entrada em {WAIVERS_FILE.name}"
+        for item in report["obsoleteWaivers"]
+    ]
+    return lines
+
+
 def render(report: dict) -> str:
     lines = [
         f"[INFO] gerado x real (sdk-{LANGUAGE} @ {report['sha']})",
         f"[INFO] {report['compared']} comparados de {report['total']}; {report['zeroGaps']} com 0 gaps; "
         f"{report['identical']} idênticos; similaridade média {percent(report['meanSimilarity'])}",
-        "",
     ]
+    lines += waiverSummary(report)
+    lines.append("")
     width = max((len(entry["resource"]) for entry in report["resources"]), default=0)
     width = max(width, len("recurso"))
     lines.append(f"  {'recurso':<{width}}  {'gaps':>4}  {'similar.':>8}  estado")
@@ -251,6 +396,7 @@ def render(report: dict) -> str:
 
     lines += ["", "[INFO] gaps por tipo:"]
     lines += [f"  {kind:<12}  {count:>4}" for kind, count in report["gapsByKind"].items()]
+    lines += waiverDetails(report)
     return "\n".join(lines)
 
 
@@ -262,6 +408,19 @@ def parseArguments(argv: list[str] | None):
         "--source",
         default=None,
         help="raiz do sdk-java real (padrão: SDK_JAVA ou _references/sdk-java)",
+    )
+    waivers = parser.add_mutually_exclusive_group()
+    waivers.add_argument(
+        "--waivers",
+        dest="waiversPath",
+        default=None,
+        help="dispensas dos membros escritos à mão (padrão: apis/java-handwritten.yaml; ausente = sem dispensas)",
+    )
+    waivers.add_argument(
+        "--no-waivers",
+        dest="noWaivers",
+        action="store_true",
+        help="mostra os gaps brutos, sem dispensas",
     )
     parser.add_argument("--json", dest="jsonPath", default=None, help="grava o relatório em JSON neste arquivo")
     return parser.parse_args(argv)
@@ -283,6 +442,9 @@ def validateArguments(args) -> tuple[Path | None, str]:
 
     if args.jsonPath and not Path(args.jsonPath).resolve().parent.is_dir():
         return (None, f"--json: o diretório de {args.jsonPath} não existe")
+
+    if args.waiversPath and not Path(args.waiversPath).is_file():
+        return (None, f"--waivers: {args.waiversPath} não existe")
 
     known = loadTool("parity-report").schemaResources()
     unknown = [name for name in args.resources if name not in known]
@@ -310,15 +472,27 @@ def main(argv: list[str] | None = None) -> int:
         emit(f"[ERROR] {problem}")
         return 2
 
+    try:
+        waivers = {} if args.noWaivers else loadWaivers(args.waiversPath or WAIVERS_FILE)
+    except ValueError as error:
+        emit(f"[ERROR] {error}")
+        return 2
+
     requested = list(dict.fromkeys(args.resources)) or loadTool("parity-report").schemaResources()
     results = [
         measureResource(resource=name, generatedRoot=Path(args.generated), sourceRoot=sourceRoot)
         for name in requested
     ]
-    report = buildReport(results=results, sha=loadTool("make-replica").sourceSha(sourceRoot))
+    results, obsolete = applyWaivers(results=results, waivers=waivers)
+    report = buildReport(results=results, sha=loadTool("make-replica").sourceSha(sourceRoot), obsolete=obsolete)
 
     emit(render(report))
-    return writeJson(report, args.jsonPath)
+    jsonCode = writeJson(report, args.jsonPath)
+    if jsonCode:
+        return jsonCode
+
+    # lista de dispensas só encolhe: entrada que não consome tudo falha a corrida
+    return 1 if obsolete else 0
 
 
 if __name__ == "__main__":

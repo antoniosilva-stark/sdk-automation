@@ -59,6 +59,11 @@ public final class Widget extends Resource {
 SPLIT = REAL.replace("Widget", "Split")
 
 
+@pytest.fixture(autouse=True)
+def noRealWaivers(tmp_path, monkeypatch):
+    monkeypatch.setattr(compare, "WAIVERS_FILE", tmp_path / "no-waivers.yaml")
+
+
 def plant(root: Path, resource: str, source: str) -> Path:
     path = root / MAIN / f"{resource}.java"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -276,8 +281,8 @@ def test_reportOrdersByGapsThenSimilarityThenNameAndAggregates():
     assert first["gapCount"] == 2
     assert first["gaps"][0] == ["constructor", "constructor ausente: x"]
     assert set(first) == {
-        "resource", "state", "detail", "gaps", "gapCount", "similarity", "importsMissing", "importsExtra",
-        "importsInOrder", "memberOrderEqual", "docEqual",
+        "resource", "state", "detail", "gaps", "gapCount", "waived", "waivedCount", "similarity", "importsMissing",
+        "importsExtra", "importsInOrder", "memberOrderEqual", "docEqual",
     }
 
 
