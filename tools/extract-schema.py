@@ -191,10 +191,12 @@ def checkLogExtraFields(resource: str, extraFields) -> None:
                 f"{resource}: javaLogs.extraFields nome invalido: {name!r}, esperado um identificador lowerCamel fora de "
                 f"{sorted(JAVA_LOG_RESERVED_FIELDS)} e das palavras reservadas do Java"
             )
-        # a descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia
-        if not isinstance(description, str) or not description.strip() or len(description.splitlines()) != 1 or "*/" in description:
+        # a descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia, e o
+        # javac traduz `*/` em `*/` antes de ler o comentario, entao a barra invertida tambem fecharia
+        if not isinstance(description, str) or not description.strip() or re.search(r"[\r\n\\]|\*/", description):
             raise ValueError(
-                f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, esperado texto de uma linha sem '*/'"
+                f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, "
+                "esperado texto de uma linha sem '*/' nem barra invertida"
             )
 
 

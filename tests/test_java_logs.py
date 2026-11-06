@@ -411,6 +411,8 @@ def test_invalidJavaLogsDataFailsNamingTheResourceTheFieldAndTheValue(extractSch
     ("extraFields: {updated: 3}", "Balance: javaLogs.extraFields.updated.*3"),
     ("extraFields: {updated: \"a */ b\"}", "Balance: javaLogs.extraFields.updated.*a \\*/ b"),
     ("extraFields: {updated: \"a\\nb\"}", "Balance: javaLogs.extraFields.updated"),
+    ("extraFields: {updated: \"a\\n\"}", "Balance: javaLogs.extraFields.updated"),
+    ("extraFields: {updated: 'a\\u002a/ x'}", "Balance: javaLogs.extraFields.updated"),
     ("ctor: created", "Balance: javaLogs.ctor.*lista.*'created'"),
     ("ctor: [created, 3]", "Balance: javaLogs.ctor.*3"),
     ("ctor: [created, created]", "Balance: javaLogs.ctor repete 'created'"),
