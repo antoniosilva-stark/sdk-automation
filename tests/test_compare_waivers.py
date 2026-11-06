@@ -1,3 +1,4 @@
+import os
 import json
 
 import pytest
@@ -164,7 +165,49 @@ def test_renderListsObsoleteWaiversAsErrors():
 def test_renderWithoutWaiversIsUnchanged():
     results = [result("Beta", gaps=2, similarity=0.5, state="com gaps"), result("Alpha", state="igual")]
     text = compare.render(compare.buildReport(results=results, sha="abc"))
-    assert "dispensa" not in text
+    assert text.split("\n") == [
+        "[INFO] gerado x real (sdk-java @ abc)",
+        "[INFO] 2 comparados de 2; 1 com 0 gaps; 1 idênticos; similaridade média 75.0%",
+        "",
+        "  recurso  gaps  similar.  estado",
+        "  Beta        2     50.0%  com gaps",
+        "  Alpha       0    100.0%  igual",
+        "",
+        "[INFO] gaps por tipo:",
+        "  constructor      2",
+    ]
+
+
+def obsoleteRun(tmp_path, jsonPath):
+    path = writeWaivers(tmp_path, f"Split:\n  - kind: signature\n    text: \"{GET_GAP}\"\n    reason: \"{REASON}\"\n")
+    generatedRoot, sourceRoot = trees(tmp_path, real=REAL, generated=REAL.replace(QUERY, ""), resource="Split")
+    return compare.main([
+        "--generated", str(generatedRoot),
+        "--source", str(sourceRoot),
+        "--waivers", str(path),
+        "--json", str(jsonPath),
+        "Split",
+    ])
+
+
+def test_mainObsoleteWaiverWithAWritableJsonExitsOne(tmp_path):
+    assert obsoleteRun(tmp_path, tmp_path / "out.json") == 1
+    assert (tmp_path / "out.json").is_file()
+
+
+def test_mainFailedJsonWriteWinsOverAnObsoleteWaiverAndExitsTwo(tmp_path, capsys):
+    if os.geteuid() == 0:
+        pytest.skip("root escreve em qualquer diretorio")
+    readOnly = tmp_path / "readonly"
+    readOnly.mkdir()
+    readOnly.chmod(0o555)
+    try:
+        code = obsoleteRun(tmp_path, readOnly / "out.json")
+    finally:
+        readOnly.chmod(0o755)
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "dispensa obsoleta" in out and "--json" in out
 
 
 def test_mainWaivesTheRealGapAndExitsZero(tmp_path):

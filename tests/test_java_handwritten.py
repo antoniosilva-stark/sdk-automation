@@ -118,6 +118,9 @@ def usesOutsideWaivedMembers(resource: str, entries: list[dict]) -> dict[str, li
     outside = {}
     for entry in [entry for entry in entries if entry["kind"] == "require"]:
         simpleName = entry["text"].rstrip(";").rsplit(".", 1)[1]
+        if simpleName == "*":
+            raise ValueError(f"{resource}: {entry['text']}: import curinga nao prova uso so nos membros dispensados")
+
         uses = [
             number for number, line in enumerate(lines, 1)
             if not line.lstrip().startswith("import ") and re.search(rf"\b{simpleName}\b", line)
@@ -132,6 +135,25 @@ def usesOutsideWaivedMembers(resource: str, entries: list[dict]) -> dict[str, li
 def test_everyWaivedRequireIsUsedOnlyInsideTheWaivedMembers(resource):
     outside = usesOutsideWaivedMembers(resource, realWaivers()[resource])
     assert {text: lines for text, lines in outside.items() if lines} == {}
+
+
+@requiresJavaSdk
+def test_aWildcardRequireIsRejectedWithAClearMessage(tmp_path):
+    scratch = tmp_path / "scratch.yaml"
+    scratch.write_text(
+        "Transfer:\n"
+        "  - kind: require\n"
+        "    text: 'require ausente: import com.google.gson.*;'\n"
+        "    reason: 'sdk-java f60902a Transfer.java scratch'\n",
+        encoding="utf-8",
+    )
+    entries = compare.loadWaivers(scratch)["Transfer"]
+    with pytest.raises(ValueError) as raised:
+        usesOutsideWaivedMembers("Transfer", entries)
+    assert str(raised.value) == (
+        "Transfer: require ausente: import com.google.gson.*;: "
+        "import curinga nao prova uso so nos membros dispensados"
+    )
 
 
 @requiresJavaSdk
@@ -182,3 +204,84 @@ def test_aWaiverForAMemberTheGeneratorAlreadyEmitsIsObsolete(buildResource, tmpP
     applied, obsolete = obsoleteAgainst("Invoice", waivers, generatedSource=generated)
     assert len(obsolete) == 1
     assert applied["waived"] == []
+
+
+def splitParameters(declaration: str) -> list[str]:
+    inner = declaration[declaration.index("(") + 1:declaration.rindex(")")]
+    parameters, depth, current = [], 0, ""
+    for character in inner:
+        depth += (character == "<") - (character == ">")
+        if character == "," and depth == 0:
+            parameters.append(current.strip())
+            current = ""
+            continue
+        current += character
+    return [*parameters, current.strip()] if current.strip() else parameters
+
+
+def shapeOf(declaration: str) -> tuple[str, int]:
+    return (declaration.split("(", 1)[0].split()[-1], len(splitParameters(declaration)))
+
+
+# Mesmo nome e aridade que o waived, mas de outro molde: o CorporateCard gera o create de lista (`create(List<?> ...)`),
+# que convive com o create de objeto unico manuscrito do real (`create(CorporateCard card, ...)`) e nao o substitui.
+OTHER_MOULD_FIRST_PARAMETER = {("CorporateCard", "create"): "List<?>"}
+
+
+def firstParameterType(declaration: str) -> str:
+    parameters = splitParameters(declaration)
+    return parameters[0].rsplit(" ", 1)[0] if parameters else ""
+
+
+def generatedShapes(generatedSource: str, resource: str) -> set[tuple[str, int]]:
+    entries = loadTool("derive-contract").extractJava(generatedSource)
+    shapes = set()
+    for kind, value in entries:
+        if kind != "signature":
+            continue
+
+        name, arity = shapeOf(value)
+        if OTHER_MOULD_FIRST_PARAMETER.get((resource, name)) == firstParameterType(value):
+            continue
+
+        shapes.add((name, arity))
+    return shapes
+
+
+def maskedShapes(waivers: dict, generatedSource: str, resource: str) -> list[tuple[str, int]]:
+    generated = generatedShapes(generatedSource, resource)
+    waived = [entry["text"].split(": ", 1)[1] for entry in waivers[resource] if entry["kind"] == "signature"]
+    return [shapeOf(declaration) for declaration in waived if shapeOf(declaration) in generated]
+
+
+def test_shapeOfCountsGenericParametersAsOne():
+    assert shapeOf("public static Page page(Map<String, Object> params, User user)") == ("page", 2)
+    assert shapeOf("public static String response(Map<String, Object> params)") == ("response", 1)
+    assert shapeOf("public static Payment payment()") == ("payment", 0)
+
+
+def test_theMaskingGuardSeesAGeneratedMethodWithTheWaivedNameAndArity():
+    waivers = {"Invoice": [{"kind": "signature", "text": "signature ausente: public static Payment payment(String id)",
+                            "count": 1, "reason": "x"}]}
+    wrong = "public class Invoice {\n    public static Payment payment(Integer other) throws Exception {\n    }\n}\n"
+    assert maskedShapes(waivers, wrong, "Invoice") == [("payment", 1)]
+    assert maskedShapes(waivers, "public class Invoice {\n}\n", "Invoice") == []
+
+
+@requiresGenerator
+@requiresJavaSdk
+@pytest.mark.parametrize("resource", sorted(
+    resource for resource, entries in realWaivers().items() if any(entry["kind"] == "signature" for entry in entries)
+))
+def test_noWaivedSignatureIsMaskingAGeneratedMethodWithTheSameNameAndArity(buildResource, tmpPath, resource):
+    generated = _generated(buildResource, tmpPath, resource, _realConventionsText())
+    assert maskedShapes(realWaivers(), generated, resource) == []
+
+
+def test_theOtherMouldExceptionIsNarrowToTheListCreateOfCorporateCard():
+    waivers = {"CorporateCard": [{"kind": "signature", "count": 1, "reason": "x",
+                                  "text": "signature ausente: public static CorporateCard create(CorporateCard card)"}]}
+    listCreate = "public class C {\n    public static List<C> create(List<?> cards) throws Exception {\n    }\n}\n"
+    objectCreate = "public class C {\n    public static C create(Object card) throws Exception {\n    }\n}\n"
+    assert maskedShapes(waivers, listCreate, "CorporateCard") == []
+    assert maskedShapes(waivers, objectCreate, "CorporateCard") == [("create", 1)]
