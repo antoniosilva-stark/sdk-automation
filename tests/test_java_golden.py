@@ -386,14 +386,13 @@ LOG_ATTRIBUTES = "real [SP] na minoria: `Attributes:` no Log (6 cabecalhos contr
 LOG_FIELD_ORDER = "real [SP] na minoria: campos do Log em outra ordem; a dominante e `created type errors X`, 16 de 24"
 IMPORT_ORDER = ("real na minoria do proprio real: Rest>Resource>Generator (11 de 42; dominante Generator>Resource>Rest, 20)"
                 " e java.util fora de ordem alfabetica (13 contra 21)")
-BALANCE_IMPORTS = "o real importa o que nao usa (Generator, List, HashMap, ArrayList); o gate DEAD_IMPORT reprova import morto"
+BALANCE_IMPORTS = ("ordem de import do real na minoria (ver IMPORT_ORDER); o gerador importa Map para o ctor Map que o real"
+                   " do Balance nao tem")
+BALANCE_USER_DOC = "o real deixa um `*` solto no fim da linha `@param user` do get(User) do Balance (descuido do sdk-java)"
 
 RULE = ("tipo-perdido",
         "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
         " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
-BALANCE_GET = ("runtime-errado",
-               "Entrega 9: Balance e singleton: o real tem `get()` e `get(User)` com Rest.getStream; o gerador emite"
-               " `get(String id)` com Rest.getId. A guarda de build-resource bloqueia a criacao")
 BALANCE_MAP_CTOR = ("cosmetico",
                     "Entrega 9: Balance nao tem ctor Map no real; o gerador emite o ctor (superficie publica a mais)")
 
@@ -461,8 +460,10 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
     },
     "Balance": {
-        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
+        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Generator,Resource,Rest | ArrayList,HashMap,List,Map":
             BALANCE_IMPORTS,
+        "doc|user real=@param user [Organization/Project object, default null]: Organization or Project object. Not necessary if starkbank.Settings.user was set before function call * gen=@param user [Organization/Project object, default null]: Organization or Project object. Not necessary if starkbank.Settings.user was set before function call|get(User)":
+            BALANCE_USER_DOC,
     },
     "Webhook": {
         "methods|order|moved=[query(Map<String, Object>, User)]":
@@ -536,18 +537,8 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
             RULE,
     },
     "Balance": {
-        "methods|missing|get(User)":
-            BALANCE_GET,
-        "methods|missing|get()":
-            BALANCE_GET,
         "methods|extra|Balance(Map<String, Object>)":
             BALANCE_MAP_CTOR,
-        "methods|extra|get(String)":
-            BALANCE_GET,
-        "methods|extra|get(String, User)":
-            BALANCE_GET,
-        "rest|get real={'getStream': 1} gen={'getId': 1}":
-            BALANCE_GET,
         "mapctor|amount real=None gen=other:0":
             BALANCE_MAP_CTOR,
         "mapctor|currency real=None gen=null":
@@ -569,14 +560,8 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
 }
 
 
-# A guarda de build-resource bloqueia a criacao de Balance (singleton), entao o golden o gera com --advisory, que nao
-# a roda: aqui se mede a estrutura contra o real, e a guarda prova o bloqueio (tests/test_build_resource.py). Os dois
-# nao se sobrepoem de proposito.
-GOLDEN_FLAGS = {"Balance": ("--advisory",)}
-
-
 def _structures(builtOnce, assertGenerated, resource: str, generated: str | None = None) -> tuple[dict, dict, str]:
-    code, out, target = builtOnce(resource, "java", *GOLDEN_FLAGS.get(resource, ()))
+    code, out, target = builtOnce(resource, "java")
     assert code == 0, out
     tool = assertGenerated.loadTool("derive-contract")
     source = generated or (target / "src/main/java/com/starkbank" / f"{resource}.java").read_text(encoding="utf-8")
@@ -624,12 +609,16 @@ def test_generatedJavaMatchesTheRealSdkOnStructure(builtOnce, assertGenerated, r
     assert not stale, f"{resource}: entrada que parou de casar, remova do registro:\n" + "\n".join(f"  {key}" for key in stale)
 
 
+# Um segmento `*` inteiro e curinga; um `*` solto dentro do texto do real (a linha @param user do Balance) e dado.
+WILDCARD_SEGMENT = re.compile(r"(?:^|\|)\*(?:\||$)")
+
+
 def test_everyExpectedDivergenceCarriesAWrittenMotive():
     assert set(EXPECTED) == set(GOLDEN_RESOURCES)
     for resource, entries in EXPECTED.items():
         for key, motive in entries.items():
             assert len(motive.split()) >= 5, f"{resource}: motivo curto demais para {key}"
-            assert "*" not in key, f"{resource}: curinga na chave {key}"
+            assert not WILDCARD_SEGMENT.search(key), f"{resource}: curinga na chave {key}"
             assert "Entrega 9" not in motive, f"{resource}: {key} e limite do gerador, nao divergencia esperada"
 
 
@@ -651,7 +640,6 @@ def test_theGeneratorLimitsAreCountedBySeverityInTheFinalReport():
     sys.stdout.write(f"=== limites do gerador no golden, por severidade (Entrega 9): {totals}\n")
 
     assert sum(totals.values()) == sum(len(entries) for entries in KNOWN_GENERATOR_LIMITS.values())
-    assert totals["runtime-errado"] > 0, "o golden nao pode esconder o limite que muda o comportamento em runtime"
 
 
 def _swapBlocks(source: str, first: str, second: str) -> str:

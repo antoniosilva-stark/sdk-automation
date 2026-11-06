@@ -92,6 +92,13 @@ def hasLogPdf(resource: str, specFile: str = SPEC_FILE) -> bool:
     return bool(((schema.get("x-sdk-java-code") or {}).get("log") or {}).get("hasPdf"))
 
 
+def hasSingletonGet(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O get do recurso le o stream e devolve o primeiro quando a spec preparada traz `singletonGet`."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool((schema.get("x-sdk-java-code") or {}).get("singletonGet"))
+
+
 def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     """Schema do componente, seguindo o `$ref` para o arquivo em `schemas/` quando ha."""
     entry = ((spec.get("components") or {}).get("schemas") or {}).get(name)
@@ -154,6 +161,8 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
     if "log" in code:
         code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
+    if javaDocs.hasSingletonGet(flags, schema.get("x-sdk-docs") or {}):
+        code["singletonGet"] = True
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
     docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
@@ -168,6 +177,7 @@ def javaImports(
     createForm: str = "list",
     hasParsers: bool = False,
     hasLogPdf: bool = False,
+    hasSingletonGet: bool = False,
 ) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
@@ -175,12 +185,12 @@ def javaImports(
     verdadeiro no Mustache. O create de objeto único (`object`/`map`) não monta lista.
     """
     properties = []
-    if flags & set(GENERATOR_USERS):
+    if flags & set(GENERATOR_USERS) or hasSingletonGet:
         properties.append("usesGenerator=true")
     if objectArray:
         properties.append("usesObjectList=true")
     listUsers = set(LIST_USERS) - ({"x-sdk-create"} if createForm in SINGLE_CREATE_FORMS else set())
-    if flags & listUsers:
+    if flags & listUsers or hasSingletonGet:
         properties.append("usesList=true")
     if flags & set(SUBRESOURCE_USERS):
         properties.append("usesSubResource=true")
@@ -267,6 +277,7 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
             createForm=createFormOf(resource),
             hasParsers=hasParsers(resource, specFile),
             hasLogPdf=hasLogPdf(resource, specFile),
+            hasSingletonGet=hasSingletonGet(resource, specFile),
         )
         properties.append(classDataProperty(resource, specFile))
     if properties:
@@ -327,8 +338,8 @@ def createFormOf(resource: str) -> str:
 
 def unsupportedShape(resource: str) -> str | None:
     """Formato que o template Java nao sabe emitir: put de objeto unico (sai put(List) com Rest.post), create de
-    objeto unico que nao casa com `object`/`map` e get sem id (singleton, sai get(String id)). Quem decide e o
-    docstring: `createForm` para o create e `returnsList` para o put, o mesmo predicado da documentacao."""
+    objeto unico que nao casa com `object`/`map`. Quem decide e o docstring: `createForm` para o create e
+    `returnsList` para o put, o mesmo predicado da documentacao."""
     javaDocs = loadTool("java-docs")
     docs = docstrings(resource)
     flags = declaredFlags(resource)
@@ -336,10 +347,6 @@ def unsupportedShape(resource: str) -> str | None:
         return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
     if "x-sdk-create" in flags and javaDocs.createForm(resource, docs.get("create")) == "unsupported":
         return unsupportedCreateMotive(resource, docs["create"])
-    getDoc = docs.get("get")
-    # `uuid` (DynamicBrcode) tambem identifica: singleton e o get que so recebe `user`
-    if "x-sdk-get" in flags and getDoc and {param["name"] for param in getDoc.get("params") or []} <= {"user"}:
-        return f"get sem id (singleton) ({resource})"
     return None
 
 

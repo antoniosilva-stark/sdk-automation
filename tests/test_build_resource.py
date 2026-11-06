@@ -278,15 +278,14 @@ def test_cancelIsEmittedWhenDeclared(builtOnce):
 
 
 @requiresGenerator
-def test_readOnlyResourceCarriesNoDeadImport(builtOnce):
-    code, out, target = builtOnce("Balance", "java", "--advisory")
+def test_resourceWithoutOperationsCarriesNoDeadGeneratorOrRestImport(builtOnce):
+    code, out, target = builtOnce("CorporateRule", "java", "--advisory")
 
     assert code == 0, out
-    source = (target / "src/main/java/com/starkbank/Balance.java").read_text(encoding="utf-8")
+    source = (target / "src/main/java/com/starkbank/CorporateRule.java").read_text(encoding="utf-8")
 
     assert "import com.starkbank.utils.Generator;" not in source
-    assert "import java.util.ArrayList;" not in source
-    assert "import java.util.List;" not in source
+    assert "import com.starkbank.utils.Rest;" not in source
     assert "import java.util.Map;" in source
 
 
@@ -923,8 +922,6 @@ def test_styleWarningsOfACreatedResourceAreCountedAndDoNotBlockTheBuild(builtOnc
 CORPORATE_CARD_MOTIVE = "create de objeto unico com expand (CorporateCard): corpo manuscrito, ME 9.8"
 UNSUPPORTED_SHAPES = [
     ("CorporateCard", CORPORATE_CARD_MOTIVE),
-    ("Balance", "get sem id (singleton) (Balance)"),
-    ("CorporateBalance", "get sem id (singleton) (CorporateBalance)"),
 ]
 SINGLE_CREATES = ("MerchantPurchase", "MerchantSession", "CorporateWithdrawal", "CorporateInvoice", "Webhook",
                   "Workspace")
@@ -937,7 +934,7 @@ def _unsupportedResources(buildResource) -> list[str]:
 
 
 def test_unsupportedShapeNamesExactlyTheResourcesTheTemplateCannotEmit(buildResource):
-    assert _unsupportedResources(buildResource) == sorted(["CorporateCard", "Balance", "CorporateBalance"])
+    assert _unsupportedResources(buildResource) == ["CorporateCard"]
 
 
 @pytest.mark.parametrize("resource", SINGLE_CREATES)
@@ -983,7 +980,7 @@ def test_creatingAnUnsupportedShapeFailsClosedAndPlacesNothing(builtOnce, resour
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["CorporateCard", "Balance"])
+@pytest.mark.parametrize("resource", ["CorporateCard"])
 def test_anExistingResourceWithAnUnsupportedShapeIsStillTheParityReport(tmpPath, resource):
     code, out = runTool("build-resource.py", resource, "--lang", "java", "--into", str(_target(tmpPath)))
 
@@ -992,7 +989,7 @@ def test_anExistingResourceWithAnUnsupportedShapeIsStillTheParityReport(tmpPath,
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["CorporateCard", "Balance"])
+@pytest.mark.parametrize("resource", ["CorporateCard"])
 def test_advisoryDoesNotRunTheShapeGuard(builtOnce, resource):
     code, out, _ = builtOnce(resource, "java", "--advisory")
 

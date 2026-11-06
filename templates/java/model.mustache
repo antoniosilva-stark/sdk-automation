@@ -88,6 +88,28 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-put}}
 {{#vendorExtensions.x-sdk-get}}
+{{#vendorExtensions.x-sdk-java-code.singletonGet}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getUser}}     */
+    public static {{classname}} get(User user) throws Exception {
+        List<{{classname}}> {{classVarName}}List = new ArrayList<>();
+        Generator<{{classname}}> {{classVarName}}s = Rest.getStream({{classDataName}}, new HashMap<String, Object>(), user);
+        for ({{classname}} {{classVarName}} : {{classVarName}}s) {
+            {{classVarName}}List.add({{classVarName}});
+        }
+        return {{classVarName}}List.get(0);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getPlain}}     */
+    public static {{classname}} get() throws Exception {
+        return {{classname}}.get(null);
+    }
+{{/vendorExtensions.x-sdk-java-code.singletonGet}}
+{{^vendorExtensions.x-sdk-java-code.singletonGet}}
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.getPlain}}     * {{{.}}}
@@ -102,6 +124,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     public static {{classname}} get(String id, User user) throws Exception {
         return Rest.getId({{classDataName}}, id, user);
     }
+{{/vendorExtensions.x-sdk-java-code.singletonGet}}
 {{/vendorExtensions.x-sdk-get}}
 {{#vendorExtensions.x-sdk-query}}
 

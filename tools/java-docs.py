@@ -91,7 +91,8 @@ def renderDocs(
     Chaves planas (`getPlain`, `queryParamsUser`, `logPageParams`...) porque o Mustache resolve nome ausente
     no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo."""
     context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
-               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName}
+               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName,
+               "singletonGet": hasSingletonGet(flags, docs)}
     lines = {
         "dataDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"]),
         "ctorAllDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"], atParam=True),
@@ -231,6 +232,16 @@ def flaggedOperations(flags: set, docs: dict) -> list:
     return operations + list(LOG_OPERATIONS) + logPdf
 
 
+def hasSingletonGet(flags: set, docs: dict) -> bool:
+    """O get documentado so recebe `user`: o recurso e unico por workspace e nao tem id (Balance). `uuid`
+    (DynamicBrcode) e `expand` tambem identificam ou alteram a busca, entao so o `user` conta. Sem doc nao ha
+    singleton: o bloco generico do get leva o id."""
+    getDoc = operationDoc(docs, "get")
+    if "x-sdk-get" not in flags or not getDoc:
+        return False
+    return {param["name"] for param in getDoc.get("params") or []} <= {"user"}
+
+
 def operationDoc(docs: dict, operation: str) -> dict | None:
     if not operation.startswith("log."):
         return (docs or {}).get(operation)
@@ -351,13 +362,19 @@ def operationTitle(context: dict, operation: str, doc: dict) -> str:
     className, profile = context["className"], context["profile"]
     template = profile["titles"].get(operation)
     plural = pluralize(className)
+    if operation == "get" and context["singletonGet"]:
+        return summaryTitle(context, operation, doc)
     if template is None or ("{Xs}" in template and plural is None):
         if template is not None:
             context["warnings"].append(f"plural irregular nao suportado: {className}; titulo de {operation}"
                                        " vem do resumo do Python")
-        summary = doc.get("summary") or genericDoc(operation, className)["summary"]
-        return contextText(context, summary)
+        return summaryTitle(context, operation, doc)
     return template.replace("{Xs}", plural or "").replace("{X}", className).replace("{a}", article(className))
+
+
+def summaryTitle(context: dict, operation: str, doc: dict) -> str:
+    summary = doc.get("summary") or genericDoc(operation, context["className"])["summary"]
+    return contextText(context, summary)
 
 
 def parameterLines(context: dict, operation: str, kind: str, doc: dict, withParams: bool,
@@ -370,6 +387,8 @@ def parameterLines(context: dict, operation: str, kind: str, doc: dict, withPara
         return mapCreateLines(context, plan, pythonParams)
     if kind == "list":
         return listLines(context, operation, pythonParams, withParams)
+    if operation == "get" and context["singletonGet"]:
+        return []
     if kind == "id":
         return [idLine(context, pythonParams)]
     if kind == "patch":
