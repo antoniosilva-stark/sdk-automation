@@ -56,10 +56,11 @@ OPERATION_KINDS = {
     "get": "id", "delete": "id", "cancel": "id", "pdf": "id",
     "update": "patch",
     "query": "filters", "page": "filters",
-    "log.get": "id", "log.query": "filters", "log.page": "filters",
+    "log.get": "id", "log.query": "filters", "log.page": "filters", "log.pdf": "id",
 }
 OBJECT_LIST_TYPE = re.compile(r"^list of \w+ objects$")
 LOG_OPERATIONS = ("log.get", "log.query", "log.page")
+LOG_PDF = "log.pdf"
 PAGE_OPERATIONS = ("page", "log.page")
 VARIANTS_PLAIN = (("Plain", False, False), ("User", False, True))
 VARIANTS_FILTERS = (("Plain", False, False), ("User", False, True),
@@ -89,7 +90,7 @@ def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: di
         "ctorAllDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"], atParam=True),
         "ctorMapDoc": ctorMapLines(context, entity),
     }
-    for operation in flaggedOperations(flags):
+    for operation in flaggedOperations(flags, docs):
         doc = operationDoc(docs, operation)
         if doc is None:
             context["fallbacks"].append(operation)
@@ -213,9 +214,14 @@ def article(name: str) -> str:
     return "an" if name[:1].lower() in "aeiou" else "a"
 
 
-def flaggedOperations(flags: set) -> list:
+def flaggedOperations(flags: set, docs: dict) -> list:
+    """O `log.pdf` so existe onde o Python o documenta: so Deposit e Invoice tem esse metodo no Log, e nao ha flag
+    para ele, entao o proprio doc e o que o declara."""
     operations = [flag[len("x-sdk-"):] for flag in sorted(flags) if flag[len("x-sdk-"):] in OPERATION_KINDS]
-    return operations + (list(LOG_OPERATIONS) if "x-sdk-log" in flags else [])
+    if "x-sdk-log" not in flags:
+        return operations
+    logPdf = [LOG_PDF] if operationDoc(docs, LOG_PDF) else []
+    return operations + list(LOG_OPERATIONS) + logPdf
 
 
 def operationDoc(docs: dict, operation: str) -> dict | None:
@@ -484,6 +490,7 @@ def genericReturns(operation: str, className: str) -> list:
         "cancel": [f"canceled {className} object"],
         "pdf": [f"{className} pdf file content"],
         "log.get": [f"{className} Log object with updated attributes"],
+        "log.pdf": [f"{className} Log pdf file"],
         "log.query": [f"generator of {className} Log objects with updated attributes"],
         "log.page": [f"list of {className} Log objects with updated attributes",
                      f"cursor to retrieve the next page of {className} Log objects"],
@@ -497,6 +504,7 @@ def genericDoc(operation: str, className: str) -> dict:
         "update": f"Update {className} entity",
         "cancel": f"Cancel {article(className)} {className} entity",
         "pdf": f"Retrieve a specific {className} pdf file",
+        "log.pdf": f"Retrieve a specific {className} Log pdf file",
     }
     descriptions = {
         "create": [f"Send a list of {className} objects for creation in the Stark Bank API"],

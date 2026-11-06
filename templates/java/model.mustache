@@ -7,8 +7,8 @@ package {{package}};
 {{/usesSubResource}}{{#vendorExtensions.x-sdk-java-code.log.usesErrorElement}}import com.starkbank.error.ErrorElement;
 {{/vendorExtensions.x-sdk-java-code.log.usesErrorElement}}
 
-{{#vendorExtensions.x-sdk-pdf}}import java.io.InputStream;
-{{/vendorExtensions.x-sdk-pdf}}{{#usesList}}import java.util.ArrayList;
+{{#usesInputStream}}import java.io.InputStream;
+{{/usesInputStream}}{{#usesList}}import java.util.ArrayList;
 {{/usesList}}{{^usesList}}{{#usesParsers}}import java.util.ArrayList;
 {{/usesParsers}}{{/usesList}}import java.util.HashMap;
 {{#usesList}}import java.util.List;
@@ -443,6 +443,22 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
             }
             return new {{newPageName}}(logs, page.cursor);
         }
+{{#hasPdf}}
+
+        /**
+{{#vendorExtensions.x-sdk-java-docs.logPdfPlain}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPdfPlain}}         */
+        public static InputStream pdf(String id) throws Exception {
+            return Log.pdf(id, null);
+        }
+
+        /**
+{{#vendorExtensions.x-sdk-java-docs.logPdfUser}}         * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.logPdfUser}}         */
+        public static InputStream pdf(String id, User user) throws Exception {
+            return Rest.getContent(data, id, "pdf", user, new HashMap<>());
+        }
+{{/hasPdf}}
     }
 {{/vendorExtensions.x-sdk-java-code.log}}
 {{/vendorExtensions.x-sdk-log}}

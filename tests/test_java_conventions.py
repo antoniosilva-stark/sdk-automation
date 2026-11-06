@@ -211,7 +211,7 @@ def test_aResourceWithEveryOperationKeepsTheWholeOrder(generated):
     for name, _, _ in _methods(source, "        "):
         if name not in logNames:
             logNames.append(name)
-    assert logNames == list(LOG_METHOD_ORDER)
+    assert logNames == [*LOG_METHOD_ORDER, "pdf"]
 
 
 @requiresGenerator

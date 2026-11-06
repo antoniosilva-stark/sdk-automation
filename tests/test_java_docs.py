@@ -349,6 +349,51 @@ def test_createDocOfAnUnsupportedSingleObjectStillMatchesTheListSignature(javaDo
     assert not any("single" in line.lower() for line in lines)
 
 
+LOG_PDF_DOC = {"log": {"pdf": {
+    "summary": "Retrieve a reversed Widget.Log pdf file",
+    "description": ["Receive a reversed Widget.Log pdf receipt file by its id."],
+    "params": [{"name": "id", "type": "string", "description": "object unique id", "section": "required"},
+               {"name": "user", "type": "Organization/Project object, default None", "description": "d",
+                "section": "optional"}],
+    "returns": ["Widget pdf file"],
+}}}
+WIDGET = {"description": "", "fields": []}
+
+
+def test_logPdfIsRenderedFromTheSpecDocsAsAnIdOperationWithAndWithoutUser(javaDocs):
+    lines = javaDocs.renderDocs("Widget", LOG_PDF_DOC, {"x-sdk-log"}, WIDGET)["lines"]
+
+    assert lines["logPdfPlain"][0] == "Retrieve a reversed Widget Log pdf file"
+    assert "@param id [string]: object unique id" in lines["logPdfPlain"]
+    assert not any(line.startswith("@param user") for line in lines["logPdfPlain"])
+    assert any(line.startswith("@param user [") for line in lines["logPdfUser"])
+    assert "@return Widget pdf file" in lines["logPdfUser"]
+
+
+def test_logPdfIsNotRenderedWithoutItsSpecDocsAndIsNotAFallback(javaDocs):
+    rendered = javaDocs.renderDocs("Widget", {"log": {}}, {"x-sdk-log"}, WIDGET)
+
+    assert not [key for key in rendered["lines"] if key.startswith("logPdf")]
+    assert "log.pdf" not in rendered["fallbacks"]
+
+
+def test_logPdfDocsOfAResourceWithoutTheLogFlagRenderNothing(javaDocs):
+    rendered = javaDocs.renderDocs("Widget", LOG_PDF_DOC, {"x-sdk-get"}, WIDGET)
+
+    assert not [key for key in rendered["lines"] if key.startswith("logPdf")]
+
+
+def test_logPdfTextPassesTheCommentGuard(javaDocs):
+    docs = {"log": {"pdf": {"summary": "s*/", "description": ["d*/ \\u0041"], "returns": ["r*/"],
+                            "params": [{"name": "id", "type": "string*/", "description": "x\\u0041",
+                                        "section": "required"}]}}}
+
+    lines = javaDocs.renderDocs("Widget", docs, {"x-sdk-log"}, WIDGET)["lines"]
+
+    for key in ("logPdfPlain", "logPdfUser"):
+        assert not any("*/" in line or "\\u" in line for line in lines[key]), key
+
+
 def test_everyTextFromTheSchemaPassesTheCommentGuard(javaDocs):
     docs = {"query": {
         "summary": "s*/", "description": ["d*/ \\u0041"], "returns": ["r*/"],

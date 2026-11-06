@@ -85,6 +85,13 @@ def hasParsers(resource: str, specFile: str = SPEC_FILE) -> bool:
     return bool((schema.get("x-sdk-java-code") or {}).get("ctorMapParsers"))
 
 
+def hasLogPdf(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O Log do recurso emite o `pdf` quando a spec preparada traz o Javadoc dele: o doc do Python e quem o declara."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool(((schema.get("x-sdk-java-code") or {}).get("log") or {}).get("hasPdf"))
+
+
 def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     """Schema do componente, seguindo o `$ref` para o arquivo em `schemas/` quando ha."""
     entry = ((spec.get("components") or {}).get("schemas") or {}).get(name)
@@ -137,6 +144,8 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     entryLine = f"\n    {resource}:\n"
     if specText.count(entryLine) != 1:
         raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
+    if "log" in code:
+        code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
     docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
@@ -150,6 +159,7 @@ def javaImports(
     objectArray: bool = False,
     createForm: str = "list",
     hasParsers: bool = False,
+    hasLogPdf: bool = False,
 ) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
@@ -170,6 +180,8 @@ def javaImports(
         properties.append("usesRest=true")
     if hasParsers:
         properties.append("usesParsers=true")
+    if "x-sdk-pdf" in flags or hasLogPdf:
+        properties.append("usesInputStream=true")
     return properties
 
 
@@ -246,6 +258,7 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
             hasObjectArray(resource, specFile),
             createForm=createFormOf(resource),
             hasParsers=hasParsers(resource, specFile),
+            hasLogPdf=hasLogPdf(resource, specFile),
         )
         properties.append(classDataProperty(resource, specFile))
     if properties:

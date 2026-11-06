@@ -46,6 +46,11 @@ def _logSignatures(block: str) -> list:
     return sorted((returns, name, " ".join(parameters.split())) for returns, name, parameters in found)
 
 
+def _logPdfSignatures(block: str | None) -> list:
+    found = re.findall(r"^        public static InputStream pdf\((.*?)\) throws Exception", block or "", re.M | re.S)
+    return sorted(" ".join(parameters.split()) for parameters in found)
+
+
 def _pageParts(block: str) -> tuple:
     constructor = re.search(r"^            public Page\((.*?)\) \{", block, re.M | re.S).group(1)
     return (re.search(r"^            public (List<.+?>) logs;", block, re.M).group(1), _splitParameters(constructor))
@@ -132,6 +137,80 @@ def test_generatedLogDeclarationsMatchTheRealOnes(buildResource, tmpPath, resour
     assert _pageParts(generated) == _pageParts(real)
     assert set(_logFields(generated).items()) == set(_logFields(real).items())
     assert _classDataClass(generated) == _classDataClass(real)
+    assert _logPdfSignatures(generated) == _logPdfSignatures(real)
+
+
+@requiresGenerator
+@requiresJavaSdk
+@pytest.mark.parametrize("resource", sorted(set(LOG_EXCLUSIONS) - {"PaymentRequest"}))
+def test_excludedResourceGeneratesItsLogWithTheSamePdfOperationsAsTheReal(buildResource, tmpPath, resource):
+    generated = _logBlock(_generated(buildResource, tmpPath, resource, _realConventionsText()))
+
+    assert _logPdfSignatures(generated) == _logPdfSignatures(_realLogBlock(resource)) == []
+
+
+def _specLogPdfResources(buildResource) -> set:
+    spec = buildResource.loadFast(SPEC_FILE.read_text(encoding="utf-8"))
+    found = set()
+    for name, entry in spec["components"]["schemas"].items():
+        if "x-sdk-log" not in entry:
+            continue
+        docs = buildResource.resolveRef(spec, name, REPO_ROOT / "apis").get("x-sdk-docs") or {}
+        if ((docs.get("log") or {}).get("pdf")):
+            found.add(name)
+    return found
+
+
+@requiresJavaSdk
+def test_theResourcesWhoseSpecDocsCarryALogPdfAreExactlyTheOnesWhoseRealLogHasIt(buildResource):
+    realPdf = {resource for resource in _realLogResources(buildResource)
+               if _logPdfSignatures(_realLogBlock(resource))}
+
+    assert realPdf == {"Deposit", "Invoice"}
+    assert _specLogPdfResources(buildResource) == realPdf
+
+
+@requiresGenerator
+@requiresJavaSdk
+@pytest.mark.parametrize("resource", ["Deposit", "Invoice"])
+def test_generatedLogPdfHasTheRealSignaturesAndReadsTheLogsOwnClassData(buildResource, tmpPath, resource):
+    source = _generated(buildResource, tmpPath, resource, _realConventionsText())
+    block = _logBlock(source)
+
+    assert _logPdfSignatures(block) == ["String id", "String id, User user"]
+    assert "            return Log.pdf(id, null);\n" in block
+    assert '            return Rest.getContent(data, id, "pdf", user, new HashMap<>());\n' in block
+    assert "import java.io.InputStream;" in source
+
+
+@requiresGenerator
+def test_logPdfJavadocIsRenderedFromTheSpecDocsOfTheLog(buildResource, tmpPath):
+    block = _logBlock(_generated(buildResource, tmpPath, "Deposit", _realConventionsText()))
+    plain, user = re.findall(r"(        /\*\*\n(?:         \*.*\n)+?         \*/\n)        public static InputStream pdf\(", block)
+
+    assert "         * Retrieve a reversed Deposit Log pdf file\n" in plain
+    assert "         * Receive a reversed Deposit Log pdf receipt file generated in the Stark Bank API by its id.\n" in plain
+    assert "         * @param id [string]: object unique id. ex: \"5656565656565656\"\n" in plain
+    assert "@param user" not in plain
+    assert "         * @param user [Organization/Project object, default null]:" in user
+    assert "         * @return Deposit pdf file\n" in user
+    assert user.count("*/") == 1
+
+
+@requiresGenerator
+def test_logWithoutLogPdfDocsEmitsNoLogPdfAndKeepsTheOuterPdfImport(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Transfer", _realConventionsText())
+
+    assert _logPdfSignatures(_logBlock(source)) == []
+    assert "public static InputStream pdf(String id, User user)" in source
+    assert "import java.io.InputStream;" in source
+
+
+@requiresGenerator
+def test_logWithoutAnyPdfEmitsNoInputStreamImport(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "CorporateHolder", _realConventionsText())
+
+    assert "InputStream" not in source
 
 
 @requiresGenerator
@@ -211,6 +290,8 @@ def test_entryOfAnotherResourceLeavesTheGeneratedClassIdentical(buildResource, t
 @requiresGenerator
 @requiresJavac
 @pytest.mark.parametrize("resource, declaration", [
+    ("Deposit", "public Log(String created, String type, String[] errors, Deposit deposit, String id) {"),
+    ("Invoice", "public Log(String created, String type, String[] errors, Invoice invoice, String id) {"),
     ("Transfer", "public Log(String created, String type, String[] errors, Transfer transfer, String id) {"),
     ("CorporateHolder", "public Log(String created, String type, CorporateHolder holder, String id) {"),
 ])

@@ -502,6 +502,12 @@ def test_dateFieldsAreStringsLikeDatetimes(builtOnce):
     assert "public LocalDate" not in source
 
 
+def test_inputStreamImportIsRequestedByTheOuterPdfOrByALogPdfAlone(buildResource):
+    assert "usesInputStream=true" in buildResource.javaImports({"x-sdk-pdf"})
+    assert "usesInputStream=true" in buildResource.javaImports({"x-sdk-get", "x-sdk-log"}, hasLogPdf=True)
+    assert "usesInputStream=true" not in buildResource.javaImports({"x-sdk-get", "x-sdk-log"})
+
+
 def test_javaImportsNeverAskForTheRemovedSettingsFlag(buildResource):
     properties = buildResource.javaImports({"x-sdk-query", "x-sdk-page", "x-sdk-log"})
 
