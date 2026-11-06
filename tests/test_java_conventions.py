@@ -16,7 +16,7 @@ RESOURCES = (
     ("Transfer", ("--advisory",)),
     ("Transaction", ("--advisory",)),
     ("Webhook", ("--advisory",)),
-    ("Balance", ("--advisory",)),
+    ("Balance", ()),
     ("VerifiedTransfer", ("--advisory",)),
     ("Invoice", ("--advisory",)),
     ("CorporateCard", ("--advisory",)),

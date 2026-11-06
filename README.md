@@ -186,8 +186,8 @@ files for six resources and keeps a closed registry of divergences.
 ### Shapes the template cannot emit
 
 Creating these is refused with `formato nao suportado` instead of emitting code that compiles and
-calls the API wrongly: a `create` that returns a single object and takes `expand` (CorporateCard) and
-a singleton `get` without an id (Balance, CorporateBalance). Webhook, MerchantSession, MerchantPurchase,
+calls the API wrongly: a `create` that returns a single object and takes `expand` (CorporateCard). The
+singleton `get` without an id (Balance, CorporateBalance) is generated. Webhook, MerchantSession, MerchantPurchase,
 CorporateWithdrawal, CorporateInvoice and Workspace are generated. Sub-objects such as `Transfer.Rule` and untyped
 `metadata` are known limits reported by the golden by severity.
 All of this is the scope of the next phase (full-Java parity).

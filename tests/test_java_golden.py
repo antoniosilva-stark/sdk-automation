@@ -613,6 +613,14 @@ def test_generatedJavaMatchesTheRealSdkOnStructure(builtOnce, assertGenerated, r
 WILDCARD_SEGMENT = re.compile(r"(?:^|\|)\*(?:\||$)")
 
 
+def test_wildcardSegmentMatchesAWholeStarSegmentAndNotAStarInsideText():
+    assert WILDCARD_SEGMENT.search("methods|*")
+    assert WILDCARD_SEGMENT.search("*|get")
+    assert WILDCARD_SEGMENT.search("doc|*|user")
+    assert not WILDCARD_SEGMENT.search("doc|user|@param user [Organization] text *")
+    assert not WILDCARD_SEGMENT.search("methods|get*")
+
+
 def test_everyExpectedDivergenceCarriesAWrittenMotive():
     assert set(EXPECTED) == set(GOLDEN_RESOURCES)
     for resource, entries in EXPECTED.items():
