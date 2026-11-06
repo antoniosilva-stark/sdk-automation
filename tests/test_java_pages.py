@@ -27,6 +27,8 @@ PAGE_CTOR_NAME_EXCEPTIONS = {
 }
 
 DEFAULT_NAMES = "short"
+
+
 def _pageEntries() -> dict:
     return yaml.safe_load(_realConventionsText())["javaPages"]
 
