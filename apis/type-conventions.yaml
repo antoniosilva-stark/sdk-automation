@@ -268,3 +268,38 @@ javaLogs:
   Transfer: {names: short, errors: "String[]", classData: short}
   UtilityPayment: {names: short, errors: "String[]", classData: short}
   VerifiedAccount: {names: short, errors: "List<ErrorElement>", classData: short}
+
+# Forma da Page externa, Recurso -> {listName, names}, as duas chaves obrigatorias, so para recurso com `x-sdk-page` cuja Page
+# real difere do default {listName: <recurso em lowerCamel>+"s", names: short}, que e o que o template emitia antes da secao
+# existir e vale para recurso sem entrada (uma entrada igual ao default e redundante e o teste a recusa). Medido contra
+# sdk-java f60902a:
+#   listName: o campo `public List<X> <listName>` da Page, o parametro do ctor, a lista local de page(Map, User) e o
+#             `Recurso.Page.<listName>` do Javadoc de retorno (BoletoPayment e outros 5 `payments`, DictKey `keys`...).
+#   names:    `short` escreve `Page page()` nos quatro overloads (o que o template emitia) e `qualified` `Recurso.Page`
+#             (8 de 32). O `new Page(...)` do corpo nao e comparado e compila nos dois casos, entao nao tem eixo.
+# Fora da secao: CorporatePurchase (Page real sem `x-sdk-page` na spec) e dois desvios de um so ponto do real que nao sao
+# um eixo: o overload page(Map) de UtilityPayment qualificado enquanto os outros tres sao `Page`, e o parametro
+# `MerchantInstallments` (M maiuscula) do ctor da Page de MerchantInstallment. Valida-se contra o real em
+# tests/test_java_pages.py, nos dois sentidos.
+javaPages:
+  BoletoHolmes: {listName: holmes, names: short}
+  BoletoPayment: {listName: payments, names: short}
+  BrcodePayment: {listName: payments, names: short}
+  CorporateCard: {listName: cards, names: short}
+  CorporateHolder: {listName: holders, names: qualified}
+  CorporateInvoice: {listName: invoices, names: short}
+  CorporateTransaction: {listName: corporateTransactions, names: qualified}
+  CorporateWithdrawal: {listName: withdrawals, names: qualified}
+  DarfPayment: {listName: payments, names: short}
+  DictKey: {listName: keys, names: short}
+  DynamicBrcode: {listName: brcodes, names: short}
+  InvoicePullRequest: {listName: requests, names: short}
+  InvoicePullSubscription: {listName: subscriptions, names: short}
+  MerchantCard: {listName: merchantCards, names: qualified}
+  MerchantInstallment: {listName: merchantInstallments, names: qualified}
+  MerchantPurchase: {listName: merchantPurchases, names: qualified}
+  MerchantSession: {listName: merchantSessions, names: qualified}
+  PaymentRequest: {listName: requests, names: short}
+  TaxPayment: {listName: payments, names: short}
+  UtilityPayment: {listName: payments, names: short}
+  VerifiedAccount: {listName: verifiedAccounts, names: qualified}

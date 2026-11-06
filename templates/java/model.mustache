@@ -136,11 +136,11 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{#vendorExtensions.x-sdk-page}}
 
     public final static class Page {
-        public List<{{classname}}> {{classVarName}}s;
+        public List<{{classname}}> {{vendorExtensions.x-sdk-java-code.page.listName}};
         public String cursor;
 
-        public Page(List<{{classname}}> {{classVarName}}s, String cursor) {
-            this.{{classVarName}}s = {{classVarName}}s;
+        public Page(List<{{classname}}> {{vendorExtensions.x-sdk-java-code.page.listName}}, String cursor) {
+            this.{{vendorExtensions.x-sdk-java-code.page.listName}} = {{vendorExtensions.x-sdk-java-code.page.listName}};
             this.cursor = cursor;
         }
     }
@@ -148,34 +148,34 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     /**
 {{#vendorExtensions.x-sdk-java-docs.pageParams}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pageParams}}     */
-    public static Page page(Map<String, Object> params) throws Exception {
+    public static {{vendorExtensions.x-sdk-java-code.page.typeName}} page(Map<String, Object> params) throws Exception {
         return {{classname}}.page(params, null);
     }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.pageUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pageUser}}     */
-    public static Page page(User user) throws Exception {
+    public static {{vendorExtensions.x-sdk-java-code.page.typeName}} page(User user) throws Exception {
         return {{classname}}.page(new HashMap<>(), user);
     }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.pagePlain}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pagePlain}}     */
-    public static Page page() throws Exception {
+    public static {{vendorExtensions.x-sdk-java-code.page.typeName}} page() throws Exception {
         return {{classname}}.page(new HashMap<>(), null);
     }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.pageParamsUser}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.pageParamsUser}}     */
-    public static Page page(Map<String, Object> params, User user) throws Exception {
+    public static {{vendorExtensions.x-sdk-java-code.page.typeName}} page(Map<String, Object> params, User user) throws Exception {
         com.starkcore.utils.Page page = Rest.getPage({{classDataName}}, params, user);
-        List<{{classname}}> {{classVarName}}s = new ArrayList<>();
+        List<{{classname}}> {{vendorExtensions.x-sdk-java-code.page.listName}} = new ArrayList<>();
         for (SubResource {{classVarName}}: page.entities) {
-            {{classVarName}}s.add(({{classname}}) {{classVarName}});
+            {{vendorExtensions.x-sdk-java-code.page.listName}}.add(({{classname}}) {{classVarName}});
         }
-        return new Page({{classVarName}}s, page.cursor);
+        return new Page({{vendorExtensions.x-sdk-java-code.page.listName}}, page.cursor);
     }
 {{/vendorExtensions.x-sdk-page}}
 {{#vendorExtensions.x-sdk-create}}

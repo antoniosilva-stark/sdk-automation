@@ -26,6 +26,12 @@ JAVA_LOG_VALUES = {
 }
 JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"}
 
+# Chaves e valores do javaPages; o default (campo `<recurso>s`, retorno `Page`) e a saida do template antes da secao existir.
+# Os nomes reservados sao locais de page(Map, User) e o campo `cursor`, que um listName igual nao compilaria.
+JAVA_PAGE_KEYS = ("listName", "names")
+JAVA_PAGE_NAMES = ("short", "qualified")
+JAVA_PAGE_RESERVED = frozenset({"cursor", "page", "params", "user"})
+
 VENDORED_ROOT = Path("_references/sdk-python")
 
 SECTION_REQUIRED = "required"
@@ -155,6 +161,39 @@ def checkLogShape(resource: str, shape) -> None:
             raise ValueError(f"{resource}: javaLogs.{field} ausente")
         if not isinstance(shape[field], str) or shape[field] not in allowed:
             raise ValueError(f"{resource}: javaLogs.{field} invalido: {shape[field]!r}, esperado um de {list(allowed)}")
+
+
+def javaPageShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    shapes = loadConventions(Path(conventions)).get("javaPages") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaPages deve ser um mapa recurso -> {listName, names}")
+    checkKnownResources("javaPages", shapes)
+    for name, shape in shapes.items():
+        checkPageShape(name, shape)
+    return shapes.get(resource) or {"listName": f"{lowerFirst(resource)}s", "names": "short"}
+
+
+def checkPageShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaPages deve ser um mapa {{listName, names}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_PAGE_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaPages chave desconhecida: {unknown[0]}")
+    for key in JAVA_PAGE_KEYS:
+        if key not in shape:
+            raise ValueError(f"{resource}: javaPages.{key} ausente")
+    listName = shape["listName"]
+    reserved = JAVA_PAGE_RESERVED | {lowerFirst(resource)}
+    if not isinstance(listName, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", listName) or listName in reserved:
+        raise ValueError(
+            f"{resource}: javaPages.listName invalido: {listName!r}, esperado um identificador fora de {sorted(reserved)}"
+        )
+    if not isinstance(shape["names"], str) or shape["names"] not in JAVA_PAGE_NAMES:
+        raise ValueError(f"{resource}: javaPages.names invalido: {shape['names']!r}, esperado um de {list(JAVA_PAGE_NAMES)}")
+
+
+def lowerFirst(name: str) -> str:
+    return f"{name[:1].lower()}{name[1:]}"
 
 
 @lru_cache(maxsize=None)

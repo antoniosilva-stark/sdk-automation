@@ -78,13 +78,20 @@ SETTINGS_REFERENCE = re.compile(r"starkbank\.(?:User\.defaultUser|user)\b")
 TYPE_DEFAULT = re.compile(r"^(?P<base>.*?)(?:,\s*default\s+(?P<default>.*))?$")
 
 
-def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: dict = JAVA_PROFILE) -> dict:
+def renderDocs(
+    className: str,
+    docs: dict,
+    flags: set,
+    entity: dict,
+    profile: dict = JAVA_PROFILE,
+    pageListName: str | None = None,
+) -> dict:
     """Linhas de Javadoc ja prontas, por chave plana; o Mustache so as emoldura.
 
     Chaves planas (`getPlain`, `queryParamsUser`, `logPageParams`...) porque o Mustache resolve nome ausente
     no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo."""
     context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
-               "snakeNames": snakeNames(docs, entity)}
+               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName}
     lines = {
         "dataDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"]),
         "ctorAllDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"], atParam=True),
@@ -432,7 +439,7 @@ def returnLines(context: dict, operation: str, doc: dict) -> list:
     returns = returns if len(returns) == 2 else genericReturns(operation, className)
     isLog = operation == "log.page"
     prefix = f"{className}.Log.Page" if isLog else f"{className}.Page"
-    field = "logs" if isLog else f"{className[:1].lower()}{className[1:]}s"
+    field = "logs" if isLog else context["pageListName"] or f"{className[:1].lower()}{className[1:]}s"
     return [f"@return {prefix} object:", f"{prefix}.{field}: {returns[0]}", f"{prefix}.cursor: {returns[1]}"]
 
 

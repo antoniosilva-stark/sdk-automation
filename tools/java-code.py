@@ -43,6 +43,7 @@ def renderJavaCode(
     innerClasses: dict | None = None,
     resourceNames: frozenset = frozenset(),
     logShape: dict | None = None,
+    pageShape: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -50,7 +51,8 @@ def renderJavaCode(
     internas simples do real, ja com os construtores e o corpo do Map-ctor prontos. `resourceNames`: os recursos
     geradores, para o override `List<Recurso>`; esse tipo e o `List<ClasseInterna>` saem do Map-ctor por um auxiliar
     `parseX` (`ctorMapParsers`), como no real. `log`: so para recurso com Log, os nomes e o tipo de `errors` do Log
-    interno, ja resolvidos a partir da forma (`javaLogs`)."""
+    interno, ja resolvidos a partir da forma (`javaLogs`). `page`: so para recurso com Page externa, o nome da lista e o
+    tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`)."""
     fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
     code = {
@@ -62,6 +64,11 @@ def renderJavaCode(
     }
     if logShape is not None:
         code["log"] = renderLog(resource, logShape)
+    if pageShape is not None:
+        code["page"] = {
+            "listName": pageShape["listName"],
+            "typeName": "Page" if pageShape["names"] == "short" else f"{resource}.Page",
+        }
     return code
 
 
