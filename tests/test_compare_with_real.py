@@ -62,6 +62,7 @@ SPLIT = REAL.replace("Widget", "Split")
 @pytest.fixture(autouse=True)
 def noRealWaivers(tmp_path, monkeypatch):
     monkeypatch.setattr(compare, "WAIVERS_FILE", tmp_path / "no-waivers.yaml")
+    monkeypatch.setattr(compare, "NOISE_FILE", tmp_path / "no-noise.yaml")
 
 
 def plant(root: Path, resource: str, source: str) -> Path:
@@ -281,8 +282,8 @@ def test_reportOrdersByGapsThenSimilarityThenNameAndAggregates():
     assert first["gapCount"] == 2
     assert first["gaps"][0] == ["constructor", "constructor ausente: x"]
     assert set(first) == {
-        "resource", "state", "detail", "gaps", "gapCount", "waived", "waivedCount", "similarity", "importsMissing",
-        "importsExtra", "importsInOrder", "memberOrderEqual", "docEqual",
+        "resource", "state", "detail", "gaps", "gapCount", "waived", "waivedCount", "noiseWaived", "noiseWaivedCount",
+        "similarity", "importsMissing", "importsExtra", "importsInOrder", "memberOrderEqual", "docEqual",
     }
 
 

@@ -19,7 +19,7 @@
 #   - Entrada obsoleta (consome menos que `count`, inclusive zero) faz `make compare` sair com 1: a lista so encolhe.
 #     So vale para recurso comparado na corrida; `make compare ARGS=Recurso` nao cobra os demais.
 #   - Nao entra: Event (sera gerado), nada que o gerador possa produzir (Page, Log padrao, pdf, get/query/CRUD padrao,
-#     tipo, nome ou estilo), nem import sem uso no real. Um import so entra quando todo uso dele esta num membro dispensado.
+#     tipo, nome ou estilo), nem import sem uso no real (esse e de apis/java-unused-imports.yaml). Um import so entra quando todo uso dele esta num membro dispensado.
 
 CorporateCard:
   - kind: require

@@ -1,0 +1,75 @@
+# Ruido do sdk-java real: import que o arquivo DECLARA e NUNCA USA (so o nome aparece em comentario, Javadoc ou string).
+# Nao e codigo escrito a mao: e import morto no real, que o gerador nao tem motivo para emitir. Fica fora de
+# apis/java-handwritten.yaml de proposito, para nao se misturar com membro manuscrito, e o comparador o conta e o lista a
+# parte (`dispensa de imports sem uso no real`, estado `sem gaps (so ruido)`). Lida so por tools/compare-with-real.py
+# (`make compare`); a geracao nao a le, e o comparador nunca a usa para medir similaridade. Medida no pin f60902a
+# (sdk-java) e validada nos dois sentidos em tests/test_java_unused_imports.py: toda entrada e import do real cujo nome
+# simples nao aparece em nenhum outro lugar do arquivo (sem comentario nem string), e todo import sem uso do real que o
+# gerador nao emite esta aqui.
+#
+# Recurso -> lista de dispensas (o recurso e o nome canonico de apis/schemas, com a caixa exata):
+#   - kind: require (so este)
+#     text: 'require ausente: import <fqcn>;' EXATO como o comparador o imprime; sem curinga nem static
+#     count: opcional, default 1 (multiconjunto, como em java-handwritten.yaml)
+#     reason: onde o import esta no real e que nunca e usado
+#
+# Regras:
+#   - A dispensa nunca some: o relatorio a lista a parte, com a razao.
+#   - Entrada obsoleta (consome menos que `count`, inclusive zero) faz `make compare` sair com 1: a lista so encolhe, e
+#     quando o gerador passar a emitir o import por um motivo real a entrada sai daqui.
+#   - Um import usado no real, ainda que so dentro de um membro manuscrito, e dispensa de java-handwritten.yaml, nao
+#     daqui. Um mesmo gap nao tem dois donos: o mesmo texto nao entra nos dois arquivos.
+#   - Event entra aqui so por `require`; nunca por outro tipo.
+
+CorporateCard:
+  - kind: require
+    text: 'require ausente: import java.io.InputStream;'
+    reason: 'java.io.InputStream is imported (sdk-java f60902a, CorporateCard.java line 9) and never used in CorporateCard.java.'
+
+Event:
+  - kind: require
+    text: 'require ausente: import com.starkbank.ellipticcurve.Ecdsa;'
+    reason: 'com.starkbank.ellipticcurve.Ecdsa is imported (sdk-java f60902a, Event.java line 4) and never used in Event.java.'
+  - kind: require
+    text: 'require ausente: import com.starkbank.ellipticcurve.PublicKey;'
+    reason: 'com.starkbank.ellipticcurve.PublicKey is imported (sdk-java f60902a, Event.java line 5) and never used in Event.java.'
+  - kind: require
+    text: 'require ausente: import com.starkbank.ellipticcurve.Signature;'
+    reason: 'com.starkbank.ellipticcurve.Signature is imported (sdk-java f60902a, Event.java line 6) and never used in Event.java: its simple name appears only in comments.'
+  - kind: require
+    text: 'require ausente: import com.starkbank.ellipticcurve.utils.ByteString;'
+    reason: 'com.starkbank.ellipticcurve.utils.ByteString is imported (sdk-java f60902a, Event.java line 7) and never used in Event.java.'
+  - kind: require
+    text: 'require ausente: import com.starkbank.error.InvalidSignatureError;'
+    reason: 'com.starkbank.error.InvalidSignatureError is imported (sdk-java f60902a, Event.java line 8) and never used in Event.java.'
+
+Institution:
+  - kind: require
+    text: 'require ausente: import com.starkbank.utils.Resource;'
+    reason: 'com.starkbank.utils.Resource is imported (sdk-java f60902a, Institution.java line 3) and never used in Institution.java.'
+
+MerchantInstallment:
+  - kind: require
+    text: 'require ausente: import java.io.InputStream;'
+    reason: 'java.io.InputStream is imported (sdk-java f60902a, MerchantInstallment.java line 8) and never used in MerchantInstallment.java.'
+
+PaymentRequest:
+  - kind: require
+    text: 'require ausente: import com.starkcore.utils.GsonEvent;'
+    reason: 'com.starkcore.utils.GsonEvent is imported (sdk-java f60902a, PaymentRequest.java line 9) and never used in PaymentRequest.java.'
+
+Transfer:
+  - kind: require
+    text: 'require ausente: import com.starkcore.utils.GsonEvent;'
+    reason: 'com.starkcore.utils.GsonEvent is imported (sdk-java f60902a, Transfer.java line 7) and never used in Transfer.java.'
+
+Workspace:
+  - kind: require
+    text: 'require ausente: import java.awt.image.RenderedImage;'
+    reason: 'java.awt.image.RenderedImage is imported (sdk-java f60902a, Workspace.java line 7) and never used in Workspace.java.'
+  - kind: require
+    text: 'require ausente: import java.io.ByteArrayOutputStream;'
+    reason: 'java.io.ByteArrayOutputStream is imported (sdk-java f60902a, Workspace.java line 8) and never used in Workspace.java.'
+  - kind: require
+    text: 'require ausente: import javax.imageio.ImageIO;'
+    reason: 'javax.imageio.ImageIO is imported (sdk-java f60902a, Workspace.java line 10) and never used in Workspace.java: its simple name appears only in comments.'

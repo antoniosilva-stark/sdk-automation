@@ -15,6 +15,10 @@ WAIVERS_FILE = TOOLS_DIR.parent / "apis/java-handwritten.yaml"
 WAIVER_SECTION = "java-handwritten"
 WAIVER_KINDS = ("signature", "field", "constructor", "require", "inner")
 WAIVER_KEYS = ("kind", "text", "count", "reason")
+NOISE_FILE = TOOLS_DIR.parent / "apis/java-unused-imports.yaml"
+NOISE_SECTION = "java-unused-imports"
+NOISE_KIND = "require"
+NOISE_TEXT_FORM = "require ausente: import <fqcn>;"
 
 LANGUAGE = "java"
 ROLE = "main"
@@ -25,12 +29,14 @@ DETAIL_WIDTH = 100
 STATE_EQUAL = "igual"
 STATE_NO_GAPS = "sem gaps"
 STATE_NO_GAPS_WAIVED = "sem gaps (com dispensa)"
+STATE_NO_GAPS_NOISE = "sem gaps (so ruido)"
 STATE_GAPS = "com gaps"
 STATE_NOT_GENERATED = "nao gerado"
 STATE_ABSENT = "ausente no real"
 STATE_ERROR = "erro"
 
 _IMPORT_LINE = re.compile(r"^import .*;$")
+_NOISE_TEXT = re.compile(r"^require ausente: import [A-Za-z_]\w*(\.[A-Za-z_]\w*)+;$")
 _JAVADOC = re.compile(r"/\*\*.*?\*/", re.DOTALL)
 _DOC_STAR = re.compile(r"^\s*\*+")
 
@@ -217,9 +223,9 @@ def checkWaiverEntry(resource: str, index: int, entry) -> dict:
     return {"kind": entry["kind"], "text": entry["text"], "count": count, "reason": entry["reason"]}
 
 
-def checkWaiverEntries(resource: str, entries) -> list[dict]:
+def checkWaiverEntries(resource: str, entries, section: str = WAIVER_SECTION) -> list[dict]:
     if not isinstance(entries, list):
-        raise ValueError(f"{resource}: {WAIVER_SECTION} deve ser uma lista de dispensas, veio {entries!r}")
+        raise ValueError(f"{resource}: {section} deve ser uma lista de dispensas, veio {entries!r}")
 
     checked = [checkWaiverEntry(resource=resource, index=index, entry=entry) for index, entry in enumerate(entries)]
     seen = set()
@@ -231,7 +237,7 @@ def checkWaiverEntries(resource: str, entries) -> list[dict]:
     return checked
 
 
-def loadWaivers(path) -> dict[str, list[dict]]:
+def loadWaivers(path, section: str = WAIVER_SECTION) -> dict[str, list[dict]]:
     """Ausente é sem dispensas; arquivo malformado é erro, nunca dispensa parcial."""
     path = Path(path)
     if not path.is_file():
@@ -241,31 +247,54 @@ def loadWaivers(path) -> dict[str, list[dict]]:
     try:
         data = extractSchema.loadFast(path.read_text(encoding="utf-8"))
     except (yaml.YAMLError, OSError) as error:
-        raise ValueError(f"{path.name}: {WAIVER_SECTION} ilegivel: {error}") from error
+        raise ValueError(f"{path.name}: {section} ilegivel: {error}") from error
 
     if data is None:
         return {}
 
     if not isinstance(data, dict):
-        raise ValueError(f"{WAIVER_SECTION}: esperado um mapa recurso -> lista de dispensas, veio {data!r}")
+        raise ValueError(f"{section}: esperado um mapa recurso -> lista de dispensas, veio {data!r}")
 
-    extractSchema.checkKnownResources(WAIVER_SECTION, data)
-    return {resource: checkWaiverEntries(resource=resource, entries=entries) for resource, entries in data.items()}
+    extractSchema.checkKnownResources(section, data)
+    return {
+        resource: checkWaiverEntries(resource=resource, entries=entries, section=section)
+        for resource, entries in data.items()
+    }
 
 
-def waiveResource(item: dict, entries: list[dict]) -> tuple[dict, list[dict]]:
+def checkNoiseEntry(resource: str, index: int, entry: dict) -> None:
+    where = f"{resource}[{index}]"
+    if entry["kind"] != NOISE_KIND:
+        raise ValueError(f"{where}.kind invalido: {entry['kind']!r}, ruido so aceita {NOISE_KIND!r}")
+
+    if not _NOISE_TEXT.match(entry["text"]):
+        raise ValueError(
+            f"{where}.text invalido: {entry['text']!r}, esperado {NOISE_TEXT_FORM!r} sem curinga nem static"
+        )
+
+
+def loadNoise(path) -> dict[str, list[dict]]:
+    """Mesmo arquivo e mesma regra das dispensas, só que de import declarado e nunca usado no real."""
+    noise = loadWaivers(path, section=NOISE_SECTION)
+    for resource, entries in noise.items():
+        for index, entry in enumerate(entries):
+            checkNoiseEntry(resource=resource, index=index, entry=entry)
+    return noise
+
+
+def waiveResource(item: dict, entries: list[dict], key: str) -> tuple[dict, list[dict]]:
     """Multiconjunto: cada entrada dispensa o gap exato (kind, texto) até `count` vezes."""
     budget = {(entry["kind"], entry["text"]): entry["count"] for entry in entries}
     reasons = {(entry["kind"], entry["text"]): entry["reason"] for entry in entries}
     remaining, waived = [], []
     for gap in item["gaps"]:
-        key = tuple(gap)
-        if budget.get(key, 0) == 0:
+        gapKey = tuple(gap)
+        if budget.get(gapKey, 0) == 0:
             remaining.append(gap)
             continue
 
-        budget[key] -= 1
-        waived.append({"kind": key[0], "text": key[1], "reason": reasons[key]})
+        budget[gapKey] -= 1
+        waived.append({"kind": gapKey[0], "text": gapKey[1], "reason": reasons[gapKey]})
 
     obsolete = [
         {
@@ -279,11 +308,25 @@ def waiveResource(item: dict, entries: list[dict]) -> tuple[dict, list[dict]]:
         for entry in entries
         if budget[(entry["kind"], entry["text"])] > 0
     ]
-    state = STATE_NO_GAPS_WAIVED if waived and not remaining else item["state"]
-    return {**item, "gaps": remaining, "waived": waived, "state": state}, obsolete
+    settled = {**item, "gaps": remaining, key: waived}
+    return {**settled, "state": settledState(settled)}, obsolete
 
 
-def applyWaivers(results: list[dict], waivers: dict[str, list[dict]]) -> tuple[list[dict], list[dict]]:
+def settledState(item: dict) -> str:
+    """Dispensa à mão pesa mais: o estado de só ruído exige que nenhum gap tenha precisado dela."""
+    if item["gaps"]:
+        return item["state"]
+
+    if item.get("waived"):
+        return STATE_NO_GAPS_WAIVED
+    return STATE_NO_GAPS_NOISE if item.get("noiseWaived") else item["state"]
+
+
+def applyWaivers(
+    results: list[dict],
+    waivers: dict[str, list[dict]],
+    key: str = "waived",
+) -> tuple[list[dict], list[dict]]:
     """Só recurso medido nesta corrida cobra obsolescência: corrida parcial não falha por quem não comparou."""
     applied, obsolete = [], []
     for item in results:
@@ -292,10 +335,14 @@ def applyWaivers(results: list[dict], waivers: dict[str, list[dict]]) -> tuple[l
             applied.append(item)
             continue
 
-        waivedItem, unused = waiveResource(item=item, entries=entries)
+        waivedItem, unused = waiveResource(item=item, entries=entries, key=key)
         applied.append(waivedItem)
         obsolete.extend(unused)
     return applied, obsolete
+
+
+def applyNoise(results: list[dict], noise: dict[str, list[dict]]) -> tuple[list[dict], list[dict]]:
+    return applyWaivers(results=results, waivers=noise, key="noiseWaived")
 
 
 def sortKey(entry: dict) -> tuple:
@@ -303,7 +350,7 @@ def sortKey(entry: dict) -> tuple:
     return (-entry["gapCount"], similarity, entry["resource"])
 
 
-def buildReport(results: list[dict], sha: str, obsolete: list[dict] = ()) -> dict:
+def buildReport(results: list[dict], sha: str, obsolete: list[dict] = (), obsoleteNoise: list[dict] = ()) -> dict:
     resources = [
         {
             "resource": result["resource"],
@@ -313,6 +360,8 @@ def buildReport(results: list[dict], sha: str, obsolete: list[dict] = ()) -> dic
             "gapCount": len(result["gaps"]),
             "waived": result.get("waived", []),
             "waivedCount": len(result.get("waived", [])),
+            "noiseWaived": result.get("noiseWaived", []),
+            "noiseWaivedCount": len(result.get("noiseWaived", [])),
             "similarity": result["similarity"],
             "importsMissing": result["importsMissing"],
             "importsExtra": result["importsExtra"],
@@ -332,11 +381,20 @@ def buildReport(results: list[dict], sha: str, obsolete: list[dict] = ()) -> dic
         "sha": sha,
         "total": len(resources),
         "compared": len(compared),
-        "zeroGaps": sum(1 for entry in compared if entry["gapCount"] == 0 and entry["waivedCount"] == 0),
+        "zeroGaps": sum(
+            1 for entry in compared
+            if entry["gapCount"] == 0 and entry["waivedCount"] == 0 and entry["noiseWaivedCount"] == 0
+        ),
         "zeroGapsWithWaiver": sum(1 for entry in compared if entry["gapCount"] == 0 and entry["waivedCount"] > 0),
+        "zeroGapsWithNoise": sum(
+            1 for entry in compared
+            if entry["gapCount"] == 0 and entry["waivedCount"] == 0 and entry["noiseWaivedCount"] > 0
+        ),
         "waivedTotal": sum(entry["waivedCount"] for entry in resources),
+        "noiseWaivedTotal": sum(entry["noiseWaivedCount"] for entry in resources),
         "gapsTotal": sum(entry["gapCount"] for entry in resources),
         "obsoleteWaivers": list(obsolete),
+        "obsoleteNoise": list(obsoleteNoise),
         "identical": sum(1 for entry in resources if entry["state"] == STATE_EQUAL),
         "meanSimilarity": round(mean, RATIO_DIGITS),
         "gapsByKind": dict(sorted(byKind.items(), key=lambda item: (-item[1], item[0]))),
@@ -356,6 +414,31 @@ def waiverSummary(report: dict) -> list[str]:
         f"[INFO] dispensa de membros escritos à mão: {report['zeroGapsWithWaiver']} sem gaps só pela dispensa; "
         f"{report['waivedTotal']} gaps dispensados; {report['gapsTotal']} gaps restantes"
     ]
+
+
+def noiseSummary(report: dict) -> list[str]:
+    if not report["noiseWaivedTotal"] and not report["obsoleteNoise"]:
+        return []
+
+    return [
+        f"[INFO] dispensa de imports sem uso no real: {report['zeroGapsWithNoise']} sem gaps so pelo ruido; "
+        f"{report['noiseWaivedTotal']} gaps dispensados"
+    ]
+
+
+def noiseDetails(report: dict) -> list[str]:
+    lines = []
+    noisyEntries = [entry for entry in report["resources"] if entry["noiseWaived"]]
+    if noisyEntries:
+        lines += ["", f"[INFO] gaps dispensados (import sem uso no real; ver {NOISE_FILE.name}):"]
+    for entry in noisyEntries:
+        lines += [f"  {entry['resource']}  {waived['text']}  [{waived['reason']}]" for waived in entry["noiseWaived"]]
+    lines += [
+        f"[ERROR] dispensa obsoleta de import sem uso em {item['resource']} [{item['kind']}] {item['text']} "
+        f"(count {item['count']}, consumida {item['consumed']}): remova ou reduza a entrada em {NOISE_FILE.name}"
+        for item in report["obsoleteNoise"]
+    ]
+    return lines
 
 
 def waiverDetails(report: dict) -> list[str]:
@@ -382,6 +465,7 @@ def render(report: dict) -> str:
         f"{report['identical']} idênticos; similaridade média {percent(report['meanSimilarity'])}",
     ]
     lines += waiverSummary(report)
+    lines += noiseSummary(report)
     lines.append("")
     width = max((len(entry["resource"]) for entry in report["resources"]), default=0)
     width = max(width, len("recurso"))
@@ -397,6 +481,7 @@ def render(report: dict) -> str:
     lines += ["", "[INFO] gaps por tipo:"]
     lines += [f"  {kind:<12}  {count:>4}" for kind, count in report["gapsByKind"].items()]
     lines += waiverDetails(report)
+    lines += noiseDetails(report)
     return "\n".join(lines)
 
 
@@ -422,6 +507,12 @@ def parseArguments(argv: list[str] | None):
         action="store_true",
         help="mostra os gaps brutos, sem dispensas",
     )
+    parser.add_argument(
+        "--noise",
+        dest="noisePath",
+        default=None,
+        help="dispensas dos imports sem uso no real (padrão: apis/java-unused-imports.yaml; ausente = sem dispensas)",
+    )
     parser.add_argument("--json", dest="jsonPath", default=None, help="grava o relatório em JSON neste arquivo")
     return parser.parse_args(argv)
 
@@ -445,6 +536,12 @@ def validateArguments(args) -> tuple[Path | None, str]:
 
     if args.waiversPath and not Path(args.waiversPath).is_file():
         return (None, f"--waivers: {args.waiversPath} não existe")
+
+    if args.noisePath and not Path(args.noisePath).is_file():
+        return (None, f"--noise: {args.noisePath} não existe")
+
+    if args.noisePath and args.noWaivers:
+        return (None, "--noise: incompatível com --no-waivers, que desliga as duas dispensas")
 
     known = loadTool("parity-report").schemaResources()
     unknown = [name for name in args.resources if name not in known]
@@ -474,6 +571,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         waivers = {} if args.noWaivers else loadWaivers(args.waiversPath or WAIVERS_FILE)
+        noise = {} if args.noWaivers else loadNoise(args.noisePath or NOISE_FILE)
     except ValueError as error:
         emit(f"[ERROR] {error}")
         return 2
@@ -484,7 +582,13 @@ def main(argv: list[str] | None = None) -> int:
         for name in requested
     ]
     results, obsolete = applyWaivers(results=results, waivers=waivers)
-    report = buildReport(results=results, sha=loadTool("make-replica").sourceSha(sourceRoot), obsolete=obsolete)
+    results, obsoleteNoise = applyNoise(results=results, noise=noise)
+    report = buildReport(
+        results=results,
+        sha=loadTool("make-replica").sourceSha(sourceRoot),
+        obsolete=obsolete,
+        obsoleteNoise=obsoleteNoise,
+    )
 
     emit(render(report))
     jsonCode = writeJson(report, args.jsonPath)
@@ -492,7 +596,7 @@ def main(argv: list[str] | None = None) -> int:
         return jsonCode
 
     # lista de dispensas só encolhe: entrada que não consome tudo falha a corrida
-    return 1 if obsolete else 0
+    return 1 if obsolete or obsoleteNoise else 0
 
 
 if __name__ == "__main__":
