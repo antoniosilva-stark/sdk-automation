@@ -6,7 +6,7 @@ import yaml
 import pytest
 
 from conftest import REPO_ROOT, requiresGenerator, requiresJavac, requiresJavaSdk
-from test_java_field_types import _balancedBlock, _generated, _realConventionsText, _realInnerBlock
+from test_java_field_types import _balancedBlock, _generated, _innerEntries, _realConventionsText, _realInnerBlock
 
 SOURCEPATH = REPO_ROOT / "_references/sdk-java/src/main/java"
 
@@ -19,6 +19,7 @@ def _members(block: str) -> list:
     """O bloco sem Javadoc, uma linha por declaracao e com os espacos normalizados; o real escreve `Log(){` e o gerador
     `Log() {`, e o `data` vem antes dos campos no real, entao a comparacao e por conjunto ordenado de linhas."""
     code = re.sub(r"/\*\*.*?\*/", "", block, flags=re.S)
+    code = re.sub(r",\s*\n\s*", ", ", code)  # o real quebra assinaturas longas depois da virgula
     lines = (re.sub(r"\s*\{", " {", " ".join(line.split())) for line in code.splitlines())
     return sorted(line for line in lines if line)
 
@@ -159,8 +160,9 @@ def test_generatedPaymentRequestPassesTheStrictGate(builtOnce):
 
 # 3. as classes internas que ja eram geradas seguem iguais ao real
 
-_EXISTING_INNER = [("Invoice", "Description"), ("Invoice", "Discount"), ("Invoice", "Payment"), ("Invoice", "Rule"),
-                   ("MerchantSession", "AllowedInstallment")]
+# derivada das entradas: uma classe interna nova ganha este teste sem ninguem lembrar de listar
+_EXISTING_INNER = [(resource, path) for resource, path, definition in _innerEntries()
+                   if "." not in path and "extends" not in definition]
 
 
 @pytest.fixture(scope="module")
@@ -168,7 +170,7 @@ def generatedExisting(tmp_path_factory):
     from conftest import _loadTool
     buildResource = _loadTool("build-resource.py")
     return {resource: _generated(buildResource, tmp_path_factory.mktemp(resource), resource, _realConventionsText())
-            for resource in ("Invoice", "MerchantSession")}
+            for resource in sorted({resource for resource, _ in _EXISTING_INNER})}
 
 
 @requiresGenerator
