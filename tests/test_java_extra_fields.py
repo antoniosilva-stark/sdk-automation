@@ -247,6 +247,14 @@ def test_noExtraFieldsLeavesTheSchemaAndTheCreateSchemaAsTheyWere(javaCode):
     assert javaCode.addExtraFields(schema, None, "Balance", {}) == (schema, None)
 
 
+def test_anExtraFieldNamedLikeAFieldOnlyTheCreateSchemaHasFailsInsteadOfOverwritingIt(javaCode):
+    schema, _ = _schemaOf("Balance")
+    createSchema = {"properties": {"onlyOnCreate": {"type": "string", "description": "original"}}}
+
+    with pytest.raises(ValueError, match="Balance.onlyOnCreate: javaExtraFields cita campo que o schema ja tem"):
+        javaCode.addExtraFields(schema, createSchema, "Balance", {"onlyOnCreate": {"type": "String"}})
+
+
 def test_anExtraFieldOfAResourceWithoutACreateSchemaStillMakesOne(javaCode):
     schema, _ = _schemaOf("Balance")
 

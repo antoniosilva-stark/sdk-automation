@@ -192,7 +192,7 @@ def checkLogExtraFields(resource: str, extraFields) -> None:
         raise ValueError(f"{resource}: javaLogs.extraFields deve ser um mapa nome -> descricao, veio {extraFields!r}")
     reserved = JAVA_LOG_RESERVED_FIELDS | JAVA_RESERVED_WORDS
     for name, description in extraFields.items():
-        if not isinstance(name, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", name) or name in reserved:
+        if not isFieldName(name, reserved):
             raise ValueError(
                 f"{resource}: javaLogs.extraFields nome invalido: {name!r}, esperado um identificador lowerCamel fora de "
                 f"{sorted(JAVA_LOG_RESERVED_FIELDS)} e das palavras reservadas do Java"
@@ -202,6 +202,11 @@ def checkLogExtraFields(resource: str, extraFields) -> None:
                 f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, "
                 "esperado texto de uma linha sem '*/' nem barra invertida"
             )
+
+
+def isFieldName(name, reserved=frozenset()) -> bool:
+    """Identificador lowerCamel que o Java aceita como campo: a regex mais o conjunto de nomes proibidos do chamador."""
+    return isinstance(name, str) and bool(re.fullmatch(r"[a-z][A-Za-z0-9]*", name)) and name not in reserved
 
 
 def isJavadocLine(description) -> bool:
@@ -237,7 +242,7 @@ def checkOmittedFields(resource: str, fields) -> None:
         raise ValueError(f"{resource}: javaOmittedFields deve ser uma lista nao vazia de campos, veio {fields!r}")
     seen = set()
     for field in fields:
-        if not isinstance(field, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", field):
+        if not isFieldName(field):
             raise ValueError(f"{resource}: javaOmittedFields campo invalido: {field!r}, esperado um identificador lowerCamel")
         if field in seen:
             raise ValueError(f"{resource}: javaOmittedFields repete {field!r}")
@@ -258,7 +263,7 @@ def checkExtraFields(resource: str, fields) -> None:
     if not isinstance(fields, dict) or not fields:
         raise ValueError(f"{resource}: javaExtraFields deve ser um mapa nome -> {{type, description}}, veio {fields!r}")
     for name, spec in fields.items():
-        if not isinstance(name, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", name) or name in JAVA_RESERVED_WORDS:
+        if not isFieldName(name, JAVA_RESERVED_WORDS):
             raise ValueError(
                 f"{resource}: javaExtraFields nome invalido: {name!r}, esperado um identificador lowerCamel que nao "
                 "seja palavra reservada do Java"

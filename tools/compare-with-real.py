@@ -267,7 +267,7 @@ def checkNoiseEntry(resource: str, index: int, entry: dict) -> None:
     if entry["kind"] != NOISE_KIND:
         raise ValueError(f"{where}.kind invalido: {entry['kind']!r}, ruido so aceita {NOISE_KIND!r}")
 
-    if not _NOISE_TEXT.match(entry["text"]):
+    if not _NOISE_TEXT.fullmatch(entry["text"]):
         raise ValueError(
             f"{where}.text invalido: {entry['text']!r}, esperado {NOISE_TEXT_FORM!r} sem curinga nem static"
         )

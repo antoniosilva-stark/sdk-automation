@@ -119,7 +119,7 @@ def addExtraFields(
     properties = dict(schema.get("properties") or {})
     creatable = dict((createSchema or {}).get("properties") or {})
     for name, spec in extras.items():
-        if name in properties:
+        if name in properties or name in creatable:
             raise ValueError(f"{resource}.{name}: javaExtraFields cita campo que o schema ja tem")
         checkOverrideType(resource, name, spec["type"], profile)
         prop = {**schemaTypeOf(spec["type"], profile), "description": spec.get("description", ""),

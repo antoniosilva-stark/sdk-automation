@@ -358,6 +358,7 @@ INVALID = {
     "staticImport": (block(text="require ausente: import static java.util.Map.of;"), ["Boleto[0].text", "static"]),
     "noPackage": (block(text="require ausente: import Map;"), ["Boleto[0].text", "Map"]),
     "extraTrailing": (block(text=NOISE_GAP + " "), ["Boleto[0].text"]),
+    "trailingNewline": (block(text=NOISE_GAP + "\n"), ["Boleto[0].text"]),
     "zeroCount": (block(count=0), ["Boleto[0].count", "0"]),
     "duplicateEntry": (block() + block().split("\n", 1)[1], ["Boleto", "duplicad", NOISE_GAP]),
     "malformedYaml": ("Boleto: [\n", ["java-unused-imports"]),

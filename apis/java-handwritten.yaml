@@ -9,8 +9,8 @@
 #     text: o texto EXATO do gap como o comparador o imprime (a mensagem inteira, ja com o prefixo
 #           `signature ausente: ...`); sem padrao nem regex, um texto quase igual nao dispensa
 #     count: opcional, default 1; quantas vezes o mesmo gap pode aparecer no recurso. Os gaps sao um multiconjunto:
-#            cada entrada consome ate `count` (o contrato do comparador e plano: `public String confirmationMode;` do
-#            MerchantSession e do Purchase tem o mesmo texto, e so o do Purchase e dispensado)
+#            cada entrada consome ate `count` (o contrato do comparador e plano: dois membros de classes internas diferentes
+#            podem ter o mesmo texto, e a dispensa consome so quantos o `count` diz)
 #     reason: o que no real o torna manuscrito (classe/metodo, o que faz, linhas no pin)
 #
 # Regras:

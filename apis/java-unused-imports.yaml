@@ -35,7 +35,7 @@ Event:
     reason: 'com.starkbank.ellipticcurve.PublicKey is imported (sdk-java f60902a, Event.java line 5) and never used in Event.java.'
   - kind: require
     text: 'require ausente: import com.starkbank.ellipticcurve.Signature;'
-    reason: 'com.starkbank.ellipticcurve.Signature is imported (sdk-java f60902a, Event.java line 6) and never used in Event.java: its simple name appears only in comments.'
+    reason: 'com.starkbank.ellipticcurve.Signature is imported (sdk-java f60902a, Event.java line 6) and never used in Event.java: its simple name appears nowhere else in the file.'
   - kind: require
     text: 'require ausente: import com.starkbank.ellipticcurve.utils.ByteString;'
     reason: 'com.starkbank.ellipticcurve.utils.ByteString is imported (sdk-java f60902a, Event.java line 7) and never used in Event.java.'
