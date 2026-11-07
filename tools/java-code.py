@@ -46,6 +46,7 @@ def renderJavaCode(
     pageShape: dict | None = None,
     logEntity: str | None = None,
     eventShape: dict | None = None,
+    logResources: frozenset = frozenset(),
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -55,14 +56,17 @@ def renderJavaCode(
     `parseX` (`ctorMapParsers`), como no real. `log`: so para recurso com Log, os nomes e o tipo de `errors` do Log
     interno, ja resolvidos a partir da forma (`javaLogs`) e do nome da entidade do Log (`logEntity`). `page`: so para recurso com Page externa, o nome da lista e o
     tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`). `events`: so para recurso com `javaEvents`,
-    o Deserializer e as subclasses, derivados das subscriptions e dos parametros do construtor all-args."""
+    o Deserializer e as subclasses, derivados das subscriptions e dos parametros do construtor all-args. `logResources`:
+    os recursos que tem Log (flag `x-sdk-log` ou `Log` em javaInnerClasses), que o recurso de cada subscription tem de ser."""
     fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
+    innerClassData = renderInnerClasses(resource, innerClasses or {}, profile, hasLog=logShape is not None)
     code = {
         "fields": fields,
         "ctorFields": ctorFields,
         "open": isOpen,
-        "innerClasses": renderInnerClasses(resource, innerClasses or {}, profile),
+        "innerClasses": innerClassData,
+        "innerClassLines": [line for item in innerClassData for line in innerClassLines(item)],
         **renderMapConstructor(entity, fields, profile, innerClasses or {}),
     }
     if logShape is not None:
@@ -73,7 +77,7 @@ def renderJavaCode(
             "typeName": "Page" if pageShape["names"] == "short" else f"{resource}.Page",
         }
     if eventShape is not None:
-        code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames)
+        code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames, logResources)
     return code
 
 
@@ -91,7 +95,7 @@ def omitFields(schema: dict, resource: str, omitted: list) -> dict:
     return {**schema, "properties": {name: prop for name, prop in properties.items() if name not in omitted}}
 
 
-def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: frozenset) -> dict:
+def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: frozenset, logResources: frozenset) -> dict:
     """Deserializer e subclasses prontos para o Mustache. Da subscription (`boleto-holmes`) saem o recurso do log
     (BoletoHolmes), a subclasse (`<Recurso><Evento>`, BoletoHolmesEvent) e o tipo do `log` (BoletoHolmes.Log); a subclasse
     de `subscription` desconhecida tem `log` JsonObject. Os parametros do construtor das subclasses sao os da base."""
@@ -99,7 +103,7 @@ def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: fr
     cases = []
     subclasses = []
     for subscription in shape["subscriptions"]:
-        logResource = eventLogResource(resource, subscription, resourceNames)
+        logResource = eventLogResource(resource, subscription, resourceNames, logResources)
         className = f"{logResource}{resource}"
         cases.append({"subscription": subscription, "className": className, "isGson": subscription in gson})
         subclasses.append({"className": className, "logType": f"{logResource}.Log"})
@@ -117,13 +121,18 @@ def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: fr
     }
 
 
-def eventLogResource(resource: str, subscription: str, resourceNames: frozenset) -> str:
+def eventLogResource(resource: str, subscription: str, resourceNames: frozenset, logResources: frozenset) -> str:
     logResource = "".join(word.capitalize() for word in subscription.split("-"))
     if logResource == resource:
         raise ValueError(f"{resource}: javaEvents.subscriptions {subscription!r} cita o proprio recurso")
     if logResource not in resourceNames:
         raise ValueError(
             f"{resource}: javaEvents.subscriptions {subscription!r} cita o recurso {logResource}, que nao existe em apis/schemas"
+        )
+    if logResource not in logResources:
+        raise ValueError(
+            f"{resource}: javaEvents.subscriptions {subscription!r} cita o recurso {logResource}, que nao tem Log "
+            "(sem x-sdk-log nem Log em javaInnerClasses)"
         )
     return logResource
 
@@ -169,40 +178,104 @@ def renderLogCtorSignature(resource: str, shape: dict, entity: str) -> str:
     return ", ".join(f"{types[name]} {name}" for name in order)
 
 
-INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData", "classDataType"}
+INNER_CLASS_KEYS = {"fields", "constructors", "map", "final", "classData", "classDataType", "extends", "inner"}
 # o real escreve `ClassData` (short) em Invoice.Payment e `SubResource.ClassData` (qualified) em MerchantSession.AllowedInstallment
 INNER_CLASS_DATA_TYPES = ("short", "qualified")
-# `Log` e `Page` o template ja emite dentro da classe externa; repetir o nome nao compilaria
-TEMPLATE_INNER_CLASSES = ("Log", "Page")
+# `Resource` carrega o `id`: o ultimo parametro de cada construtor com campos, repassado a `super(id)` (PaymentRequest.Log)
+INNER_CLASS_SUPERCLASSES = ("SubResource", "Resource")
+# `Page` o template ja emite dentro da classe externa, e `Log` quando o recurso tem `x-sdk-log`; repetir o nome nao compilaria
+TEMPLATE_INNER_CLASSES = ("Page",)
 MAP_CONSTRUCTOR_SIGNATURE = "Map<String, Object>"
 
 
-def renderInnerClasses(resource: str, innerClasses: dict, profile: dict = JAVA_CODE_PROFILE) -> list:
+def renderInnerClasses(resource: str, innerClasses: dict, profile: dict = JAVA_CODE_PROFILE, hasLog: bool = False) -> list:
     """Classes internas simples ja prontas para o Mustache: o real as escreve a mao e a spec nao as descreve, entao a
     definicao e dado do Java. Cada construtor atribui os campos recebidos e `null` nos demais; o Map-ctor le so os
-    campos de `map`. Campo primitivo nao aceita null, entao tem de ser recebido e lido."""
-    return [renderInnerClass(resource, name, definition, profile) for name, definition in innerClasses.items()]
+    campos de `map`. Campo primitivo nao aceita null, entao tem de ser recebido e lido. `inner` aninha classes com a
+    mesma forma, e um campo pode ter como tipo o recurso ou o caminho qualificado de qualquer classe interna dele."""
+    scope = {
+        "resource": resource,
+        "profile": profile,
+        "reserved": (*TEMPLATE_INNER_CLASSES, "Log") if hasLog else TEMPLATE_INNER_CLASSES,
+        "references": {resource, *innerClassPaths(resource, innerClasses)},
+        "seen": set(),
+    }
+    return [renderInnerClass(scope, resource, name, definition) for name, definition in innerClasses.items()]
 
 
-def renderInnerClass(resource: str, name: str, definition: dict, profile: dict) -> dict:
-    where = f"{resource}.{name}"
-    checkInnerClass(where, name, definition, resource, profile)
+def innerClassPaths(outerPath: str, innerClasses: dict):
+    for name, definition in innerClasses.items():
+        yield f"{outerPath}.{name}"
+        nested = definition.get("inner") if isinstance(definition, dict) else None
+        if isinstance(nested, dict):
+            yield from innerClassPaths(f"{outerPath}.{name}", nested)
+
+
+def renderInnerClass(scope: dict, outerPath: str, name: str, definition: dict) -> dict:
+    where = f"{outerPath}.{name}"
+    checkInnerClass(scope, where, name, definition)
     fields = definition["fields"]
+    extendsResource = definition.get("extends") == "Resource"
     rendered = {
         "className": name,
+        "superclass": definition.get("extends", "SubResource"),
         "isFinal": definition.get("final", True),
         "fields": [{"name": field, "javaType": javaType} for field, javaType in fields.items()],
     }
     if "classData" in definition:
         rendered["classDataLine"] = innerClassDataLine(name, definition["classData"], definition["classDataType"])
-    rendered["constructors"] = [renderInnerConstructor(names, fields) for names in definition.get("constructors") or []]
+    rendered["constructors"] = [
+        renderInnerConstructor(names, fields, extendsResource) for names in definition.get("constructors") or []
+    ]
     if "map" in definition:
-        rendered["map"] = renderInnerMapConstructor(definition["map"], fields, profile)
+        rendered["map"] = renderInnerMapConstructor(definition["map"], fields, scope["profile"])
+    rendered["inner"] = [renderInnerClass(scope, where, nestedName, nestedDefinition)
+                         for nestedName, nestedDefinition in (definition.get("inner") or {}).items()]
     return rendered
 
 
-def checkInnerClass(where: str, name, definition, resource: str, profile: dict) -> None:
-    checkInnerClassName(where, name, resource)
+def innerClassLines(rendered: dict, depth: int = 0) -> list:
+    """O texto Java da classe interna, uma linha por item e com a indentacao do nivel, para o Mustache so repeti-lo: o
+    Mustache resolve a chave ausente na classe de fora, entao um `classData` ou `map` do pai vazaria para a aninhada."""
+    pad = " " * (4 * depth)
+    name = rendered["className"]
+    final = "final " if rendered["isFinal"] else ""
+    lines = ["", f"{pad}    public {final}static class {name} extends {rendered['superclass']} {{"]
+    lines += [f"{pad}        public {field['javaType']} {field['name']};" for field in rendered["fields"]]
+    if "classDataLine" in rendered:
+        lines += ["", f"{pad}        {rendered['classDataLine']}"]
+    for constructor in rendered["constructors"]:
+        lines += ["", f"{pad}        public {name}({constructor['signature']}) {{"]
+        lines += [f"{pad}            {line}" for line in constructor["body"]]
+        lines.append(f"{pad}        }}")
+    if "map" in rendered:
+        lines += innerMapConstructorLines(name, rendered["map"], pad)
+    for nested in rendered["inner"]:
+        lines += innerClassLines(nested, depth + 1)
+    lines.append(f"{pad}    }}")
+    return lines
+
+
+def innerMapConstructorLines(name: str, constructor: dict, pad: str) -> list:
+    lines = [""]
+    if constructor["suppress"]:
+        lines.append(f'{pad}        @SuppressWarnings("unchecked")')
+    lines += [
+        f"{pad}        public {name}(Map<String, Object> data) throws Exception {{",
+        f"{pad}            HashMap<String, Object> dataCopy = new HashMap<>(data);",
+        "",
+        *[f"{pad}            {line}" for line in constructor["body"]],
+        "",
+        f"{pad}            if (!dataCopy.isEmpty()) {{",
+        f'{pad}                throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");',
+        f"{pad}            }}",
+        f"{pad}        }}",
+    ]
+    return lines
+
+
+def checkInnerClass(scope: dict, where: str, name, definition) -> None:
+    checkInnerClassName(scope, where, name)
     if not isinstance(definition, dict):
         raise ValueError(f"{where}: definicao deve ser um mapa")
     unknown = sorted(str(key) for key in set(definition) - INNER_CLASS_KEYS)
@@ -212,18 +285,37 @@ def checkInnerClass(where: str, name, definition, resource: str, profile: dict) 
     if not isinstance(fields, dict) or not fields:
         raise ValueError(f"{where}: fields ausente ou vazio")
     for field, javaType in fields.items():
-        checkInnerClassField(where, field, javaType, profile)
+        checkInnerClassField(where, field, javaType, scope)
     constructors = definition.get("constructors") or []
     for names in constructors:
-        checkInnerFieldNames(where, "construtor", names, fields, profile)
+        checkInnerFieldNames(where, "construtor", names, fields, scope["profile"])
     if "map" in definition:
-        checkInnerFieldNames(where, "map", definition["map"], fields, profile)
+        checkInnerFieldNames(where, "map", definition["map"], fields, scope["profile"])
+        checkInnerMapTypes(where, definition["map"], fields, scope)
     checkInnerClassSignatures(where, constructors, fields, "map" in definition)
     if not isinstance(definition.get("final", True), bool):
         raise ValueError(f"{where}: final deve ser booleano")
     if "classData" in definition and not isIdentifier(definition["classData"], "[A-Z]"):
         raise ValueError(f"{where}: classData invalido: {definition['classData']!r}")
     checkInnerClassDataType(where, definition)
+    checkInnerClassExtends(where, definition)
+    if "inner" in definition and not isinstance(definition["inner"], dict):
+        raise ValueError(f"{where}: inner deve ser um mapa de classes")
+
+
+def checkInnerClassExtends(where: str, definition: dict) -> None:
+    superclass = definition.get("extends", "SubResource")
+    if superclass not in INNER_CLASS_SUPERCLASSES:
+        raise ValueError(
+            f"{where}: extends invalido: {superclass!r}, esperado um de {list(INNER_CLASS_SUPERCLASSES)}"
+        )
+    if superclass != "Resource":
+        return
+
+    if "id" in definition["fields"]:
+        raise ValueError(f"{where}: classe que estende Resource herda o campo id e nao pode declara-lo")
+    if "map" in definition:
+        raise ValueError(f"{where}: map nao e suportado em classe que estende Resource")
 
 
 def checkInnerClassDataType(where: str, definition: dict) -> None:
@@ -245,19 +337,34 @@ def isIdentifier(value, firstCharacter: str) -> bool:
     return isinstance(value, str) and fullmatch(rf"{firstCharacter}[A-Za-z0-9]*", value) is not None
 
 
-def checkInnerClassName(where: str, name, resource: str) -> None:
+def checkInnerClassName(scope: dict, where: str, name) -> None:
+    """O nome e unico na arvore inteira do recurso: uma classe aninhada que repete o nome de uma classe de fora (ou de
+    uma irma) sombreia o tipo dentro dela e o `javac` o resolve para a errada."""
     if not isIdentifier(name, "[A-Z]"):
         raise ValueError(f"{where}: nome de classe interna invalido")
-    if name in TEMPLATE_INNER_CLASSES:
+    if name in scope["reserved"]:
         raise ValueError(f"{where}: nome de classe interna que o template ja emite")
-    if name == resource:
+    if name == scope["resource"]:
         raise ValueError(f"{where}: nome de classe interna igual ao da classe externa")
+    if name in scope["seen"]:
+        raise ValueError(f"{where}: nome de classe interna repetido")
+    scope["seen"].add(name)
 
 
-def checkInnerClassField(where: str, field, javaType, profile: dict) -> None:
+def checkInnerClassField(where: str, field, javaType, scope: dict) -> None:
     if not isIdentifier(field, "[a-z]"):
         raise ValueError(f"{where}.{field}: nome de campo invalido")
-    checkOverrideType(where, field, javaType, profile)
+    if isinstance(javaType, str) and javaType in scope["references"]:
+        return
+
+    checkOverrideType(where, field, javaType, scope["profile"])
+
+
+def checkInnerMapTypes(where: str, names: list, fields: dict, scope: dict) -> None:
+    """O Map-ctor le por cast do perfil; um tipo de referencia (o recurso ou uma classe interna) nao vem de um Map."""
+    unread = [name for name in names if fields[name] in scope["references"]]
+    if unread:
+        raise ValueError(f"{where}: map cita campo de tipo {fields[unread[0]]!r}, que o Map-ctor nao le: {unread[0]}")
 
 
 def checkInnerFieldNames(where: str, label: str, names, fields: dict, profile: dict) -> None:
@@ -290,12 +397,16 @@ def innerClassDataLine(name: str, classData: str, classDataType: str) -> str:
     return f'static {qualifier}ClassData data = new {qualifier}ClassData({name}.class, "{classData}");'
 
 
-def renderInnerConstructor(names: list, fields: dict) -> dict:
-    signature = ", ".join(f"{fields[name]} {name}" for name in names)
+def renderInnerConstructor(names: list, fields: dict, extendsResource: bool = False) -> dict:
     if not names:
-        return {"signature": signature, "body": []}
+        return {"signature": "", "body": ["super(null);"] if extendsResource else []}
+
+    parameters = [f"{fields[name]} {name}" for name in names]
     body = [f"this.{field} = {field};" if field in names else f"this.{field} = null;" for field in fields]
-    return {"signature": signature, "body": body}
+    if not extendsResource:
+        return {"signature": ", ".join(parameters), "body": body}
+
+    return {"signature": ", ".join([*parameters, "String id"]), "body": ["super(id);", *body]}
 
 
 def renderInnerMapConstructor(names: list, fields: dict, profile: dict) -> dict:
@@ -408,6 +519,8 @@ def checkSubObjectElement(resource: str, name: str, element: str, innerClasses: 
 
 
 def checkInnerClassBuildable(resource: str, name: str, className: str, definition: dict) -> None:
+    if definition.get("extends") == "Resource":
+        raise ValueError(f"{resource}.{name}: classe interna {className!r} estende Resource, que o parseX nao constroi")
     if "map" in definition or any(definition.get("constructors") or []):
         return
     raise ValueError(f"{resource}.{name}: classe interna {className!r} nao tem construtor que receba campos")

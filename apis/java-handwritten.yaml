@@ -156,45 +156,9 @@ MerchantSession:
     reason: 'MerchantSession.purchase(uuid, purchase, user) (sdk-java f60902a, MerchantSession.java:149) is @Deprecated since v2.27.0 and its body is only throw new Exception(Function deprecated since v2.27.0) (line 150); no mould emits a deprecated operation.'
 
 PaymentRequest:
-  - kind: constructor
-    text: 'constructor ausente: public Log(String created, String updated, String type, String[] errors, PaymentRequest request, PaymentRequest.Log.User user, String id)'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:505.'
-  - kind: constructor
-    text: 'constructor ausente: public Log()'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:515.'
-  - kind: constructor
-    text: 'constructor ausente: public User(String email, String id, String name, String pictureUrl, String status, String type)'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:527.'
-  - kind: constructor
-    text: 'constructor ausente: public User()'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; constructor at PaymentRequest.java:536.'
-  - kind: field
-    text: 'field ausente: static ClassData data = new ClassData(Log.class, "PaymentRequestLog");'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; Log ClassData at PaymentRequest.java:480. The generator emits no Log for PaymentRequest (no x-sdk-log) and the generated Log mould would add the get/query/page operations that this real Log does not have.'
-  - kind: field
-    text: 'field ausente: public String[] errors;'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:485.'
-  - kind: field
-    text: 'field ausente: public PaymentRequest request;'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:486.'
-  - kind: field
-    text: 'field ausente: public PaymentRequest.Log.User user;'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:487.'
-  - kind: field
-    text: 'field ausente: public String email;'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:520.'
-  - kind: field
-    text: 'field ausente: public String pictureUrl;'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource; field declared at PaymentRequest.java:523.'
   - kind: inner
     text: 'inner ausente: public static class Deserializer implements JsonDeserializer<PaymentRequest>'
     reason: 'PaymentRequest.Deserializer (sdk-java f60902a, PaymentRequest.java:167-214) is a Gson JsonDeserializer: it removes the payment element, rebuilds the right Resource by switching on request.type (transfer, transaction, boleto-payment, ...) and re-reads the actions list from LinkedTreeMaps; no generated mould emits a deserializer.'
-  - kind: inner
-    text: 'inner ausente: public final static class Log extends Resource'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource (Log declaration at line 479).'
-  - kind: inner
-    text: 'inner ausente: public final static class User extends SubResource'
-    reason: 'PaymentRequest.Log (sdk-java f60902a, PaymentRequest.java:479-539) is a hand-written Log that follows no generated Log mould: it extends Resource but has no get/query/page operations (PaymentRequest is in LOG_EXCLUSIONS of tests/test_java_logs.py) and nests Log.User (PaymentRequest.java:519-538), a SubResource that the inner-class mould only emits at the top level of a resource (User declaration at line 519).'
   - kind: require
     text: 'require ausente: import com.google.gson.internal.LinkedTreeMap;'
     reason: 'com.google.gson.internal.LinkedTreeMap is used only inside PaymentRequest.Deserializer (sdk-java f60902a, PaymentRequest.java line 203, within 167-214).'

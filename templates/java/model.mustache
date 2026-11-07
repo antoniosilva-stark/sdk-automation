@@ -541,39 +541,8 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-java-code.log}}
 {{/vendorExtensions.x-sdk-log}}
-{{#vendorExtensions.x-sdk-java-code.innerClasses}}
-
-    public {{#isFinal}}final {{/isFinal}}static class {{className}} extends SubResource {
-{{#fields}}        public {{{javaType}}} {{name}};
-{{/fields}}
-{{#classDataLine}}
-
-        {{{.}}}
-{{/classDataLine}}
-{{#constructors}}
-
-        public {{className}}({{{signature}}}) {
-{{#body}}            {{{.}}}
-{{/body}}        }
-{{/constructors}}
-{{#map}}
-
-{{#suppress}}
-        @SuppressWarnings("unchecked")
-{{/suppress}}
-        public {{className}}(Map<String, Object> data) throws Exception {
-            HashMap<String, Object> dataCopy = new HashMap<>(data);
-
-{{#body}}
-            {{{.}}}
-{{/body}}
-
-            if (!dataCopy.isEmpty()) {
-                throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
-            }
-        }
-{{/map}}
-    }
-{{/vendorExtensions.x-sdk-java-code.innerClasses}}
+{{#vendorExtensions.x-sdk-java-code.innerClassLines}}
+{{{.}}}
+{{/vendorExtensions.x-sdk-java-code.innerClassLines}}
 }
 {{/model}}{{/models}}

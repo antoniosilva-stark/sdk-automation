@@ -111,6 +111,15 @@ def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     return node
 
 
+def logResourceNames(spec: dict, conventions: Path) -> frozenset:
+    """Recursos com Log: a flag `x-sdk-log` da spec (Log gerado por javaLogs) ou um `Log` em javaInnerClasses (o Log
+    de PaymentRequest, sem operacoes, que o real escreve como classe interna)."""
+    extractSchema = loadTool("extract-schema")
+    flagged = {name for name, entry in spec["components"]["schemas"].items() if "x-sdk-log" in entry}
+    innerClasses = extractSchema.loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    return frozenset(flagged | {name for name, classes in innerClasses.items() if "Log" in classes})
+
+
 def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = None) -> dict:
     """Copia `apis/` para `stagedDir` e injeta o Javadoc e o corpo do Map-ctor pre-renderizados na entrada do
     recurso da copia.
@@ -145,6 +154,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
     isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
     logShape = extractSchema.javaLogShape(resource, conventionsFile)
+    eventShape = extractSchema.javaEventShape(resource, conventionsFile)
     code = javaCode.renderJavaCode(
         schema,
         entity,
@@ -158,7 +168,8 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         logShape=logShape if "x-sdk-log" in flags else None,
         pageShape=pageShape,
         logEntity=spec["components"]["schemas"][resource].get("x-sdk-log-entity"),
-        eventShape=extractSchema.javaEventShape(resource, conventionsFile),
+        eventShape=eventShape,
+        logResources=logResourceNames(spec, conventionsFile) if eventShape else frozenset(),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

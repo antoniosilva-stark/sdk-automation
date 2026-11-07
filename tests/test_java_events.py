@@ -67,6 +67,11 @@ def generatedEvent(tmp_path_factory):
 
 # 1. os dados, nos dois sentidos contra o real
 
+def _realLogResources(buildResource) -> frozenset:
+    spec = buildResource.loadFast((REPO_ROOT / buildResource.SPEC_FILE).read_text(encoding="utf-8"))
+    return buildResource.logResourceNames(spec, REPO_ROOT / "apis/type-conventions.yaml")
+
+
 @requiresJavaSdk
 def test_theSubscriptionsOfTheDataAreTheCasesOfTheRealSwitchInOrder():
     assert _entry()["subscriptions"] == [subscription for subscription, _, _ in _realSwitch()]
@@ -79,10 +84,12 @@ def test_theGsonSubsetOfTheDataIsTheCasesTheRealDeserializesWithGsonEvent():
 
 
 @requiresJavaSdk
-def test_theDerivedClassesAndLogTypesAreTheRealSubclassesAndTheUnknownOne(javaCode, javaDocs, extractSchema):
+def test_theDerivedClassesAndLogTypesAreTheRealSubclassesAndTheUnknownOne(
+    javaCode, javaDocs, extractSchema, buildResource
+):
     events = javaCode.renderEvents("Event", extractSchema.javaEventShape("Event"),
                                    _ctorFieldsOfEvent(javaCode, javaDocs, extractSchema),
-                                   extractSchema.schemaResourceNames())
+                                   extractSchema.schemaResourceNames(), _realLogResources(buildResource))
     real = {name: _logTypeOf(block) for name, block in _subclassBlocks(_realSource()).items()}
 
     assert {item["className"]: item["logType"] for item in events["subclasses"]} == real
@@ -391,7 +398,8 @@ def test_renderEventsDerivesTheClassesTheLogTypesAndTheSuperCallFromTheBaseConst
                   {"name": "id", "javaType": "String", "isId": True}]
     shape = {"subscriptions": ["boleto-holmes", "invoice"], "gson": ["invoice"]}
 
-    events = javaCode.renderEvents("Event", shape, ctorFields, frozenset({"BoletoHolmes", "Invoice"}))
+    events = javaCode.renderEvents("Event", shape, ctorFields, frozenset({"BoletoHolmes", "Invoice"}),
+                                   frozenset({"BoletoHolmes", "Invoice"}))
 
     assert events["cases"] == [
         {"subscription": "boleto-holmes", "className": "BoletoHolmesEvent", "isGson": False},
@@ -407,7 +415,8 @@ def test_renderEventsDerivesTheClassesTheLogTypesAndTheSuperCallFromTheBaseConst
     assert events["unknownClassName"] == "UnknownEvent"
     assert events["usesGsonEvent"] is True
     plain = {"subscriptions": ["invoice"], "gson": []}
-    assert javaCode.renderEvents("Event", plain, ctorFields, frozenset({"Invoice"}))["usesGsonEvent"] is False
+    assert javaCode.renderEvents("Event", plain, ctorFields, frozenset({"Invoice"}),
+                                 frozenset({"Invoice"}))["usesGsonEvent"] is False
 
 
 @pytest.mark.parametrize("subscription, message", [
@@ -422,4 +431,60 @@ def test_aSubscriptionWhoseResourceIsNotAKnownOneOrIsTheEventItselfFailsNamingRe
 
     with pytest.raises(ValueError, match=message):
         javaCode.renderEvents("Event", {"subscriptions": [subscription], "gson": []}, ctorFields,
-                              frozenset({"Event", "Invoice"}))
+                              frozenset({"Event", "Invoice"}), frozenset({"Event", "Invoice"}))
+
+
+# 5. o recurso da subscription tem de ter Log
+
+def test_aSubscriptionWhoseResourceHasNoLogFailsNamingResourceKeyAndValue(javaCode):
+    ctorFields = [{"name": "id", "javaType": "String", "isId": True}]
+    names = frozenset({"Event", "Balance", "Invoice"})
+
+    with pytest.raises(ValueError, match=r"Event: javaEvents\.subscriptions 'balance' cita o recurso Balance, que nao tem Log"):
+        javaCode.renderEvents("Event", {"subscriptions": ["invoice", "balance"], "gson": []}, ctorFields, names,
+                              frozenset({"Invoice"}))
+
+
+def test_aSubscriptionWhoseResourceHasALogIsAccepted(javaCode):
+    ctorFields = [{"name": "id", "javaType": "String", "isId": True}]
+    names = frozenset({"Event", "PaymentRequest"})
+
+    events = javaCode.renderEvents("Event", {"subscriptions": ["payment-request"], "gson": []}, ctorFields, names,
+                                   frozenset({"PaymentRequest"}))
+
+    assert events["subclasses"][0] == {"className": "PaymentRequestEvent", "logType": "PaymentRequest.Log"}
+
+
+_LOG_SPEC = """components:
+  schemas:
+    Invoice:
+      x-sdk-log: true
+    Balance:
+      x-sdk-get: true
+    PaymentRequest:
+      x-sdk-page: true
+    Transfer:
+      x-sdk-log: true
+"""
+
+
+def test_aResourceHasALogWhenItHasTheSpecFlagOrALogInItsInnerClasses(buildResource, tmpPath):
+    conventions = tmpPath / "type-conventions.yaml"
+    conventions.write_text(
+        "javaInnerClasses:\n"
+        "  PaymentRequest:\n    Log:\n      fields: {created: String}\n"
+        "  Balance:\n    Entry:\n      fields: {created: String}\n",
+        encoding="utf-8",
+    )
+    spec = buildResource.loadFast(_LOG_SPEC)
+
+    assert buildResource.logResourceNames(spec, conventions) == frozenset({"Invoice", "Transfer", "PaymentRequest"})
+
+
+def test_everySubscriptionOfTheDataDerivesAResourceThatHasALog(buildResource, extractSchema):
+    logResources = _realLogResources(buildResource)
+    resources = {"".join(word.capitalize() for word in subscription.split("-"))
+                 for subscription in _entry()["subscriptions"]}
+
+    assert "PaymentRequest" in resources
+    assert resources <= logResources

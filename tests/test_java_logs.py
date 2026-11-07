@@ -10,7 +10,7 @@ from test_java_field_types import REAL_SOURCES, SCHEMAS, _generated, _realConven
 # segue fora do modelo no real, entao a lista nao envelhece.
 LOG_EXCLUSIONS = {
     "MerchantInstallment": "o parametro do ctor e `merchantInstallment` e o campo e `installment`",
-    "PaymentRequest": "Log escrito a mao com a classe interna User (ME 9.8)",
+    "PaymentRequest": "sem get/query/page: o Log e gerado por javaInnerClasses (extends Resource, com a User aninhada)",
 }
 
 SHORT_RETURNS = {"Log", "Generator<Log>", "Log.Page"}
@@ -150,6 +150,14 @@ def test_generatedLogDeclarationsMatchTheRealOnes(buildResource, tmpPath, resour
     assert set(_logFields(generated).items()) == set(_logFields(real).items())
     assert _classDataClass(generated) == _classDataClass(real)
     assert _logPdfSignatures(generated) == _logPdfSignatures(real)
+
+
+def test_paymentRequestLogIsGeneratedThroughJavaInnerClassesSinceItHasNoOperations():
+    inner = yaml.safe_load(_realConventionsText())["javaInnerClasses"]["PaymentRequest"]
+
+    assert "javaInnerClasses" in LOG_EXCLUSIONS["PaymentRequest"]
+    assert inner["Log"]["extends"] == "Resource"
+    assert "ME 9.8" not in LOG_EXCLUSIONS["PaymentRequest"]
 
 
 @requiresGenerator

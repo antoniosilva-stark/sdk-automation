@@ -187,9 +187,15 @@ javaConstructorTypes:
 # ficam null; ausente = sem esse construtor), `final` (default true), `classData` (nome do ClassData, so quando o real
 # o declara) e `classDataType`, obrigatorio com `classData`: `short` escreve `static ClassData data = new ClassData(...)`
 # (Invoice.Payment) e `qualified` escreve `SubResource.ClassData` (MerchantSession.AllowedInstallment); o real nao e
-# uniforme, entao e um eixo por classe, como javaLogs.classData. Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
-# Fora (outras entregas): Log/Page/User dentro de Log (ME 9.4), Transfer.Rule (Deserializer manual), PaymentRequest.
-# Deserializer, MerchantSession.Purchase e tudo do Event (ME 9.8).
+# uniforme, entao e um eixo por classe, como javaLogs.classData. Mais duas chaves opcionais: `extends` (`SubResource`, o
+# default, ou `Resource`: o `id` e o ultimo parametro de cada construtor com campos, repassado a `super(id)`, e o sem
+# argumentos chama `super(null)`; sem campo `id` nem `map`) e `inner` (classes aninhadas, no mesmo formato, com nome unico
+# no recurso). O tipo de um campo pode ser o proprio recurso ou o caminho qualificado de uma classe interna dele
+# (`PaymentRequest.Log.User`), mas esse tipo nao entra em `map`. Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
+# PaymentRequest.Log nao e um javaLogs: nao tem get/query/page (e o PaymentRequest nao tem `x-sdk-log`), entao e uma classe
+# interna que estende Resource, com a User aninhada; e dele que o Event tira o tipo do log da subscription payment-request.
+# Fora (outras entregas): Page dentro de Log (ME 9.4), Transfer.Rule (Deserializer manual), PaymentRequest.Deserializer,
+# MerchantSession.Purchase e o Deserializer do Event (ME 9.8).
 javaInnerClasses:
   Boleto:
     Description:
@@ -242,6 +248,17 @@ javaInnerClasses:
     Action:
       fields: {name: String, action: String, type: String, id: String}
       constructors: [[name, action, type, id], []]
+    Log:
+      extends: Resource
+      fields: {created: String, updated: String, type: String, errors: "String[]", request: PaymentRequest,
+        user: PaymentRequest.Log.User}
+      constructors: [[created, updated, type, errors, request, user], []]
+      classData: PaymentRequestLog
+      classDataType: short
+      inner:
+        User:
+          fields: {email: String, id: String, name: String, pictureUrl: String, status: String, type: String}
+          constructors: [[email, id, name, pictureUrl, status, type], []]
 
 # Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias, mais duas opcionais. O real nao e
 # uniforme (medido contra sdk-java f60902a, 24 recursos com Log; 22 aqui, os 2 de forma propria ficam fora, ver

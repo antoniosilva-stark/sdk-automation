@@ -572,20 +572,26 @@ def test_everyResourceNameOfTheRealTablesIsAccepted(extractSchema):
     assert all(extractSchema.javaInnerClasses(name) for name in sections("javaInnerClasses"))
 
 
+def _walkInner(classes: dict, prefix: str = ""):
+    for name, definition in classes.items():
+        yield f"{prefix}{name}", definition
+        yield from _walkInner(definition.get("inner") or {}, f"{prefix}{name}.")
+
+
 def _innerEntries() -> list:
     section = _constructorSection("javaInnerClasses")
-    return [(resource, name, definition) for resource, classes in section.items()
-            for name, definition in classes.items()]
+    return [(resource, path, definition) for resource, classes in section.items()
+            for path, definition in _walkInner(classes)]
 
 
-_INNER_IDS = [f"{resource}.{name}" for resource, name, _ in _innerEntries()]
+_INNER_IDS = [f"{resource}.{path}" for resource, path, _ in _innerEntries()]
 
 
-def _realInnerBlock(resource: str, name: str) -> str | None:
-    source = (REAL_SOURCES / f"{resource}.java").read_text(encoding="utf-8")
-    match = re.search(rf"^    public (?:final )?static (?:final )?class {name}\b[^{{]*\{{", source, re.M)
-    if not match:
-        return None
+def _memberIndent(path: str) -> str:
+    return " " * (4 * (path.count(".") + 2))
+
+
+def _balancedBlock(source: str, match) -> str:
     depth, index = 1, match.end()
     while depth:
         depth += (source[index] == "{") - (source[index] == "}")
@@ -593,8 +599,21 @@ def _realInnerBlock(resource: str, name: str) -> str | None:
     return source[match.start():index]
 
 
-def _realInnerConstructors(block: str, name: str) -> list:
-    pattern = rf"^        public {name}\s*\((.*?)\)\s*(?:throws [\w, ]+)?\{{"
+def _realInnerBlock(resource: str, path: str) -> str | None:
+    """A classe interna do real; `Log.User` e a `User` declarada dentro do bloco do `Log`, um nivel mais fundo."""
+    block = (REAL_SOURCES / f"{resource}.java").read_text(encoding="utf-8")
+    for depth, name in enumerate(path.split(".")):
+        pattern = rf"^ {{{4 * (depth + 1)}}}public (?:final )?static (?:final )?class {name}\b[^{{]*\{{"
+        match = re.search(pattern, block, re.M)
+        if not match:
+            return None
+        block = _balancedBlock(block, match)
+    return block
+
+
+def _realInnerConstructors(block: str, path: str) -> list:
+    name = path.rsplit(".", 1)[-1]
+    pattern = rf"^{_memberIndent(path)}public {name}\s*\((.*?)\)\s*(?:throws [\w, ]+)?\{{"
     return [_splitParameters(match.group(1)) for match in re.finditer(pattern, block, re.M | re.S)]
 
 
@@ -602,43 +621,52 @@ _MAP_PARAMETER = [("Map<String, Object>", "data")]
 
 
 @requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryExistsInTheRealWithTheSameFinalityAndSuperclass(resource, name, definition):
-    block = _realInnerBlock(resource, name)
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryExistsInTheRealWithTheSameFinalityAndSuperclass(resource, path, definition):
+    block = _realInnerBlock(resource, path)
 
     assert block is not None
     header = block.split("{", 1)[0]
     assert (" final " in f" {header} ") is definition.get("final", True)
-    assert re.search(r"\bextends SubResource\s*$", header)
+    assert re.search(rf"\bextends {definition.get('extends', 'SubResource')}\s*$", header)
 
 
 @requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryHasTheRealFieldsWithTheirTypesInDeclarationOrder(resource, name, definition):
-    block = _realInnerBlock(resource, name)
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheRealFieldsWithTheirTypesInDeclarationOrder(resource, path, definition):
+    block = _realInnerBlock(resource, path)
 
-    declared = re.findall(r"^        public ([\w<>\[\], ]+?) (\w+);", block, re.M)
+    declared = re.findall(rf"^{_memberIndent(path)}public ([\w<>\[\], .]+?) (\w+);", block, re.M)
 
     assert [(field, javaType) for javaType, field in declared] == list(definition["fields"].items())
 
 
-@requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryHasTheRealPositionalConstructorsWithFieldNamesAndTypesInOrder(resource, name, definition):
-    block = _realInnerBlock(resource, name)
-    positional = [parameters for parameters in _realInnerConstructors(block, name) if parameters != _MAP_PARAMETER]
+def _withoutInheritedId(definition: dict, parameters: list) -> list:
+    """O `id` do ctor de uma classe que estende Resource e o ultimo parametro, repassado a `super(id)`, e nao campo."""
+    if definition.get("extends") != "Resource" or not parameters:
+        return parameters
+    assert parameters[-1] == ("String", "id")
+    return parameters[:-1]
 
-    real = sorted([field for _, field in parameters] for parameters in positional)
+
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheRealPositionalConstructorsWithFieldNamesAndTypesInOrder(resource, path, definition):
+    block = _realInnerBlock(resource, path)
+    positional = [parameters for parameters in _realInnerConstructors(block, path) if parameters != _MAP_PARAMETER]
+
+    real = sorted([field for _, field in _withoutInheritedId(definition, parameters)] for parameters in positional)
     assert real == sorted(definition["constructors"])
     for parameters in positional:
-        assert all(javaType == definition["fields"][field] for javaType, field in parameters)
+        assert all(javaType == definition["fields"][field]
+                   for javaType, field in _withoutInheritedId(definition, parameters))
 
 
 @requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryHasTheMapConstructorOnlyWhenTheRealDoesAndReadsTheSameFields(resource, name, definition):
-    block = _realInnerBlock(resource, name)
-    hasMapConstructor = _MAP_PARAMETER in _realInnerConstructors(block, name)
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryHasTheMapConstructorOnlyWhenTheRealDoesAndReadsTheSameFields(resource, path, definition):
+    block = _realInnerBlock(resource, path)
+    hasMapConstructor = _MAP_PARAMETER in _realInnerConstructors(block, path)
 
     assert hasMapConstructor is ("map" in definition)
     reads = re.findall(r'this\.(\w+) = .*dataCopy\.remove\("\1"\)', block)
@@ -646,9 +674,10 @@ def test_innerClassEntryHasTheMapConstructorOnlyWhenTheRealDoesAndReadsTheSameFi
 
 
 @requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryDeclaresTheClassDataOnlyWhenTheRealDoes(resource, name, definition):
-    block = _realInnerBlock(resource, name)
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryDeclaresTheClassDataOnlyWhenTheRealDoes(resource, path, definition):
+    block = _realInnerBlock(resource, path)
+    name = path.rsplit(".", 1)[-1]
 
     real = re.search(rf'static (?:SubResource\.)?ClassData data = new (?:SubResource\.)?ClassData\({name}\.class, "(\w+)"\)',
                      block)
@@ -657,9 +686,9 @@ def test_innerClassEntryDeclaresTheClassDataOnlyWhenTheRealDoes(resource, name, 
 
 
 @requiresJavaSdk
-@pytest.mark.parametrize("resource, name, definition", _innerEntries(), ids=_INNER_IDS)
-def test_innerClassEntryWritesTheClassDataTypeTheRealWrites(resource, name, definition):
-    block = _realInnerBlock(resource, name)
+@pytest.mark.parametrize("resource, path, definition", _innerEntries(), ids=_INNER_IDS)
+def test_innerClassEntryWritesTheClassDataTypeTheRealWrites(resource, path, definition):
+    block = _realInnerBlock(resource, path)
 
     real = re.search(r"static (SubResource\.)?ClassData data = new (SubResource\.)?ClassData\(", block)
 
@@ -671,31 +700,44 @@ def test_innerClassEntryWritesTheClassDataTypeTheRealWrites(resource, name, defi
 
 _NOT_SIMPLE_INNER = {("Transfer", "Rule"), ("MerchantSession", "Purchase"), ("PaymentRequest", "Deserializer")}
 _NOT_SIMPLE_FILES = {"Event"}
+# o Log de PaymentRequest nao tem get/query/page: nao e um javaLogs, e sim uma classe interna que estende Resource
+_LOG_AS_INNER = {("PaymentRequest", "Log")}
 
 
 def _realInnerClasses() -> set:
+    """Os caminhos (`Recurso`, `Log.User`) das classes internas simples do real, aninhadas inclusive."""
     declaration = re.compile(r"^    public (?:final )?static (?:final )?class (\w+)", re.M)
+    nested = re.compile(r"^        public (?:final )?static (?:final )?class (\w+)", re.M)
     found = set()
     for path in sorted(REAL_SOURCES.glob("*.java")):
         if path.stem in _NOT_SIMPLE_FILES:
             continue
-        found.update((path.stem, name) for name in declaration.findall(path.read_text(encoding="utf-8")))
-    return {pair for pair in found if pair[1] not in ("Log", "Page")} - _NOT_SIMPLE_INNER
+        source = path.read_text(encoding="utf-8")
+        for name in declaration.findall(source):
+            if (path.stem, name) in _NOT_SIMPLE_INNER or name == "Page" or (name == "Log" and (path.stem, name) not in _LOG_AS_INNER):
+                continue
+            found.add((path.stem, name))
+            found.update((path.stem, f"{name}.{inner}") for inner in nested.findall(_realInnerBlock(path.stem, name)) if inner != "Page")
+    return found
 
 
 @requiresJavaSdk
 def test_innerClassSectionHoldsExactlyTheSimpleInnerClassesOfTheRealSdk():
-    section = {(resource, name) for resource, name, _ in _innerEntries()}
+    section = {(resource, path) for resource, path, _ in _innerEntries()}
 
     assert sorted(_realInnerClasses() - section) == []
     assert sorted(section - _realInnerClasses()) == []
+
+
+def _isAlphabetical(classes: dict) -> bool:
+    return list(classes) == sorted(classes) and all(_isAlphabetical(item.get("inner") or {}) for item in classes.values())
 
 
 def test_innerClassSectionIsAlphabeticalByResourceAndByClass():
     section = _constructorSection("javaInnerClasses")
 
     assert list(section) == sorted(section)
-    assert all(list(classes) == sorted(classes) for classes in section.values())
+    assert all(_isAlphabetical(classes) for classes in section.values())
 
 
 _SYNTHETIC_INNER = """javaInnerClasses:
@@ -765,6 +807,62 @@ def test_innerClassDataTypeShortEmitsTheUnqualifiedLine(buildResource, tmpPath):
     assert "SubResource.ClassData" not in pair
 
 
+_SYNTHETIC_NESTED = """javaInnerClasses:
+  Balance:
+    Log:
+      extends: Resource
+      fields: {created: String, errors: "String[]", balance: Balance, user: Balance.Log.User}
+      constructors: [[created, errors, balance, user], []]
+      classData: BalanceLog
+      classDataType: short
+      inner:
+        User:
+          fields: {email: String, id: String}
+          constructors: [[email, id], []]
+"""
+
+
+@requiresGenerator
+def test_innerClassThatExtendsResourceAndNestsAnotherIsEmittedInTheShapeOfTheRealLog(buildResource, tmpPath):
+    source = _generated(buildResource, tmpPath, "Balance", _SYNTHETIC_NESTED)
+
+    assert source.rstrip().endswith("""
+    public final static class Log extends Resource {
+        public String created;
+        public String[] errors;
+        public Balance balance;
+        public Balance.Log.User user;
+
+        static ClassData data = new ClassData(Log.class, "BalanceLog");
+
+        public Log(String created, String[] errors, Balance balance, Balance.Log.User user, String id) {
+            super(id);
+            this.created = created;
+            this.errors = errors;
+            this.balance = balance;
+            this.user = user;
+        }
+
+        public Log() {
+            super(null);
+        }
+
+        public final static class User extends SubResource {
+            public String email;
+            public String id;
+
+            public User(String email, String id) {
+                this.email = email;
+                this.id = id;
+            }
+
+            public User() {
+            }
+        }
+    }
+}""")
+
+
 @requiresGenerator
 def test_resourceWithoutInnerEntryIsGeneratedIdenticallyWhateverOtherResourcesDeclare(buildResource, tmpPath):
     plain = _generated(buildResource, tmpPath / "plain", "Transfer", "javaTypes:\n")
@@ -809,12 +907,14 @@ def test_renderJavaCodeRendersInnerClassConstructorsWithAssignmentsAndNulls(java
 
     assert rendered == [{
         "className": "Pair",
+        "superclass": "SubResource",
         "isFinal": True,
         "fields": [{"name": "key", "javaType": "String"}, {"name": "amount", "javaType": "Integer"}],
         "constructors": [
             {"signature": "String key", "body": ["this.key = key;", "this.amount = null;"]},
             {"signature": "", "body": []},
         ],
+        "inner": [],
     }]
 
 
@@ -843,13 +943,136 @@ _PAIR = {"fields": {"key": "String", "amount": "Integer"}, "constructors": [["ke
     ({"Pair": {**_PAIR, "extra": 1}}, "Balance.Pair: chave desconhecida: extra"),
     ({"Pair": {"constructors": [["key"]]}}, "Balance.Pair: fields ausente ou vazio"),
     ({"pair": _PAIR}, "Balance.pair: nome de classe interna invalido"),
-    ({"Log": _PAIR}, "Balance.Log: nome de classe interna que o template ja emite"),
     ({"Page": _PAIR}, "Balance.Page: nome de classe interna que o template ja emite"),
     ({"Balance": _PAIR}, "Balance.Balance: nome de classe interna igual ao da classe externa"),
 ])
 def test_invalidInnerClassFailsNamingTheResourceTheClassAndTheProblem(javaCode, javaDocs, innerClasses, message):
     with pytest.raises(ValueError, match=re.escape(message)):
         _balanceInner(javaCode, javaDocs, innerClasses)
+
+
+_LOG = {
+    "extends": "Resource",
+    "fields": {"created": "String", "balance": "Balance", "user": "Balance.Log.User"},
+    "constructors": [["created", "balance", "user"], []],
+    "classData": "BalanceLog",
+    "classDataType": "short",
+    "inner": {
+        "User": {"fields": {"email": "String", "id": "String"}, "constructors": [["email", "id"], []]},
+    },
+}
+
+
+def test_innerClassThatExtendsResourceTakesTheIdLastAndPassesItToSuper(javaCode, javaDocs):
+    [log] = _balanceInner(javaCode, javaDocs, {"Log": _LOG})
+
+    assert log["superclass"] == "Resource"
+    assert log["constructors"] == [
+        {"signature": "String created, Balance balance, Balance.Log.User user, String id",
+         "body": ["super(id);", "this.created = created;", "this.balance = balance;", "this.user = user;"]},
+        {"signature": "", "body": ["super(null);"]},
+    ]
+
+
+def test_innerClassWithoutExtendsKeepsSubResourceAndHasAnEmptyNestedList(javaCode, javaDocs):
+    [pair] = _balanceInner(javaCode, javaDocs, {"Pair": _PAIR})
+
+    assert pair["superclass"] == "SubResource"
+    assert pair["inner"] == []
+
+
+def test_nestedInnerClassIsRenderedWithTheSameShapeAsTheOuterOne(javaCode, javaDocs):
+    [log] = _balanceInner(javaCode, javaDocs, {"Log": _LOG})
+
+    assert log["inner"] == [{
+        "className": "User",
+        "superclass": "SubResource",
+        "isFinal": True,
+        "fields": [{"name": "email", "javaType": "String"}, {"name": "id", "javaType": "String"}],
+        "constructors": [
+            {"signature": "String email, String id", "body": ["this.email = email;", "this.id = id;"]},
+            {"signature": "", "body": []},
+        ],
+        "inner": [],
+    }]
+
+
+def test_nestedInnerClassCanItselfNestAnotherOne(javaCode, javaDocs):
+    deeper = {"Entry": {**_PAIR, "inner": {"Mid": {**_PAIR, "inner": {"Leaf": _PAIR}}}}}
+
+    [entry] = _balanceInner(javaCode, javaDocs, deeper)
+
+    assert entry["inner"][0]["className"] == "Mid"
+    assert entry["inner"][0]["inner"][0]["className"] == "Leaf"
+
+
+def test_aFieldOfAnInnerClassMayBeTheQualifiedTypeOfItsNestedClass(javaCode, javaDocs):
+    [entry] = _balanceInner(javaCode, javaDocs, {"Entry": {
+        **_PAIR, "fields": {"key": "String", "user": "Balance.Entry.User"}, "constructors": [["key", "user"]],
+        "inner": {"User": _PAIR},
+    }})
+
+    assert entry["fields"][1] == {"name": "user", "javaType": "Balance.Entry.User"}
+
+
+@pytest.mark.parametrize("innerClasses, message", [
+    ({"Entry": {**_PAIR, "fields": {"key": "String", "user": "Balance.Ghost"}}},
+     "Balance.Entry.user: tipo de override 'Balance.Ghost' que o Map-ctor nao le"),
+    ({"Entry": {**_PAIR, "fields": {"key": "String", "user": "Other"}}},
+     "Balance.Entry.user: tipo de override 'Other' que o Map-ctor nao le"),
+    ({"Entry": {"fields": {"key": "String", "user": "Balance"}, "constructors": [["key", "user"]], "map": ["key", "user"]}},
+     "Balance.Entry: map cita campo de tipo 'Balance', que o Map-ctor nao le: user"),
+])
+def test_aFieldTypeOutsideTheProfileMustBeTheOuterResourceOrAnInnerClassOfItAndNeverInTheMap(
+    javaCode, javaDocs, innerClasses, message
+):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        _balanceInner(javaCode, javaDocs, innerClasses)
+
+
+@pytest.mark.parametrize("innerClasses, message", [
+    ({"Pair": {**_PAIR, "extends": "Object"}}, "Balance.Pair: extends invalido: 'Object', esperado um de ['SubResource', 'Resource']"),
+    ({"Pair": {**_PAIR, "extends": ["Resource"]}}, "Balance.Pair: extends invalido: ['Resource'], esperado um de"),
+    ({"Pair": {"fields": {"id": "String"}, "constructors": [["id"]], "extends": "Resource"}},
+     "Balance.Pair: classe que estende Resource herda o campo id e nao pode declara-lo"),
+    ({"Pair": {**_PAIR, "extends": "Resource", "map": ["key"]}},
+     "Balance.Pair: map nao e suportado em classe que estende Resource"),
+    ({"Pair": {**_PAIR, "inner": []}}, "Balance.Pair: inner deve ser um mapa de classes"),
+    ({"Pair": {**_PAIR, "inner": {"user": _PAIR}}}, "Balance.Pair.user: nome de classe interna invalido"),
+    ({"Pair": {**_PAIR, "inner": {"User": {**_PAIR, "extra": 1}}}}, "Balance.Pair.User: chave desconhecida: extra"),
+    ({"Pair": {**_PAIR, "inner": {"User": {"constructors": [["key"]]}}}}, "Balance.Pair.User: fields ausente ou vazio"),
+    ({"Pair": {**_PAIR, "inner": {"User": {**_PAIR, "constructors": [["nope"]]}}}},
+     "Balance.Pair.User: construtor cita campo que a classe nao tem: nope"),
+    ({"Pair": {**_PAIR, "inner": {"Pair": _PAIR}}}, "Balance.Pair.Pair: nome de classe interna repetido"),
+    ({"Pair": {**_PAIR, "inner": {"Balance": _PAIR}}}, "Balance.Pair.Balance: nome de classe interna igual ao da classe externa"),
+    ({"Pair": {**_PAIR, "inner": {"Page": _PAIR}}}, "Balance.Pair.Page: nome de classe interna que o template ja emite"),
+    ({"Pair": {**_PAIR, "inner": {"Slot": _PAIR}}, "Slot": _PAIR}, "Balance.Slot: nome de classe interna repetido"),
+    ({"Pair": {**_PAIR, "inner": {"Slot": {**_PAIR, "inner": {"Slot": _PAIR}}}}},
+     "Balance.Pair.Slot.Slot: nome de classe interna repetido"),
+])
+def test_invalidExtendsOrNestedInnerClassFailsNamingResourceClassKeyAndValue(javaCode, javaDocs, innerClasses, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        _balanceInner(javaCode, javaDocs, innerClasses)
+
+
+def test_aListOfAClassThatExtendsResourceFailsSinceTheItemParserWouldNotPassTheId(javaCode, javaDocs):
+    schemas = yaml.safe_load((SCHEMAS / "balance.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
+    entity = javaDocs.describeEntity(schemas["Balance"], schemas["BalanceCreate"])
+    inner = {"Entry": {"fields": {"key": "String"}, "constructors": [["key"]], "extends": "Resource"}}
+
+    with pytest.raises(ValueError, match=re.escape("Balance.amount: classe interna 'Entry' estende Resource")):
+        javaCode.renderJavaCode(schemas["Balance"], entity, "Balance", {"amount": "List<Entry>"}, innerClasses=inner)
+
+
+def test_aClassNamedLogIsRejectedOnlyWhereTheTemplateEmitsTheLogOfTheResource(javaCode, javaDocs):
+    schemas = yaml.safe_load((SCHEMAS / "balance.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
+    entity = javaDocs.describeEntity(schemas["Balance"], schemas["BalanceCreate"])
+    shape = {"names": "short", "errors": "none", "classData": "short"}
+
+    with pytest.raises(ValueError, match=re.escape("Balance.Log: nome de classe interna que o template ja emite")):
+        javaCode.renderJavaCode(schemas["Balance"], entity, "Balance", {}, innerClasses={"Log": _PAIR},
+                                logShape=shape, logEntity="balance")
+    assert _balanceInner(javaCode, javaDocs, {"Log": _PAIR})[0]["className"] == "Log"
 
 
 def test_innerClassWithAnAcceptedTypeFromTheProfileIsRendered(javaCode, javaDocs):
