@@ -316,6 +316,8 @@ def checkInnerClassExtends(where: str, definition: dict) -> None:
         raise ValueError(f"{where}: classe que estende Resource herda o campo id e nao pode declara-lo")
     if "map" in definition:
         raise ValueError(f"{where}: map nao e suportado em classe que estende Resource")
+    if not definition.get("constructors"):
+        raise ValueError(f"{where}: extends Resource exige ao menos um construtor em constructors")
 
 
 def checkInnerClassDataType(where: str, definition: dict) -> None:

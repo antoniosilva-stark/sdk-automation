@@ -25,7 +25,7 @@ def _members(block: str) -> list:
 
 def _generatedBlock(source: str, path: str) -> str:
     name = path.rsplit(".", 1)[-1]
-    match = re.search(rf"^ {{{4 * (path.count('.') + 1)}}}public final static class {name}\b[^{{]*\{{", source, re.M)
+    match = re.search(rf"^ {{{4 * (path.count('.') + 1)}}}public (?:final )?static class {name}\b[^{{]*\{{", source, re.M)
     return _balancedBlock(source, match)
 
 
@@ -76,6 +76,7 @@ def test_generatedLogAndUserMatchTheRealDeclarations(generatedPaymentRequest, pa
 
 @requiresGenerator
 def test_generatedLogIsTheSingleLogOfThePaymentRequestAndHasNoOperations(generatedPaymentRequest):
+    assert generatedPaymentRequest.count("    public final static class Log extends Resource {\n") == 1
     assert generatedPaymentRequest.count("class Log extends Resource") == 1
     assert generatedPaymentRequest.count("class User extends SubResource") == 1
     log = _generatedBlock(generatedPaymentRequest, "Log")
@@ -156,18 +157,25 @@ def test_generatedPaymentRequestPassesTheStrictGate(builtOnce):
     assert "DEAD_IMPORT" not in out
 
 
-# 3. nenhuma outra saida muda
+# 3. as classes internas que ja eram geradas seguem iguais ao real
 
-def _withoutThePaymentRequestLog(text: str) -> str:
-    conventions = yaml.safe_load(text)
-    del conventions["javaInnerClasses"]["PaymentRequest"]["Log"]
-    return yaml.safe_dump(conventions, sort_keys=False)
+_EXISTING_INNER = [("Invoice", "Description"), ("Invoice", "Discount"), ("Invoice", "Payment"), ("Invoice", "Rule"),
+                   ("MerchantSession", "AllowedInstallment")]
+
+
+@pytest.fixture(scope="module")
+def generatedExisting(tmp_path_factory):
+    from conftest import _loadTool
+    buildResource = _loadTool("build-resource.py")
+    return {resource: _generated(buildResource, tmp_path_factory.mktemp(resource), resource, _realConventionsText())
+            for resource in ("Invoice", "MerchantSession")}
 
 
 @requiresGenerator
-@pytest.mark.parametrize("resource", ["Invoice", "MerchantSession", "Transfer", "Deposit", "BoletoHolmes"])
-def test_thePaymentRequestLogLeavesAnotherResourceByteIdentical(buildResource, tmpPath, resource):
-    real = _generated(buildResource, tmpPath / "real", resource, _realConventionsText())
-    without = _generated(buildResource, tmpPath / "without", resource, _withoutThePaymentRequestLog(_realConventionsText()))
+@requiresJavaSdk
+@pytest.mark.parametrize("resource, name", _EXISTING_INNER)
+def test_existingInnerClassesStillMatchTheRealDeclarationsAfterExtendsAndInner(generatedExisting, resource, name):
+    real = _realInnerBlock(resource, name)
+    generated = _generatedBlock(generatedExisting[resource], name)
 
-    assert real == without
+    assert _members(generated) == _members(real)

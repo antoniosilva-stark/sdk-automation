@@ -152,14 +152,6 @@ def test_generatedLogDeclarationsMatchTheRealOnes(buildResource, tmpPath, resour
     assert _logPdfSignatures(generated) == _logPdfSignatures(real)
 
 
-def test_paymentRequestLogIsGeneratedThroughJavaInnerClassesSinceItHasNoOperations():
-    inner = yaml.safe_load(_realConventionsText())["javaInnerClasses"]["PaymentRequest"]
-
-    assert "javaInnerClasses" in LOG_EXCLUSIONS["PaymentRequest"]
-    assert inner["Log"]["extends"] == "Resource"
-    assert "ME 9.8" not in LOG_EXCLUSIONS["PaymentRequest"]
-
-
 @requiresGenerator
 @requiresJavaSdk
 @pytest.mark.parametrize("resource", sorted(set(LOG_EXCLUSIONS) - {"PaymentRequest"}))

@@ -1055,6 +1055,18 @@ def test_invalidExtendsOrNestedInnerClassFailsNamingResourceClassKeyAndValue(jav
         _balanceInner(javaCode, javaDocs, innerClasses)
 
 
+@pytest.mark.parametrize("definition", [
+    {"extends": "Resource", "fields": {"a": "String"}},
+    {"extends": "Resource", "fields": {"a": "String"}, "constructors": []},
+    {"extends": "Resource", "fields": {"a": "String"}, "constructors": None},
+])
+def test_classThatExtendsResourceWithoutAConstructorFailsSinceTheJavacWouldInjectAnAbsentSuper(
+    javaCode, javaDocs, definition
+):
+    with pytest.raises(ValueError, match=re.escape("Balance.Log: extends Resource exige ao menos um construtor em constructors")):
+        _balanceInner(javaCode, javaDocs, {"Log": definition})
+
+
 def test_aListOfAClassThatExtendsResourceFailsSinceTheItemParserWouldNotPassTheId(javaCode, javaDocs):
     schemas = yaml.safe_load((SCHEMAS / "balance.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
     entity = javaDocs.describeEntity(schemas["Balance"], schemas["BalanceCreate"])
