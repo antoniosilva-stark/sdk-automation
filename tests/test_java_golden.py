@@ -390,9 +390,22 @@ BALANCE_IMPORTS = ("ordem de import do real na minoria (ver IMPORT_ORDER); o ger
                    " do Balance nao tem")
 BALANCE_USER_DOC = "o real deixa um `*` solto no fim da linha `@param user` do get(User) do Balance (descuido do sdk-java)"
 
+PARSE_STATIC = ("o auxiliar parseX do gerador e `private static`; o real o declara de instancia em 11 de 12"
+                " (so o do VerifiedTransfer e static)")
+EXTRA_FIELD_ORDER = ("campo de javaExtraFields e declarado e documentado depois dos campos da spec; o real o escreve junto"
+                     " do campo que o antecede no ctor (a posicao no ctor all-args e a de javaConstructorOrder)")
 RULE = ("tipo-perdido",
-        "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
-        " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
+        "Entrega 9: o gerador nao emite o Transfer.Rule.Deserializer (Gson manual, dispensado em java-handwritten.yaml);"
+        " o Rule gerado fica sem registro no GsonAdapters")
+HELPER_ORDER = ("cosmetico",
+                "Entrega 9: o gerador emite o auxiliar parseX depois das operacoes e o ctor Map da classe interna depois do"
+                " sem argumentos; o real os escreve logo depois do ctor Map externo e antes do ctor sem argumentos")
+SUPPRESS = ("cosmetico",
+            "Entrega 9: o gerador emite `@SuppressWarnings(\"unchecked\")` no ctor Map quando um cast e generico (a lista de"
+            " `rules` passa pelo parseRules); o ctor Map do Transfer do real nao o tem")
+RULE_DOC = ("cosmetico",
+            "Entrega 9: o gerador nao emite Javadoc de classe interna nem dos construtores dela (a spec nao descreve o"
+            " sub-objeto Transfer.Rule)")
 BALANCE_MAP_CTOR = ("cosmetico",
                     "Entrega 9: Balance nao tem ctor Map no real; o gerador emite o ctor (superficie publica a mais)")
 
@@ -438,8 +451,8 @@ EXPECTED: dict[str, dict[str, str]] = {
             PRIMITIVE_CAST,
     },
     "Transfer": {
-        "methods|order|moved=[query(Map<String, Object>, User), delete(String), delete(String, User)]":
-            TRANSFER_ORDER,
+        "signature|returns private List<Rule> -> private static List<Rule>|parseRules(List<Object>)":
+            PARSE_STATIC,
         "allArgs|Transfer(all-args)|extra|displayDescription":
             DOCSTRING_EXTRA,
         "allArgs|Transfer(all-args)|order|moved=[id]":
@@ -478,22 +491,16 @@ EXPECTED: dict[str, dict[str, str]] = {
             ID_RETURN_ONLY,
     },
     "VerifiedTransfer": {
-        "allArgs|VerifiedTransfer(all-args)|missing|accountType":
-            DOCSTRING_MISSING,
-        "allArgs|VerifiedTransfer(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "doc|tags -[param:accountType] +[]|VerifiedTransfer(all-args)":
-            DOCSTRING_MISSING,
+        "doc|tags moved=[param:accountType]|VerifiedTransfer(all-args)":
+            EXTRA_FIELD_ORDER,
         "doc|sections -[Parameters (optional):] +[]|VerifiedTransfer(Map<String, Object>)":
             OPTIONAL_HEADER,
-        "doc|filters -[accountType, id] +[]|VerifiedTransfer(Map<String, Object>)":
-            DOCSTRING_MISSING,
+        "doc|filters -[id] +[] moved=[accountType]|VerifiedTransfer(Map<String, Object>)":
+            EXTRA_FIELD_ORDER,
         "doc|tags -[param:transfers] +[param:verifiedTransfers]|create(List<?>), create(List<?>, User)":
             LIST_PARAM,
-        "fields|missing|accountType":
-            DOCSTRING_MISSING,
-        "mapctor|accountType real=cast:String gen=None":
-            DOCSTRING_MISSING,
+        "fields|order|moved=[accountType]":
+            EXTRA_FIELD_ORDER,
         "imports|real=Rest,Resource | Map,List,HashMap,ArrayList gen=Resource,Rest | ArrayList,HashMap,List,Map":
             IMPORT_ORDER,
     },
@@ -507,32 +514,16 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
 
     },
     "Transfer": {
-        "methods|missing|parseRules(List<Object>)":
-            RULE,
-        "methods|missing|class Rule":
-            RULE,
-        "methods|missing|Rule.Rule(all-args)":
-            RULE,
-        "methods|missing|Rule.Rule(Map<String, Object>)":
-            RULE,
-        "methods|missing|Rule.Rule()":
-            RULE,
+        "methods|order|moved=[parseRules(List<Object>), query(Map<String, Object>, User), delete(String), delete(String, User), Rule.Rule(Map<String, Object>)]":
+            HELPER_ORDER,
         "methods|missing|class Rule.Deserializer":
             RULE,
         "methods|missing|Rule.Deserializer.deserialize(JsonElement, Type, JsonDeserializationContext)":
             RULE,
-        "allArgs|Transfer(all-args)|type|rules real=List<Rule> gen=List<Object>":
-            RULE,
+        "doc|presence real=True gen=False|class Rule, Rule.Rule(all-args), Rule.Rule(Map<String, Object>)":
+            RULE_DOC,
         "annotations|-[] +[SuppressWarnings]|Transfer(Map<String, Object>)":
-            RULE,
-        "fields|missing|Rule.key":
-            RULE,
-        "fields|missing|Rule.value":
-            RULE,
-        "fields|type|rules real=List<Rule> gen=List<Object>":
-            RULE,
-        "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
-            RULE,
+            SUPPRESS,
         "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource | InputStream,ArrayList,HashMap,List,Map":
             RULE,
     },
@@ -548,14 +539,8 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
     },
     "Webhook": {},
     "VerifiedTransfer": {
-        "methods|missing|parseRules(List<Object>)":
-            RULE,
-        "allArgs|VerifiedTransfer(all-args)|type|rules real=List<Transfer.Rule> gen=List<Object>":
-            RULE,
-        "fields|type|rules real=List<Transfer.Rule> gen=List<Object>":
-            RULE,
-        "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
-            RULE,
+        "methods|order|moved=[parseRules(List<Object>)]":
+            HELPER_ORDER,
     },
 }
 

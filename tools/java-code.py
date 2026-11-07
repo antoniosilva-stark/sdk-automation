@@ -31,6 +31,10 @@ JAVA_CODE_PROFILE = {
 }
 
 
+# o tipo Java de um campo de javaExtraFields viaja na propriedade sintetica: a spec nao o descreve
+EXTRA_FIELD_TYPE_KEY = "x-sdk-java-type"
+
+
 def renderJavaCode(
     schema: dict,
     entity: dict,
@@ -47,6 +51,7 @@ def renderJavaCode(
     logEntity: str | None = None,
     eventShape: dict | None = None,
     logResources: frozenset = frozenset(),
+    otherInnerClasses: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -57,8 +62,12 @@ def renderJavaCode(
     interno, ja resolvidos a partir da forma (`javaLogs`) e do nome da entidade do Log (`logEntity`). `page`: so para recurso com Page externa, o nome da lista e o
     tipo de retorno dos `page()`, resolvidos a partir da forma (`javaPages`). `events`: so para recurso com `javaEvents`,
     o Deserializer e as subclasses, derivados das subscriptions e dos parametros do construtor all-args. `logResources`:
-    os recursos que tem Log (flag `x-sdk-log` ou `Log` em javaInnerClasses), que o recurso de cada subscription tem de ser."""
-    fields = renderFields(schema, resource, overrides, profile, innerClasses or {}, resourceNames)
+    os recursos que tem Log (flag `x-sdk-log` ou `Log` em javaInnerClasses), que o recurso de cada subscription tem de ser.
+    `otherInnerClasses`: as classes internas dos demais recursos por nome qualificado (`Transfer.Rule`), so para o tipo
+    `List<Transfer.Rule>` de um campo; a classe nao e emitida aqui. Os campos extras (javaExtraFields) ja chegam no schema
+    (`addExtraFields`)."""
+    knownInnerClasses = {**(innerClasses or {}), **(otherInnerClasses or {})}
+    fields = renderFields(schema, resource, overrides, profile, knownInnerClasses, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
     innerClassData = renderInnerClasses(resource, innerClasses or {}, profile, hasLog=logShape is not None)
     code = {
@@ -67,7 +76,7 @@ def renderJavaCode(
         "open": isOpen,
         "innerClasses": innerClassData,
         "innerClassLines": [line for item in innerClassData for line in innerClassLines(item)],
-        **renderMapConstructor(entity, fields, profile, innerClasses or {}),
+        **renderMapConstructor(entity, fields, profile, knownInnerClasses),
     }
     if logShape is not None:
         code["log"] = renderLog(resource, logShape, logEntity)
@@ -93,6 +102,44 @@ def omitFields(schema: dict, resource: str, omitted: list) -> dict:
         if properties[name].get("x-sdk-id"):
             raise ValueError(f"{resource}.{name}: javaOmittedFields cita o campo id, que o template sempre emite")
     return {**schema, "properties": {name: prop for name, prop in properties.items() if name not in omitted}}
+
+
+def addExtraFields(
+    schema: dict,
+    createSchema: dict | None,
+    resource: str,
+    extras: dict,
+    profile: dict = JAVA_CODE_PROFILE,
+) -> tuple:
+    """O schema e o XCreate com os campos que so o Java declara (`javaExtraFields`), depois dos da spec. O campo entra
+    nos dois, entao e opcional para o Javadoc e o Map-ctor o le, como o real le os quatro. O tipo tem de ser um que o
+    Map-ctor sabe ler e o nome nao pode ser de um campo da spec, senao o extra o sobrescreveria calado."""
+    if not extras:
+        return schema, createSchema
+    properties = dict(schema.get("properties") or {})
+    creatable = dict((createSchema or {}).get("properties") or {})
+    for name, spec in extras.items():
+        if name in properties:
+            raise ValueError(f"{resource}.{name}: javaExtraFields cita campo que o schema ja tem")
+        checkOverrideType(resource, name, spec["type"], profile)
+        prop = {**schemaTypeOf(spec["type"], profile), "description": spec.get("description", ""),
+                EXTRA_FIELD_TYPE_KEY: spec["type"]}
+        properties[name] = prop
+        creatable[name] = prop
+    return {**schema, "properties": properties}, {**(createSchema or {}), "properties": creatable}
+
+
+def schemaTypeOf(javaType: str, profile: dict) -> dict:
+    """O `type` do schema que da o tipo Java dado, so para o vocabulario do Javadoc (`[string]`, `[integer]`)."""
+    for kind, formats in profile["types"].items():
+        if javaType in formats.values():
+            return {"type": kind}
+    for itemKind, arrayType in profile["arrayTypes"].items():
+        if javaType == arrayType:
+            return {"type": "array", "items": {"type": itemKind}}
+    if javaType in profile["primitives"]:
+        return {"type": "integer"}
+    return {"type": "object"}
 
 
 def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: frozenset, logResources: frozenset) -> dict:
@@ -437,7 +484,10 @@ def renderFields(
         isId = bool(prop.get("x-sdk-id"))
         if name in overrides and isId:
             raise ValueError(f"{resource}.{name}: override de campo id, que o template sempre emite como String")
-        javaType = overrides[name] if name in overrides else fieldTypeOf(resource, name, prop, profile)
+        if name in overrides and EXTRA_FIELD_TYPE_KEY in prop:
+            raise ValueError(f"{resource}.{name}: javaTypes cita campo declarado em javaExtraFields")
+        extraType = prop.get(EXTRA_FIELD_TYPE_KEY)
+        javaType = overrides[name] if name in overrides else extraType or fieldTypeOf(resource, name, prop, profile)
         if name in overrides:
             checkOverrideType(resource, name, javaType, profile, innerClasses or {}, resourceNames)
         fields.append({"name": name, "javaType": javaType, "isId": isId})
@@ -507,8 +557,12 @@ def subObjectElement(javaType, profile: dict) -> str | None:
 
 
 def checkSubObjectElement(resource: str, name: str, element: str, innerClasses: dict, resourceNames) -> None:
-    """E e uma classe interna do proprio recurso (qualificada ou nao) ou, sem qualificador, outro recurso gerado."""
+    """E e uma classe interna do proprio recurso (qualificada ou nao), uma de outro recurso (`innerClasses` a traz pelo
+    nome qualificado, `Transfer.Rule`) ou, sem qualificador, outro recurso gerado."""
     qualifier, _, bare = element.rpartition(".")
+    if qualifier and element in innerClasses:
+        checkInnerClassBuildable(resource, name, bare, innerClasses[element])
+        return
     if qualifier and qualifier != resource:
         raise ValueError(f"{resource}.{name}: qualificador {qualifier!r} de {element!r} nao e o proprio recurso")
     if qualifier and bare not in innerClasses:
@@ -571,7 +625,7 @@ def renderMapConstructor(
             continue
         parser = f"parse{field['name'][0].upper()}{field['name'][1:]}"
         lines.append(f'this.{field["name"]} = {parser}((List<Object>) dataCopy.remove("{field["name"]}"));')
-        innerDefinition = (innerClasses or {}).get(element.rpartition(".")[2])
+        innerDefinition = (innerClasses or {}).get(element) or (innerClasses or {}).get(element.rpartition(".")[2])
         parsers.append(renderParseHelper(parser, element, innerDefinition, profile))
     return {
         "ctorMapBody": lines,

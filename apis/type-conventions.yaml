@@ -16,8 +16,9 @@ stringFormats:
 # O tipo precisa ser um que o Map-ctor sabe ler (perfil: String, Integer, Long, Number, Float, Double, Boolean, Object,
 # String[], List<Object>, mais long/int primitivos e Map/HashMap/List<String>/Resource por cast direto). `List<E>` e o
 # tipo do real, VERBATIM, para o campo que o schema descreve so como array de object: E e uma classe interna do proprio
-# recurso (em javaInnerClasses, com ou sem o qualificador `Recurso.`) ou outro recurso gerado; o Map-ctor converte cada
-# Map em E por um auxiliar `parseX`, como o real. Campo que o schema nao tem falha na geracao.
+# recurso (em javaInnerClasses, com ou sem o qualificador `Recurso.`), uma classe interna de outro recurso pelo nome
+# qualificado (`Transfer.Rule` no VerifiedTransfer) ou outro recurso gerado; o Map-ctor converte cada Map em E por um
+# auxiliar `parseX`, como o real. Campo que o schema nao tem falha na geracao.
 javaTypes:
   Balance:
     amount: long
@@ -108,9 +109,11 @@ javaTypes:
   Transfer:
     amount: long
     metadata: HashMap<String, Object>
+    rules: List<Rule>
   VerifiedTransfer:
     amount: long
     metadata: HashMap<String, Object>
+    rules: List<Transfer.Rule>
   Workspace:
     allowedTaxIds: List<String>
 
@@ -133,7 +136,8 @@ javaOpenClasses:
 # deriva do docstring Python: e dado do Java, medido contra sdk-java f60902a no construtor publico mais longo de
 # cada classe externa. Recurso sem entrada usa a ordem e o tipo do campo no schema, que e o default para recurso novo.
 # Valida-se contra o real em tests/test_java_field_types.py (cada entrada e o real; todo recurso de mesmo conjunto de
-# nomes que o real esta coberto). Fora: CorporateWithdrawal (ctor package-private) e os de conjunto de nomes diferente.
+# nomes que o real esta coberto, e o campo de javaExtraFields conta como campo da ordem). Fora: CorporateWithdrawal (ctor
+# package-private) e os de conjunto de nomes diferente (Transfer e MerchantPurchase, que carregam campo da spec que o real nao tem).
 javaConstructorOrder:
   Balance: [amount, currency, updated, id]
   Boleto: [amount, name, taxId, streetLine1, streetLine2, district, city, stateCode, zipCode, due, fine,
@@ -156,8 +160,13 @@ javaConstructorOrder:
   Invoice: [amount, due, taxId, name, expiration, fine, interest, descriptions, discounts, rules, splits, pdf,
     link, tags, nominalAmount, fineAmount, interestAmount, discountAmount, id, brcode, fee,
     transactionIds, status, created, updated]
+  InvoicePullSubscription: [start, interval, pullMode, pullRetryLimit, type, amount, amountMinLimit, displayDescription,
+    due, externalId, referenceCode, end, data, name, taxId, tags, status, bacenId, installmentId, brcode, created,
+    updated, id]
   MerchantInstallment: [id, amount, created, due, fee, fundingType, network, purchaseId, status, tags, transactionIds,
     updated]
+  MerchantSession: [id, allowedFundingTypes, allowedInstallments, allowedIps, challengeMode, confirmationMode, holderId,
+    softDescriptor, created, expiration, status, tags, updated, uuid]
   PaymentRequest: [id, centerId, payment, type, due, tags, amount, description, status, actions, updated, created]
   SplitReceiver: [name, taxId, bankCode, branchCode, accountNumber, accountType, id, tags, status, created, updated]
   TaxPayment: [id, line, barCode, description, tags, scheduled, status, amount, fee, transactionIds, type, updated,
@@ -166,6 +175,8 @@ javaConstructorOrder:
   UtilityPayment: [amount, tags, description, scheduled, line, barCode, id, fee, type, transactionIds, status, created,
     updated]
   VerifiedAccount: [id, bankCode, bankName, branchCode, created, keyId, name, number, status, tags, taxId, type, updated]
+  VerifiedTransfer: [id, amount, accountId, accountType, externalId, scheduled, description, displayDescription, tags,
+    rules, fee, status, transactionIds, metadata, created, updated]
   Workspace: [username, name, allowedTaxIds, status, id, organizationId, pictureUrl, created]
 
 # Campo do schema que o Java nao declara na classe externa, Recurso -> lista de campos. A spec e compartilhada com as
@@ -174,6 +185,29 @@ javaConstructorOrder:
 # (javaEvents). Nao vale para o id, que o template sempre emite. Campo que o schema nao tem falha na geracao.
 javaOmittedFields:
   Event: [log]
+
+# Campo que o real declara na classe externa e a spec (do sdk-python) nao tem, Recurso -> nome -> {type, description}. E o
+# inverso de javaOmittedFields: o campo e declarado (depois dos da spec), atribuido pelo ctor all-args, lido pelo Map-ctor
+# como qualquer campo nao somente de retorno e documentado no Javadoc; a posicao no ctor all-args e a de javaConstructorOrder,
+# que passa a contar o campo. O dado so tem campo que o Map-ctor do real le, e a spec compartilhada nao e tocada.
+#   type:        (obrigatorio) o tipo Java, o mesmo do campo no real, aceito como em javaTypes.
+#   description: (opcional) o texto da linha `@param` do Javadoc, o do real; sem ele a linha e so `nome [tipo]`, que e o
+#                que o gerador escreve sem descricao (o real de MerchantPurchase e MerchantSession nao documenta o campo).
+# Medido contra sdk-java f60902a e validado em tests/test_java_extra_fields.py: cada entrada e o real (tipo, ctor, Map-ctor,
+# texto) e nenhum campo da classe externa do real fica sem schema nem entrada nos cinco recursos.
+javaExtraFields:
+  InvoicePullSubscription:
+    installmentId:
+      type: String
+      description: 'unique id of the installment related to this request. ex: "5656565656565656"'
+  MerchantPurchase:
+    confirmationMode: {type: String}
+  MerchantSession:
+    confirmationMode: {type: String}
+  VerifiedTransfer:
+    accountType:
+      type: String
+      description: 'receiver bank account type. This parameter only has effect on Pix Transfers. ex: "checking", "savings", "salary" or "payment"'
 
 javaConstructorTypes:
   CorporateRule:
@@ -194,7 +228,9 @@ javaConstructorTypes:
 # (`PaymentRequest.Log.User`), mas esse tipo nao entra em `map`. Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
 # PaymentRequest.Log nao e um javaLogs: nao tem get/query/page (e o PaymentRequest nao tem `x-sdk-log`), entao e uma classe
 # interna que estende Resource, com a User aninhada; e dele que o Event tira o tipo do log da subscription payment-request.
-# Fora (outras entregas): Page dentro de Log (ME 9.4), Transfer.Rule (Deserializer manual), PaymentRequest.Deserializer,
+# Transfer.Rule e uma classe simples como as outras: o `Deserializer` aninhado do real nao e gerado e segue dispensado
+# em apis/java-handwritten.yaml. O VerifiedTransfer usa `List<Transfer.Rule>` (javaTypes) sem declarar a classe.
+# Fora (outras entregas): Page dentro de Log (ME 9.4), Transfer.Rule.Deserializer, PaymentRequest.Deserializer,
 # MerchantSession.Purchase e o Deserializer do Event (ME 9.8).
 javaInnerClasses:
   Boleto:
@@ -259,6 +295,11 @@ javaInnerClasses:
         User:
           fields: {email: String, id: String, name: String, pictureUrl: String, status: String, type: String}
           constructors: [[email, id, name, pictureUrl, status, type], []]
+  Transfer:
+    Rule:
+      fields: {key: String, value: Object}
+      constructors: [[key, value], []]
+      map: [key, value]
 
 # Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias, mais duas opcionais. O real nao e
 # uniforme (medido contra sdk-java f60902a, 24 recursos com Log; 22 aqui, os 2 de forma propria ficam fora, ver

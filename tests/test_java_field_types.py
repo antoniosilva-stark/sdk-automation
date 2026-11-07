@@ -5,7 +5,7 @@ import subprocess
 import yaml
 import pytest
 
-from conftest import REFERENCES, REPO_ROOT, requiresGenerator, requiresJavaSdk, requiresJavac
+from conftest import REFERENCES, REPO_ROOT, _loadTool, requiresGenerator, requiresJavaSdk, requiresJavac
 
 SCHEMAS = REPO_ROOT / "apis/schemas"
 REAL_SOURCES = REPO_ROOT / "_references/sdk-java/src/main/java/com/starkbank"
@@ -86,6 +86,7 @@ def test_everyOverrideIsAcceptedByTheProfileAndPointsToAFieldOfItsSchema(javaCod
             overrides,
             innerClasses=extractSchema.javaInnerClasses(resource),
             resourceNames=extractSchema.schemaResourceNames(),
+            otherInnerClasses=extractSchema.javaOtherInnerClasses(resource),
         )
 
 
@@ -277,10 +278,14 @@ def _schemaOf(resource: str) -> tuple:
 
 
 def _generatedSchemaOf(resource: str) -> tuple:
-    """O schema como o Java o declara: sem os campos de javaOmittedFields (o `log` da base do Event)."""
+    """O schema como o Java o declara: sem os campos de javaOmittedFields (o `log` da base do Event) e com os de
+    javaExtraFields (o que o real tem e a spec nao)."""
     schema, createSchema = _schemaOf(resource)
-    omitted = (yaml.safe_load(_realConventionsText()).get("javaOmittedFields") or {}).get(resource) or []
-    return {**schema, "properties": {name: prop for name, prop in schema["properties"].items() if name not in omitted}}, createSchema
+    conventions = yaml.safe_load(_realConventionsText())
+    omitted = (conventions.get("javaOmittedFields") or {}).get(resource) or []
+    kept = {"properties": {name: prop for name, prop in schema["properties"].items() if name not in omitted}}
+    extras = (conventions.get("javaExtraFields") or {}).get(resource) or {}
+    return _loadTool("java-code.py").addExtraFields({**schema, **kept}, createSchema, resource, extras)
 
 
 def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> list:
@@ -294,6 +299,7 @@ def _generatedCtorFields(javaCode, javaDocs, extractSchema, resource: str) -> li
         ctorTypes=extractSchema.javaConstructorTypes(resource),
         innerClasses=extractSchema.javaInnerClasses(resource),
         resourceNames=extractSchema.schemaResourceNames(),
+        otherInnerClasses=extractSchema.javaOtherInnerClasses(resource),
     )["ctorFields"]
 
 
@@ -531,6 +537,7 @@ _RESOURCE_SECTIONS = [
     ("javaConstructorTypes", "javaConstructorTypes:\n  {name}:\n    amount: int\n", "javaConstructorTypes"),
     ("javaInnerClasses", "javaInnerClasses:\n  {name}: {{}}\n", "javaInnerClasses"),
     ("javaLogs", "javaLogs:\n  {name}: {{names: short, errors: none, classData: short}}\n", "javaLogShape"),
+    ("javaExtraFields", "javaExtraFields:\n  {name}: {{}}\n", "javaExtraFields"),
 ]
 
 
@@ -698,8 +705,10 @@ def test_innerClassEntryWritesTheClassDataTypeTheRealWrites(resource, path, defi
         assert ("qualified" if real.group(1) else "short") == definition["classDataType"]
 
 
-_NOT_SIMPLE_INNER = {("Transfer", "Rule"), ("MerchantSession", "Purchase"), ("PaymentRequest", "Deserializer")}
+_NOT_SIMPLE_INNER = {("MerchantSession", "Purchase"), ("PaymentRequest", "Deserializer")}
 _NOT_SIMPLE_FILES = {"Event"}
+# `Page` o template emite; o `Deserializer` aninhado (Transfer.Rule) e Gson manual, dispensado em apis/java-handwritten.yaml
+_NOT_SIMPLE_NESTED = {"Page", "Deserializer"}
 # o Log de PaymentRequest nao tem get/query/page: nao e um javaLogs, e sim uma classe interna que estende Resource
 _LOG_AS_INNER = {("PaymentRequest", "Log")}
 
@@ -717,7 +726,8 @@ def _realInnerClasses() -> set:
             if (path.stem, name) in _NOT_SIMPLE_INNER or name == "Page" or (name == "Log" and (path.stem, name) not in _LOG_AS_INNER):
                 continue
             found.add((path.stem, name))
-            found.update((path.stem, f"{name}.{inner}") for inner in nested.findall(_realInnerBlock(path.stem, name)) if inner != "Page")
+            found.update((path.stem, f"{name}.{inner}") for inner in nested.findall(_realInnerBlock(path.stem, name))
+                         if inner not in _NOT_SIMPLE_NESTED)
     return found
 
 
@@ -1110,17 +1120,17 @@ def test_innerClassLoaderDefaultsToNothingWhenTheSectionIsAbsent(extractSchema, 
     assert extractSchema.javaInnerClasses("Balance", conventions) == {}
 
 
-def _isSubObjectType(resource: str, javaType: str, innerNames: set, resources: set) -> bool:
-    """`Resource`, `List<InternaDoRecurso>` (qualificada ou nao) ou `List<OutroRecurso>`: o que o gerador nao deriva do
-    schema, que so diz `array` de `object`."""
+def _isSubObjectType(resource: str, javaType: str, innerByResource: dict, resources: set) -> bool:
+    """`Resource`, `List<InternaDoRecurso>` (qualificada ou nao), `List<Outro.Interna>` ou `List<OutroRecurso>`: o que o
+    gerador nao deriva do schema, que so diz `array` de `object`."""
     if javaType == "Resource":
         return True
     match = re.fullmatch(r"List<(?:(\w+)\.)?(\w+)>", javaType)
     if not match:
         return False
     qualifier, bare = match.groups()
-    if bare in innerNames:
-        return qualifier in (None, resource)
+    if bare in innerByResource.get(qualifier or resource, {}):
+        return True
     return qualifier is None and bare in resources
 
 
@@ -1133,7 +1143,7 @@ def test_everyRealOuterSubObjectListAndResourceFieldOfAGeneratedResourceHasItsOv
     missing = [f"{resource}.{name}: real={javaType} tabela={table.get(resource, {}).get(name)}"
                for resource in sorted(resources) if (REAL_SOURCES / f"{resource}.java").is_file()
                for name, javaType in _realOuterFields(resource).items()
-               if _isSubObjectType(resource, javaType, set(innerByResource.get(resource, {})), resources)
+               if _isSubObjectType(resource, javaType, innerByResource, resources)
                and table.get(resource, {}).get(name) != javaType]
 
     assert missing == []
@@ -1147,7 +1157,7 @@ def test_theSubObjectOverridesAreTheOnesTheRealSdkDeclares(buildResource):
 
     declared = {f"{resource}.{name}": javaType for resource, fields in table.items()
                 for name, javaType in fields.items()
-                if _isSubObjectType(resource, javaType, set(innerByResource.get(resource, {})), resources)}
+                if _isSubObjectType(resource, javaType, innerByResource, resources)}
 
     assert declared == {
         "Boleto.descriptions": "List<Boleto.Description>",
@@ -1167,6 +1177,8 @@ def test_theSubObjectOverridesAreTheOnesTheRealSdkDeclares(buildResource):
         "MerchantSession.allowedInstallments": "List<AllowedInstallment>",
         "PaymentRequest.actions": "List<PaymentRequest.Action>",
         "PaymentRequest.payment": "Resource",
+        "Transfer.rules": "List<Rule>",
+        "VerifiedTransfer.rules": "List<Transfer.Rule>",
     }
 
 

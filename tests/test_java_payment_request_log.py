@@ -160,9 +160,10 @@ def test_generatedPaymentRequestPassesTheStrictGate(builtOnce):
 
 # 3. as classes internas que ja eram geradas seguem iguais ao real
 
-# derivada das entradas: uma classe interna nova ganha este teste sem ninguem lembrar de listar
+# derivada das entradas: uma classe interna nova ganha este teste sem ninguem lembrar de listar. Transfer.Rule fica de
+# fora: o real carrega o Deserializer dispensado e le `value` sem cast, e tests/test_java_extra_fields.py a compara assim
 _EXISTING_INNER = [(resource, path) for resource, path, definition in _innerEntries()
-                   if "." not in path and "extends" not in definition]
+                   if "." not in path and "extends" not in definition and (resource, path) != ("Transfer", "Rule")]
 
 
 @pytest.fixture(scope="module")

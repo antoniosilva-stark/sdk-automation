@@ -432,6 +432,51 @@ def test_invalidListOfSubObjectsFailsNamingTheFieldAndTheProblem(javaCode, javaT
         _renderList(javaCode, javaType, inner, frozenset(resourceNames))
 
 
+def _renderOtherList(javaCode, javaType, otherInnerClasses):
+    schema, entity = _entity({"rules": _ARRAY}, ("rules",))
+    return javaCode.renderJavaCode(
+        schema,
+        entity,
+        "Widget",
+        {"rules": javaType},
+        resourceNames=frozenset({"Other"}),
+        otherInnerClasses=otherInnerClasses,
+    )
+
+
+def test_listOfAnInnerClassOfAnotherResourceIsTypedQualifiedAndBuiltThroughItsMapConstructor(javaCode):
+    rendered = _renderOtherList(javaCode, "List<Other.Rule>", {"Other.Rule": _MAP_RULE})
+
+    assert rendered["fields"][0]["javaType"] == "List<Other.Rule>"
+    assert rendered["ctorMapBody"] == ['this.rules = parseRules((List<Object>) dataCopy.remove("rules"));']
+    assert "        parsed.add(new Other.Rule((Map<String, Object>) item));" in rendered["ctorMapParsers"][0]["body"]
+    assert rendered["innerClasses"] == []
+
+
+def test_listOfAnInnerClassOfAnotherResourceWithoutAMapConstructorReadsEachArgumentByItsFieldType(javaCode):
+    inner = {"Other.Rule": {"fields": {"key": "String", "size": "long"}, "constructors": [["key", "size"]]}}
+
+    body = _renderOtherList(javaCode, "List<Other.Rule>", inner)["ctorMapParsers"][0]["body"]
+
+    assert "        parsed.add(new Other.Rule(" in body
+    assert '            ((Number) map.get("size")).longValue()' in body
+
+
+@pytest.mark.parametrize("javaType, inner, message", [
+    ("List<Other.Nope>", {"Other.Rule": _MAP_RULE}, "Widget.rules: qualificador 'Other' de 'Other.Nope' nao e o proprio recurso"),
+    ("List<Third.Rule>", {"Other.Rule": _MAP_RULE}, "Widget.rules: qualificador 'Third' de 'Third.Rule' nao e o proprio recurso"),
+    ("List<Other.Rule>", {"Other.Rule": {"fields": _RULE_FIELDS, "constructors": [[]]}},
+     "Widget.rules: classe interna 'Rule' nao tem construtor que receba campos"),
+    ("List<Other.Rule>", {"Other.Rule": {**_MAP_RULE, "extends": "Resource"}},
+     "Widget.rules: classe interna 'Rule' estende Resource, que o parseX nao constroi"),
+])
+def test_listOfAnInnerClassOfAnotherResourceThatIsUnknownOrCannotBeBuiltFailsNamingTheField(
+    javaCode, javaType, inner, message
+):
+    with pytest.raises(ValueError, match=message):
+        _renderOtherList(javaCode, javaType, inner)
+
+
 def test_anInnerClassThatCannotBeBuiltFromAMapFailsNamingTheField(javaCode):
     inner = {"Rule": {"fields": _RULE_FIELDS, "constructors": [[]]}}
 

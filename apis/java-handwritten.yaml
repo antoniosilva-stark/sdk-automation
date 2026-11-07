@@ -134,9 +134,6 @@ MerchantSession:
     text: 'field ausente: public String billingZipCode;'
     reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:238.'
   - kind: field
-    text: 'field ausente: public String confirmationMode;'
-    reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:240. The same text is also the field of MerchantSession itself (MerchantSession.java:27), which stays a gap: count 1 waives only this Purchase declaration, and when the generator emits the outer field both occurrences disappear and this entry goes obsolete.'
-  - kind: field
     text: 'field ausente: public Map<String, Object> metadata;'
     reason: 'MerchantSession.Purchase (sdk-java f60902a, MerchantSession.java:217-312) is a deprecated hand-written class: it extends Resource (the generated inner-class mould only emits SubResource classes) and its constructors are not the generated ones; field declared at MerchantSession.java:241.'
   - kind: field

@@ -141,6 +141,12 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         extractSchema.javaOmittedFields(resource, conventionsFile),
     )
     createSchema = resolveRef(spec, f"{resource}Create", apisDir)
+    schema, createSchema = javaCode.addExtraFields(
+        schema,
+        createSchema,
+        resource,
+        extractSchema.javaExtraFields(resource, conventionsFile),
+    )
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
     pageShape = extractSchema.javaPageShape(resource, conventionsFile) if "x-sdk-page" in flags else None
@@ -164,6 +170,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         ctorOrder=extractSchema.javaConstructorOrder(resource, conventionsFile),
         ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
         innerClasses=extractSchema.javaInnerClasses(resource, conventionsFile),
+        otherInnerClasses=extractSchema.javaOtherInnerClasses(resource, conventionsFile),
         resourceNames=extractSchema.schemaResourceNames(),
         logShape=logShape if "x-sdk-log" in flags else None,
         pageShape=pageShape,

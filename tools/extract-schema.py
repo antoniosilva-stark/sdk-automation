@@ -46,6 +46,7 @@ JAVA_RESERVED_WORDS = frozenset({
 # Chaves do javaEvents e o formato de uma subscription (kebab-case minusculo: dele sai o nome do recurso, `boleto-holmes`
 # -> BoletoHolmes). O default de `gson` e nenhuma subscription.
 JAVA_EVENT_KEYS = ("subscriptions", "gson")
+JAVA_EXTRA_FIELD_KEYS = frozenset({"type", "description"})
 JAVA_EVENT_SUBSCRIPTION = re.compile(r"[a-z]+(?:-[a-z]+)*")
 
 VENDORED_ROOT = Path("_references/sdk-python")
@@ -196,13 +197,17 @@ def checkLogExtraFields(resource: str, extraFields) -> None:
                 f"{resource}: javaLogs.extraFields nome invalido: {name!r}, esperado um identificador lowerCamel fora de "
                 f"{sorted(JAVA_LOG_RESERVED_FIELDS)} e das palavras reservadas do Java"
             )
-        # a descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia, e o
-        # javac traduz `*/` em `*/` antes de ler o comentario, entao a barra invertida tambem fecharia
-        if not isinstance(description, str) or not description.strip() or re.search(r"[\r\n\\]|\*/", description):
+        if not isJavadocLine(description):
             raise ValueError(
                 f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, "
                 "esperado texto de uma linha sem '*/' nem barra invertida"
             )
+
+
+def isJavadocLine(description) -> bool:
+    """A descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia, e o javac
+    traduz `*/` em `*/` antes de ler o comentario, entao a barra invertida tambem fecharia."""
+    return isinstance(description, str) and bool(description.strip()) and not re.search(r"[\r\n\\]|\*/", description)
 
 
 def checkLogCtor(resource: str, order) -> None:
@@ -237,6 +242,55 @@ def checkOmittedFields(resource: str, fields) -> None:
         if field in seen:
             raise ValueError(f"{resource}: javaOmittedFields repete {field!r}")
         seen.add(field)
+
+
+def javaExtraFields(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    extras = loadConventions(Path(conventions)).get("javaExtraFields") or {}
+    if not isinstance(extras, dict):
+        raise ValueError("javaExtraFields deve ser um mapa recurso -> {campo: {type, description}}")
+    checkKnownResources("javaExtraFields", extras)
+    for name, fields in extras.items():
+        checkExtraFields(name, fields)
+    return extras.get(resource) or {}
+
+
+def checkExtraFields(resource: str, fields) -> None:
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError(f"{resource}: javaExtraFields deve ser um mapa nome -> {{type, description}}, veio {fields!r}")
+    for name, spec in fields.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", name) or name in JAVA_RESERVED_WORDS:
+            raise ValueError(
+                f"{resource}: javaExtraFields nome invalido: {name!r}, esperado um identificador lowerCamel que nao "
+                "seja palavra reservada do Java"
+            )
+        checkExtraField(resource, name, spec)
+
+
+def checkExtraField(resource: str, name: str, spec) -> None:
+    if not isinstance(spec, dict):
+        raise ValueError(f"{resource}.{name}: javaExtraFields deve ser um mapa {{type, description}}, veio {spec!r}")
+    unknown = sorted(str(key) for key in set(spec) - JAVA_EXTRA_FIELD_KEYS)
+    if unknown:
+        raise ValueError(f"{resource}.{name}: javaExtraFields chave desconhecida: {unknown[0]}")
+    if "type" not in spec:
+        raise ValueError(f"{resource}.{name}: javaExtraFields.type ausente")
+    if not isinstance(spec["type"], str) or not spec["type"].strip():
+        raise ValueError(f"{resource}.{name}: javaExtraFields.type invalido: {spec['type']!r}, esperado texto")
+    if "description" in spec and not isJavadocLine(spec["description"]):
+        raise ValueError(
+            f"{resource}.{name}: javaExtraFields.description invalida: {spec['description']!r}, "
+            "esperado texto de uma linha sem '*/' nem barra invertida"
+        )
+
+
+def javaOtherInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    """As classes internas dos demais recursos, por nome qualificado (`Transfer.Rule`): o campo `List<Transfer.Rule>` do
+    VerifiedTransfer usa a classe sem declara-la."""
+    classes = loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    checkKnownResources("javaInnerClasses", classes)
+    return {f"{outer}.{name}": definition
+            for outer, inner in classes.items() if outer != resource
+            for name, definition in (inner or {}).items()}
 
 
 def javaEventShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
