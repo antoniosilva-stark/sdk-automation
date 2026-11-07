@@ -171,6 +171,18 @@ def test_generatedEventImportsWhatTheDeserializerUsesAndNothingForParse(generate
 
 
 @requiresGenerator
+def test_withoutAGsonSubsetTheEventImportsNoGsonEventAndNoCaseUsesIt(buildResource, tmpPath):
+    conventions = yaml.safe_load(_realConventionsText())
+    del conventions["javaEvents"]["Event"]["gson"]
+    source = _generated(buildResource, tmpPath, "Event", yaml.safe_dump(conventions, sort_keys=False))
+
+    assert "import com.google.gson.*;\n" in source
+    assert "import com.starkcore.utils.GsonEvent;" not in source
+    assert "GsonEvent" not in source
+    assert source.count("context.deserialize(jsonObject,") == 19
+
+
+@requiresGenerator
 def test_generatedBaseEventKeepsNoLogInItsJavadoc(generatedEvent):
     outer = generatedEvent.split("    public static class Deserializer")[0]
 
@@ -179,11 +191,14 @@ def test_generatedBaseEventKeepsNoLogInItsJavadoc(generatedEvent):
 
 
 @requiresGenerator
-def test_theGeneratedEventPassesTheContractGateInAdvisoryMode(builtOnce):
-    code, out, _ = builtOnce("Event", "java", "--advisory")
+@requiresJavac
+def test_theGeneratedEventPassesTheStrictGateIncludingTheStyleStepAndTheDeadImportCheck(builtOnce):
+    code, out, _ = builtOnce("Event", "java")
 
     assert code == 0, out
     assert "sintaxe (javac)" in out
+    assert "estilo" in out
+    assert "DEAD_IMPORT" not in out
 
 
 def _mainSource(subscriptions: list) -> str:
@@ -304,6 +319,9 @@ def test_javaEventShapeIsNoneWithoutEntryOrSection(extractSchema, tmpPath):
     ("javaEvents:\n  Event:\n    subscriptions: [transfer-]\n", r"Event: javaEvents\.subscriptions.*'transfer-'"),
     ("javaEvents:\n  Event:\n    subscriptions: [9lives]\n", r"Event: javaEvents\.subscriptions.*'9lives'"),
     ("javaEvents:\n  Event:\n    subscriptions: [7]\n", r"Event: javaEvents\.subscriptions.*7"),
+    ('javaEvents:\n  Event:\n    subscriptions: ["transfer\\n"]\n', r"Event: javaEvents\.subscriptions.*'transfer\\n'"),
+    ("javaEvents:\n  Event:\n    subscriptions: ['tr\"ansfer']\n", r"Event: javaEvents\.subscriptions.*'tr\"ansfer'"),
+    ("javaEvents:\n  Event:\n    subscriptions: ['tr\\ansfer']\n", r"Event: javaEvents\.subscriptions.*'tr\\\\ansfer'"),
     ("javaEvents:\n  Event:\n    subscriptions: [transfer, transfer]\n", r"Event: javaEvents\.subscriptions.*repete.*'transfer'"),
     ("javaEvents:\n  Event:\n    subscriptions: []\n", r"Event: javaEvents\.subscriptions.*lista nao vazia"),
     ("javaEvents:\n  Event:\n    subscriptions: transfer\n", r"Event: javaEvents\.subscriptions.*'transfer'"),
