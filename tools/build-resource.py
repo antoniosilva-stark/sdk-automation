@@ -213,6 +213,11 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
     if javaDocs.hasSingletonGet(flags, schema.get("x-sdk-docs") or {}):
         code["singletonGet"] = True
+    for operation in ("get", "pdf"):
+        hasMap = "x-sdk-" + operation in flags and javaDocs.hasOptionalParamOverloads(
+            operation, javaDocs.operationDoc(schema.get("x-sdk-docs") or {}, operation))
+        if hasMap:
+            code[f"{operation}Params"] = True
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
     docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""

@@ -26,9 +26,12 @@ JAVA_PROFILE = {
         "create": "map of parameters",
         "query": "map of parameters for the query",
         "page": "parameters of the query",
+        "get": "map of parameters",
+        "pdf": "[Map of String: Object]: PDF generation options",
         "log.query": "map of parameters for the query",
         "log.page": "parameters of the query",
     },
+    "mapParamName": {"pdf": "options"},
     "patchText": "map of parameters to patch",
     "createMapText": "parameters for the creation of the {x}",
     "ctorMapText": "map of properties for the creation of the {X}",
@@ -243,6 +246,12 @@ def hasSingletonGet(flags: set, docs: dict) -> bool:
     return {param["name"] for param in getDoc.get("params") or []} <= {"user"}
 
 
+def hasOptionalParamOverloads(operation: str, doc: dict | None) -> bool:
+    """Um `get` ou `pdf` documentado com opcional alem de `user` (`expand`, `layout`...) ganha as sobrecargas com
+    Map; so o `user` (ou o id) nao conta, para o resto do SDK sair como antes."""
+    return operation in ("get", "pdf") and bool(optionalParams(doc or {}))
+
+
 def operationDoc(docs: dict, operation: str) -> dict | None:
     if not operation.startswith("log."):
         return (docs or {}).get(operation)
@@ -258,7 +267,8 @@ def renderOperation(context: dict, operation: str, doc: dict) -> dict:
     kind = OPERATION_KINDS[operation]
     plan = createPlan(context["className"], doc) if operation == "create" else None
     doc = listFormDoc(operation, context["className"], doc) if kind == "list" and not isSingle(plan) else doc
-    hasParamsOverloads = kind == "filters" or bool(plan and plan["hasExpand"])
+    hasParamsOverloads = (kind == "filters" or bool(plan and plan["hasExpand"])
+                          or hasOptionalParamOverloads(operation, doc))
     variants = VARIANTS_FILTERS if hasParamsOverloads else VARIANTS_PLAIN
     description = [contextText(context, line) for line in doc.get("description") or []]
     title = singleTitle(context, doc) if isSingle(plan) else operationTitle(context, operation, doc)
@@ -392,6 +402,10 @@ def parameterLines(context: dict, operation: str, kind: str, doc: dict, withPara
         return []
     if kind == "parse":
         return [f"@param {paramText(context, param)}" for param in pythonParams]
+    if kind == "id" and withParams:
+        name = profile["mapParamName"].get(operation, "params")
+        return [idLine(context, pythonParams), f"@param {name} {profile['mapParamText'][operation]}",
+                *[paramText(context, param) for param in optionalParams(doc)]]
     if kind == "id":
         return [idLine(context, pythonParams)]
     if kind == "patch":

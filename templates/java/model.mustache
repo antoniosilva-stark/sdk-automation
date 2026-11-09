@@ -158,6 +158,37 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-java-code.singletonGet}}
 {{^vendorExtensions.x-sdk-java-code.singletonGet}}
+{{#vendorExtensions.x-sdk-java-code.getParams}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getParamsUser}}     */
+    public static {{classname}} get(String id, Map<String, Object> params, User user) throws Exception {
+        return Rest.getId({{classDataName}}, id, params, user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getParams}}     */
+    public static {{classname}} get(String id, Map<String, Object> params) throws Exception {
+        return {{classname}}.get(id, params, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getUser}}     */
+    public static {{classname}} get(String id, User user) throws Exception {
+        return {{classname}}.get(id, null, user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.getPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.getPlain}}     */
+    public static {{classname}} get(String id) throws Exception {
+        return {{classname}}.get(id, null, null);
+    }
+{{/vendorExtensions.x-sdk-java-code.getParams}}
+{{^vendorExtensions.x-sdk-java-code.getParams}}
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.getPlain}}     * {{{.}}}
@@ -172,6 +203,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     public static {{classname}} get(String id, User user) throws Exception {
         return Rest.getId({{classDataName}}, id, user);
     }
+{{/vendorExtensions.x-sdk-java-code.getParams}}
 {{/vendorExtensions.x-sdk-java-code.singletonGet}}
 {{/vendorExtensions.x-sdk-get}}
 {{#vendorExtensions.x-sdk-query}}
@@ -346,6 +378,37 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-update}}
 {{#vendorExtensions.x-sdk-pdf}}
+{{#vendorExtensions.x-sdk-java-code.pdfParams}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfPlain}}     */
+    public static InputStream pdf(String id) throws Exception {
+        return {{classname}}.pdf(id, null, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfParams}}     */
+    public static InputStream pdf(String id, Map<String, Object> options) throws Exception {
+        return {{classname}}.pdf(id, options, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfUser}}     */
+    public static InputStream pdf(String id, User user) throws Exception {
+        return {{classname}}.pdf(id, null, user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.pdfParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.pdfParamsUser}}     */
+    public static InputStream pdf(String id, Map<String, Object> options, User user) throws Exception {
+        return Rest.getContent({{classDataName}}, id, "pdf", user, options);
+    }
+{{/vendorExtensions.x-sdk-java-code.pdfParams}}
+{{^vendorExtensions.x-sdk-java-code.pdfParams}}
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.pdfPlain}}     * {{{.}}}
@@ -360,6 +423,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     public static InputStream pdf(String id, User user) throws Exception {
         return Rest.getContent({{classDataName}}, id, "pdf", user, new HashMap<>());
     }
+{{/vendorExtensions.x-sdk-java-code.pdfParams}}
 {{/vendorExtensions.x-sdk-pdf}}
 {{#vendorExtensions.x-sdk-delete}}
 
