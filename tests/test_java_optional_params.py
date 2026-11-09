@@ -59,7 +59,7 @@ def test_theResourcesWithAnOptionalParameterBesidesTheUserAreExactlyTheKnownOnes
     for name, docs in _specDocs(buildResource).items():
         for operation in ("get", "pdf"):
             optional = [param["name"] for param in (docs.get(operation) or {}).get("params") or []
-                        if param.get("section") == "optional" and param["name"] != "user"]
+                        if param.get("section") != "required" and param["name"] != "user"]
             if optional:
                 found[(name, operation)] = optional
 
