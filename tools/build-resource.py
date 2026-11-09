@@ -128,6 +128,8 @@ def renderNested(entry: dict, schema: dict, javaDocs) -> tuple[dict | None, list
         return (None, [])
 
     docs = (schema.get("x-sdk-docs") or {}).get(className.lower()) or {}
+    if not docs:
+        raise ValueError(f"{className}: x-sdk-nested sem x-sdk-docs.{className.lower()}, a classe sairia sem operacoes")
     flags = {f"x-sdk-{operation}" for operation in docs}
     rendered = javaDocs.renderDocs(className, docs, flags, {"description": "", "fields": []})
     return ({"className": className, "operations": list(docs), "docs": rendered["lines"]}, rendered["warnings"])

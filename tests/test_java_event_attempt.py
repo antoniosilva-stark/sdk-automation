@@ -185,6 +185,11 @@ def test_generatedAttemptDocumentsEveryOperationFromThePythonDocstrings(generate
 def test_theOuterEventIsUnchangedByTheNestedClass(generatedEvent):
     outer = generatedEvent.split("    public final static class Attempt")[0]
 
+    assert "Attempt" not in outer
+    assert outer.count("Rest.getId(") == 1
+    assert outer.count("Rest.getStream(") == 1
+    assert outer.count("Rest.getPage(") == 1
+    assert outer.count("public final static class Page {") == 1
     assert generatedEvent.count("public final static class Page {") == 2
     assert generatedEvent.count("import java.util.List;") == 1
 
@@ -207,6 +212,14 @@ def test_nestedFlagWithoutTheInnerClassEntryFailsNamingResourceAndClass(buildRes
 
     with pytest.raises(ValueError, match=r"Event.*Attempt"):
         buildResource.stageJavaDocs("Event", tmp_path / "staged", conventions)
+
+
+def test_nestedFlagWithoutTheSubpackageDocsFailsNamingTheClassInsteadOfEmittingNoOperations(buildResource):
+    javaDocs = buildResource.loadTool("java-docs")
+
+    for schema in ({"x-sdk-docs": {}}, {}):
+        with pytest.raises(ValueError, match=r"Attempt.*x-sdk-docs\.attempt"):
+            buildResource.renderNested({"x-sdk-nested": "Attempt"}, schema, javaDocs)
 
 
 def test_nestedClassWithoutClassDataFailsNamingResourceAndClass(buildResource, tmp_path):
