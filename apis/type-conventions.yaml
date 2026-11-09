@@ -96,6 +96,8 @@ javaTypes:
     expiration: Number
     allowedIps: List<String>
     allowedInstallments: List<AllowedInstallment>
+  PaymentPreview:
+    payment: Object
   PaymentRequest:
     payment: Resource
     actions: List<PaymentRequest.Action>
@@ -212,6 +214,8 @@ javaExtraFields:
 javaConstructorTypes:
   CorporateRule:
     counterAmount: Long
+  PaymentPreview:
+    payment: String
   Transaction:
     fee: int
 
