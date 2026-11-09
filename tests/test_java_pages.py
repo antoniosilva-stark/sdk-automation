@@ -423,4 +423,3 @@ def test_generatedUtilityPaymentCompilesWithTheRealSiblingsAndHasNoDeadImport(
     )
 
     assert compiled.returncode == 0, compiled.stderr
-
