@@ -26,7 +26,7 @@ RESERVED_PROPERTY_NAMES = {
 CODE_LOG_ENTITY = "LOG_ENTITY"
 CODE_SUBRESOURCE_UNSUPPORTED = "SUBRESOURCE_UNSUPPORTED"
 SUBRESOURCE_UNSUPPORTED_FLAGS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-update", "x-sdk-delete",
-                                 "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
+                                 "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log", "x-sdk-parse")
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3

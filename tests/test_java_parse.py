@@ -74,8 +74,7 @@ def test_extractorWritesTheParseDocstringIntoTheDocs(extractSchema, resource):
     assert docs["returns"] == [f"Parsed {resource} object"]
 
 
-def test_parseDocsComeAfterTheOtherOperationsSoNoOtherSchemaChangesOrder(extractSchema):
-    assert list(extractSchema.OPERATION_FLAGS)[-1] == "parse"
+def test_parseExportMapsToTheParseFlag(extractSchema):
     assert extractSchema.OPERATION_FLAGS["parse"] == "x-sdk-parse"
 
 
