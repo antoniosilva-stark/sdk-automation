@@ -97,6 +97,19 @@ def renderJavaCode(
     return code
 
 
+def renderQuery(resource: str, shape: dict, flags: set) -> dict:
+    """O `query` em List so existe onde o real o escreve: subrecurso com query e sem Page externa, que o `page()` ja
+    devolve em lista e o template emite a classe Page publica."""
+    key = f"{resource}: javaQueryShapes.returns {shape['returns']!r}"
+    if "x-sdk-subresource" not in flags:
+        raise ValueError(f"{key} exige x-sdk-subresource")
+    if "x-sdk-query" not in flags:
+        raise ValueError(f"{key} exige x-sdk-query")
+    if "x-sdk-page" in flags:
+        raise ValueError(f"{key} nao vale com x-sdk-page")
+    return {"returnsList": shape["returns"] == "list", "shortClassData": shape["classData"] == "short"}
+
+
 def renderParse(resource: str, eventShape: dict | None) -> dict:
     if eventShape is None:
         return {"isEvent": False}

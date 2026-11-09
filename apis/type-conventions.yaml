@@ -416,3 +416,15 @@ javaEvents:
       tax-payment, darf-payment, invoice-pull-subscription, invoice-pull-request, verified-account, payment-request,
       merchant-purchase, merchant-session, merchant-installment, merchant-card]
     gson: [payment-request]
+
+# `query` de subrecurso que o real escreve em lista, Recurso -> {returns, classData}, as duas chaves obrigatorias. E uma
+# convencao do real, nao do sdk-python (que so tem `query`): o corpo le uma pagina com Rest.getPage, copia as entidades para
+# uma `List<Recurso>` e a devolve pelo campo da `private final static class Page`, no lugar do `Generator` do template.
+# Sem entrada o recurso segue com o `Generator<Recurso> query` e o `SubResource.ClassData`.
+#   returns:   `list` troca as quatro sobrecargas de `query` por `List<Recurso>` (ordem do real: plain, params, user,
+#              params+user), emite a Page privada e tira o import de Generator. So vale para recurso com x-sdk-subresource e
+#              x-sdk-query e sem x-sdk-page.
+#   classData: `short` escreve `ClassData` no lugar de `SubResource.ClassData` (o real herda o nome de SubResource).
+# Valida-se contra o real em tests/test_java_query_shapes.py: Institution e o unico recurso do real com essa forma.
+javaQueryShapes:
+  Institution: {returns: list, classData: short}

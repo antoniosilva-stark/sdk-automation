@@ -99,6 +99,13 @@ def hasSingletonGet(resource: str, specFile: str = SPEC_FILE) -> bool:
     return bool((schema.get("x-sdk-java-code") or {}).get("singletonGet"))
 
 
+def hasQueryList(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O `query` devolve List (sem Generator) quando a spec preparada traz `query.returnsList`."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool(((schema.get("x-sdk-java-code") or {}).get("query") or {}).get("returnsList"))
+
+
 def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     """Schema do componente, seguindo o `$ref` para o arquivo em `schemas/` quando ha."""
     entry = ((spec.get("components") or {}).get("schemas") or {}).get(name)
@@ -213,6 +220,9 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
     if javaDocs.hasSingletonGet(flags, schema.get("x-sdk-docs") or {}):
         code["singletonGet"] = True
+    queryShape = extractSchema.javaQueryShape(resource, conventionsFile)
+    if queryShape is not None:
+        code["query"] = javaCode.renderQuery(resource, queryShape, flags)
     for operation in ("get", "pdf"):
         hasMap = "x-sdk-" + operation in flags and javaDocs.hasOptionalParamOverloads(
             operation, javaDocs.operationDoc(schema.get("x-sdk-docs") or {}, operation))
@@ -233,6 +243,7 @@ def javaImports(
     hasParsers: bool = False,
     hasLogPdf: bool = False,
     hasSingletonGet: bool = False,
+    hasQueryList: bool = False,
 ) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
@@ -240,12 +251,13 @@ def javaImports(
     verdadeiro no Mustache. O create de objeto único (`object`/`map`) não monta lista.
     """
     properties = []
-    if flags & set(GENERATOR_USERS) or hasSingletonGet:
+    generatorUsers = set(GENERATOR_USERS) - ({"x-sdk-query"} if hasQueryList else set())
+    if flags & generatorUsers or hasSingletonGet:
         properties.append("usesGenerator=true")
     if objectArray:
         properties.append("usesObjectList=true")
     listUsers = set(LIST_USERS) - ({"x-sdk-create"} if createForm in SINGLE_CREATE_FORMS else set())
-    if flags & listUsers or hasSingletonGet:
+    if flags & listUsers or hasSingletonGet or hasQueryList:
         properties.append("usesList=true")
     if flags & set(SUBRESOURCE_USERS):
         properties.append("usesSubResource=true")
@@ -335,6 +347,7 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
             hasParsers=hasParsers(resource, specFile),
             hasLogPdf=hasLogPdf(resource, specFile),
             hasSingletonGet=hasSingletonGet(resource, specFile),
+            hasQueryList=hasQueryList(resource, specFile),
         )
         properties.append(classDataProperty(resource, specFile))
     if properties:

@@ -43,6 +43,9 @@ JAVA_RESERVED_WORDS = frozenset({
     "void", "volatile", "while", "true", "false", "null",
 })
 
+# Valores aceitos do javaQueryShapes; a ausencia de entrada e o `query` em Generator com o ClassData qualificado do template.
+JAVA_QUERY_VALUES = {"returns": ("list",), "classData": ("short",)}
+
 # Chaves do javaEvents e o formato de uma subscription (kebab-case minusculo: dele sai o nome do recurso, `boleto-holmes`
 # -> BoletoHolmes). O default de `gson` e nenhuma subscription.
 JAVA_EVENT_KEYS = ("subscriptions", "gson")
@@ -368,6 +371,29 @@ def checkPageShape(resource: str, shape) -> None:
         )
     if not isinstance(shape["names"], str) or shape["names"] not in JAVA_PAGE_NAMES:
         raise ValueError(f"{resource}: javaPages.names invalido: {shape['names']!r}, esperado um de {list(JAVA_PAGE_NAMES)}")
+
+
+def javaQueryShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    shapes = loadConventions(Path(conventions)).get("javaQueryShapes") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaQueryShapes deve ser um mapa recurso -> {returns, classData}")
+    checkKnownResources("javaQueryShapes", shapes)
+    for name, shape in shapes.items():
+        checkQueryShape(name, shape)
+    return shapes.get(resource)
+
+
+def checkQueryShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaQueryShapes deve ser um mapa {{returns, classData}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_QUERY_VALUES))
+    if unknown:
+        raise ValueError(f"{resource}: javaQueryShapes chave desconhecida: {unknown[0]}")
+    for key, allowed in JAVA_QUERY_VALUES.items():
+        if key not in shape:
+            raise ValueError(f"{resource}: javaQueryShapes.{key} ausente")
+        if not isinstance(shape[key], str) or shape[key] not in allowed:
+            raise ValueError(f"{resource}: javaQueryShapes.{key} invalido: {shape[key]!r}, esperado um de {list(allowed)}")
 
 
 def lowerFirst(name: str) -> str:

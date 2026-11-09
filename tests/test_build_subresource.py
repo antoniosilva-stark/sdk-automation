@@ -5,7 +5,9 @@ import pytest
 from conftest import REPO_ROOT, requiresGenerator, requiresJavac
 
 SUBRESOURCES = ("CardMethod", "MerchantCountry", "MerchantCategory", "Institution")
-OPEN_CLASSES = set(yaml.safe_load((REPO_ROOT / "apis/type-conventions.yaml").read_text(encoding="utf-8"))["javaOpenClasses"])
+CONVENTIONS = yaml.safe_load((REPO_ROOT / "apis/type-conventions.yaml").read_text(encoding="utf-8"))
+OPEN_CLASSES = set(CONVENTIONS["javaOpenClasses"])
+LIST_QUERY_RESOURCES = set(CONVENTIONS["javaQueryShapes"])
 
 
 def _artifact(builtOnce, resource: str) -> str:
@@ -22,12 +24,14 @@ def test_subResourceGeneratesAsSubResource(builtOnce, resource):
     modifier = "public" if resource in OPEN_CLASSES else "public final"
 
     assert f"{modifier} class {resource} extends SubResource {{" in source
-    assert f"static SubResource.ClassData data = new SubResource.ClassData({resource}.class, \"{resource}\");" in source
+    classData = "ClassData" if resource in LIST_QUERY_RESOURCES else "SubResource.ClassData"
+    assert f"static {classData} data = new {classData}({resource}.class, \"{resource}\");" in source
     assert "import com.starkcore.utils.SubResource;" in source
     assert "import com.starkbank.utils.Resource;" not in source
     assert "super(" not in source
     assert "String id" not in source
-    assert "public static Generator<%s> query(" % resource in source
+    returned = "List" if resource in LIST_QUERY_RESOURCES else "Generator"
+    assert f"public static {returned}<{resource}> query(" in source
 
 
 @requiresGenerator

@@ -24,7 +24,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     /**
 {{#vendorExtensions.x-sdk-java-docs.dataDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.dataDoc}}     */
-    static {{#vendorExtensions.x-sdk-subresource}}SubResource.{{/vendorExtensions.x-sdk-subresource}}ClassData {{classDataName}} = new {{#vendorExtensions.x-sdk-subresource}}SubResource.{{/vendorExtensions.x-sdk-subresource}}ClassData({{classname}}.class, "{{classname}}");
+    static {{#vendorExtensions.x-sdk-subresource}}{{^vendorExtensions.x-sdk-java-code.query.shortClassData}}SubResource.{{/vendorExtensions.x-sdk-java-code.query.shortClassData}}{{/vendorExtensions.x-sdk-subresource}}ClassData {{classDataName}} = new {{#vendorExtensions.x-sdk-subresource}}{{^vendorExtensions.x-sdk-java-code.query.shortClassData}}SubResource.{{/vendorExtensions.x-sdk-java-code.query.shortClassData}}{{/vendorExtensions.x-sdk-subresource}}ClassData({{classname}}.class, "{{classname}}");
 
 {{#vendorExtensions.x-sdk-java-code.fields}}{{^isId}}    public {{{javaType}}} {{name}};
 {{/isId}}{{/vendorExtensions.x-sdk-java-code.fields}}
@@ -207,6 +207,52 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{/vendorExtensions.x-sdk-java-code.singletonGet}}
 {{/vendorExtensions.x-sdk-get}}
 {{#vendorExtensions.x-sdk-query}}
+{{#vendorExtensions.x-sdk-java-code.query.returnsList}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryPlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryPlain}}     */
+    public static List<{{classname}}> query() throws Exception {
+        return {{classname}}.query(new HashMap<>(), null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryParams}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryParams}}     */
+    public static List<{{classname}}> query(Map<String, Object> params) throws Exception {
+        return {{classname}}.query(params, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryUser}}     */
+    public static List<{{classname}}> query(User user) throws Exception {
+        return {{classname}}.query(new HashMap<>(), user);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.queryParamsUser}}     */
+    public static List<{{classname}}> query(Map<String, Object> params, User user) throws Exception {
+        com.starkcore.utils.Page page = Rest.getPage({{classDataName}}, params, user);
+        List<{{classname}}> {{classVarName}}s = new ArrayList<>();
+        for (SubResource {{classVarName}}: page.entities) {
+            {{classVarName}}s.add(({{classname}}) {{classVarName}});
+        }
+        return new Page({{classVarName}}s, page.cursor).{{classVarName}}s;
+    }
+
+    private final static class Page {
+        public List<{{classname}}> {{classVarName}}s;
+        public String cursor;
+
+        public Page(List<{{classname}}> {{classVarName}}s, String cursor) {
+            this.{{classVarName}}s = {{classVarName}}s;
+            this.cursor = cursor;
+        }
+    }
+{{/vendorExtensions.x-sdk-java-code.query.returnsList}}
+{{^vendorExtensions.x-sdk-java-code.query.returnsList}}
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.queryParamsUser}}     * {{{.}}}
@@ -235,6 +281,7 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     public static Generator<{{classname}}> query() throws Exception {
         return {{classname}}.query(new HashMap<>(), null);
     }
+{{/vendorExtensions.x-sdk-java-code.query.returnsList}}
 {{/vendorExtensions.x-sdk-query}}
 {{#vendorExtensions.x-sdk-page}}
 
