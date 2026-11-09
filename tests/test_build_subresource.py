@@ -7,7 +7,8 @@ from conftest import REPO_ROOT, requiresGenerator, requiresJavac
 SUBRESOURCES = ("CardMethod", "MerchantCountry", "MerchantCategory", "Institution")
 CONVENTIONS = yaml.safe_load((REPO_ROOT / "apis/type-conventions.yaml").read_text(encoding="utf-8"))
 OPEN_CLASSES = set(CONVENTIONS["javaOpenClasses"])
-LIST_QUERY_RESOURCES = set(CONVENTIONS["javaQueryShapes"])
+# literal e nao lido da convencao: lido dela, remover a entrada do Institution deixaria o teste passar
+LIST_QUERY_RESOURCES = {"Institution"}
 
 
 def _artifact(builtOnce, resource: str) -> str:
