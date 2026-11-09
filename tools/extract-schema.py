@@ -32,6 +32,10 @@ JAVA_LOG_RESERVED_FIELDS = frozenset({"created", "type", "errors", "id", "data"}
 # Chaves e valores do javaPages; o default (campo `<recurso>s`, retorno `Page`) e a saida do template antes da secao existir.
 # Os nomes reservados sao locais de page(Map, User) e o campo `cursor`, que um listName igual nao compilaria.
 JAVA_PAGE_KEYS = ("listName", "names")
+# Opcional: as sobrecargas de page() que o real qualifica (`Recurso.Page`) com `names: short` (params = page(Map), user =
+# page(User), plain = page(), paramsUser = page(Map, User)); a ordem e a canonica do template.
+JAVA_PAGE_OPTIONAL_KEYS = ("qualifiedOverloads",)
+JAVA_PAGE_OVERLOADS = ("params", "user", "plain", "paramsUser")
 JAVA_PAGE_NAMES = ("short", "qualified")
 JAVA_PAGE_RESERVED = frozenset({"cursor", "page", "params", "user"})
 # Palavras reservadas e literais do Java: como campo, parametro ou local so falhariam no javac, sem nomear a chave.
@@ -360,7 +364,7 @@ def javaPageShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
 def checkPageShape(resource: str, shape) -> None:
     if not isinstance(shape, dict):
         raise ValueError(f"{resource}: javaPages deve ser um mapa {{listName, names}}, veio {shape!r}")
-    unknown = sorted(str(key) for key in set(shape) - set(JAVA_PAGE_KEYS))
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_PAGE_KEYS) - set(JAVA_PAGE_OPTIONAL_KEYS))
     if unknown:
         raise ValueError(f"{resource}: javaPages chave desconhecida: {unknown[0]}")
     for key in JAVA_PAGE_KEYS:
@@ -375,6 +379,25 @@ def checkPageShape(resource: str, shape) -> None:
         )
     if not isinstance(shape["names"], str) or shape["names"] not in JAVA_PAGE_NAMES:
         raise ValueError(f"{resource}: javaPages.names invalido: {shape['names']!r}, esperado um de {list(JAVA_PAGE_NAMES)}")
+    if "qualifiedOverloads" in shape:
+        checkQualifiedOverloads(resource, shape)
+
+
+def checkQualifiedOverloads(resource: str, shape: dict) -> None:
+    overloads = shape["qualifiedOverloads"]
+    if not isinstance(overloads, list) or not overloads:
+        raise ValueError(f"{resource}: javaPages.qualifiedOverloads invalido: {overloads!r}, esperado uma lista nao vazia")
+    if shape["names"] == "qualified":
+        raise ValueError(f"{resource}: javaPages.qualifiedOverloads e redundante com names: qualified")
+    seen = set()
+    for overload in overloads:
+        if not isinstance(overload, str) or overload not in JAVA_PAGE_OVERLOADS:
+            raise ValueError(
+                f"{resource}: javaPages.qualifiedOverloads invalido: {overload!r}, esperado um de {list(JAVA_PAGE_OVERLOADS)}"
+            )
+        if overload in seen:
+            raise ValueError(f"{resource}: javaPages.qualifiedOverloads repete {overload!r}")
+        seen.add(overload)
 
 
 def javaQueryShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:

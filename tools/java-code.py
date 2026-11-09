@@ -86,10 +86,7 @@ def renderJavaCode(
     if logShape is not None:
         code["log"] = renderLog(resource, logShape, logEntity)
     if pageShape is not None:
-        code["page"] = {
-            "listName": pageShape["listName"],
-            "typeName": "Page" if pageShape["names"] == "short" else f"{resource}.Page",
-        }
+        code["page"] = renderPage(resource, pageShape)
     if eventShape is not None:
         code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames, logResources, hasParse)
     if hasParse:
@@ -215,6 +212,16 @@ def eventLogResource(resource: str, subscription: str, resourceNames: frozenset,
             "(sem x-sdk-log nem Log em javaInnerClasses)"
         )
     return logResource
+
+
+def renderPage(resource: str, shape: dict) -> dict:
+    qualified = shape["names"] == "qualified"
+    overloads = shape.get("qualifiedOverloads", [])
+    page = {"listName": shape["listName"]}
+    for overload in ("params", "user", "plain", "paramsUser"):
+        isQualified = qualified or overload in overloads
+        page[f"{overload}TypeName"] = f"{resource}.Page" if isQualified else "Page"
+    return page
 
 
 def renderLog(resource: str, shape: dict, entity: str) -> dict:

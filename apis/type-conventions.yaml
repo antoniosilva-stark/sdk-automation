@@ -376,10 +376,12 @@ javaLogs:
 #             `Recurso.Page.<listName>` do Javadoc de retorno (BoletoPayment e outros 5 `payments`, DictKey `keys`...).
 #   names:    `short` escreve `Page page()` nos quatro overloads (o que o template emitia) e `qualified` `Recurso.Page`
 #             (8 de 32). O `new Page(...)` do corpo nao e comparado e compila nos dois casos, entao nao tem eixo.
-# Fora da secao: CorporatePurchase (Page real sem `x-sdk-page` na spec) e dois desvios de um so ponto do real que nao sao
-# um eixo: o overload page(Map) de UtilityPayment qualificado enquanto os outros tres sao `Page`, e o parametro
-# `MerchantInstallments` (M maiuscula) do ctor da Page de MerchantInstallment. Valida-se contra o real em
-# tests/test_java_pages.py, nos dois sentidos.
+#   qualifiedOverloads: (opcional) so com `names: short`: as sobrecargas que o real qualifica com `Recurso.Page` enquanto as
+#             outras ficam `Page` (lista nao vazia, sem repeticao, de params = page(Map), user = page(User),
+#             plain = page(), paramsUser = page(Map, User)); com `names: qualified` seria redundante e e recusada.
+#             Hoje so UtilityPayment, com [params].
+# Fora da secao: o parametro `MerchantInstallments` (M maiuscula) do ctor da Page de MerchantInstallment, desvio de um so
+# ponto do real que nao e um eixo. Valida-se contra o real em tests/test_java_pages.py, nos dois sentidos.
 javaPages:
   BoletoHolmes: {listName: holmes, names: short}
   BoletoPayment: {listName: payments, names: short}
@@ -401,7 +403,7 @@ javaPages:
   MerchantSession: {listName: merchantSessions, names: qualified}
   PaymentRequest: {listName: requests, names: short}
   TaxPayment: {listName: payments, names: short}
-  UtilityPayment: {listName: payments, names: short}
+  UtilityPayment: {listName: payments, names: short, qualifiedOverloads: [params]}
   VerifiedAccount: {listName: verifiedAccounts, names: qualified}
 
 # Subclasses e Deserializer do Event, Recurso -> {subscriptions, gson}. O real escreve, para cada `subscription` do

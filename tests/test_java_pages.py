@@ -1,4 +1,6 @@
 import re
+import shutil
+import subprocess
 import yaml
 import pytest
 
@@ -7,16 +9,11 @@ from test_java_field_types import REAL_SOURCES, SCHEMAS, _generated, _realConven
 
 SPEC_FILE = REPO_ROOT / "apis/spec-v2.openapi.yaml"
 PAGE_OVERLOADS = ("Map<String, Object> params", "User user", "", "Map<String, Object> params, User user")
+OVERLOAD_NAMES = ("params", "user", "plain", "paramsUser")
 
 # Page externa do real cujo recurso nao tem `x-sdk-page` na spec: o template nunca a emite, entao o javaPages nao a alcanca.
 # O teste prova que cada um segue sem a flag e com a Page no real, entao a lista nao envelhece.
 PAGE_EXCLUSIONS = {}
-
-# Overload cujo retorno diverge dos outros tres no proprio real (descuido do sdk-java): o eixo `names` e um por recurso e
-# nao o representa, entao o teste o nomeia em vez de o esconder.
-PAGE_OVERLOAD_EXCEPTIONS = {
-    "UtilityPayment": {"Map<String, Object> params": "UtilityPayment.Page"},
-}
 
 # Parametro do ctor da Page que o real escreve com outro nome que o campo (MerchantInstallments, com M maiuscula): so o
 # nome do parametro, que nao muda o contrato, entao fica fora do modelo e nomeado aqui.
@@ -80,22 +77,27 @@ def _flaggedResources(buildResource) -> set:
 
 
 def _realShape(resource: str) -> dict | None:
-    """None quando a Page do real nao tem a forma que o template emite (campo, parametro e retornos coerentes)."""
+    """None quando a Page do real nao tem a forma que o template emite (campo, parametro e retornos coerentes). Retorno
+    qualificado em so algumas sobrecargas vira `names: short` mais `qualifiedOverloads`, na ordem canonica."""
     source = _realSource(resource)
     parts = _pageParts(source)
     returns = _pageReturns(source)
-    exceptions = PAGE_OVERLOAD_EXCEPTIONS.get(resource, {})
     ctorName = PAGE_CTOR_NAME_EXCEPTIONS.get(resource, parts["listName"])
-    compared = {returned for parameters, returned in returns.items() if parameters not in exceptions}
+    qualified = f"{resource}.Page"
     isShape = (
         parts["listType"] == f"List<{resource}>"
         and parts["constructor"] == [(parts["listType"], ctorName), ("String", "cursor")]
         and set(returns) == set(PAGE_OVERLOADS)
-        and compared in ({"Page"}, {f"{resource}.Page"})
+        and set(returns.values()) <= {"Page", qualified}
     )
     if not isShape:
         return None
-    return {"listName": parts["listName"], "names": "short" if compared == {"Page"} else "qualified"}
+    qualifiedOverloads = [name for name, parameters in zip(OVERLOAD_NAMES, PAGE_OVERLOADS) if returns[parameters] == qualified]
+    if len(qualifiedOverloads) == len(PAGE_OVERLOADS):
+        return {"listName": parts["listName"], "names": "qualified"}
+    if not qualifiedOverloads:
+        return {"listName": parts["listName"], "names": "short"}
+    return {"listName": parts["listName"], "names": "short", "qualifiedOverloads": qualifiedOverloads}
 
 
 def _effectiveShape(resource: str) -> dict:
@@ -145,16 +147,6 @@ def test_javaPagesAndTheSpecPageFlagCoverTheSameResourcesOnlyWhereTheEntryExists
     assert sorted(set(_pageEntries()) - _flaggedResources(buildResource)) == []
 
 
-@requiresJavaSdk
-@pytest.mark.parametrize("resource", sorted(PAGE_OVERLOAD_EXCEPTIONS))
-def test_overloadExceptionStillDiffersFromTheOtherOverloadsInTheReal(resource):
-    returns = _pageReturns(_realSource(resource))
-
-    for parameters, returned in PAGE_OVERLOAD_EXCEPTIONS[resource].items():
-        assert returns[parameters] == returned
-        assert {other for key, other in returns.items() if key != parameters} != {returned}
-
-
 def _generatedPage(buildResource, tmpPath, resource: str, conventionsText: str):
     source = _generated(buildResource, tmpPath, resource, conventionsText)
     return source, _pageParts(source), _pageReturns(source)
@@ -166,12 +158,9 @@ def _generatedPage(buildResource, tmpPath, resource: str, conventionsText: str):
 def test_generatedPageDeclarationsMatchTheRealOnes(buildResource, tmpPath, resource):
     _, parts, returns = _generatedPage(buildResource, tmpPath, resource, _realConventionsText())
     real = _realSource(resource)
-    exceptions = PAGE_OVERLOAD_EXCEPTIONS.get(resource, {})
 
     assert parts == _realPartsWithTheGeneratedCtorName(resource, real)
-    assert set(returns) == set(PAGE_OVERLOADS)
-    assert {key: value for key, value in returns.items() if key not in exceptions} == \
-        {key: value for key, value in _pageReturns(real).items() if key not in exceptions}
+    assert returns == _pageReturns(real)
 
 
 @requiresGenerator
@@ -320,6 +309,16 @@ def test_javaPageShapeIsTheTodayDefaultWithoutEntryOrSection(extractSchema, tmpP
     ("javaPages:\n  Transferr: {listName: items, names: short}\n", "Transferr: javaPages cita recurso"),
     ("javaPages:\n  balance: {listName: items, names: short}\n", "balance: javaPages cita recurso"),
     ("javaPages:\n  Invoice: {listName: items, names: nope}\n", "Invoice: javaPages.names.*'nope'"),
+    ("javaPages:\n  Balance: {listName: items, names: short, qualifiedOverloads: [nope]}\n",
+     "Balance: javaPages.qualifiedOverloads.*'nope'"),
+    ("javaPages:\n  Balance: {listName: items, names: short, qualifiedOverloads: [params, params]}\n",
+     "Balance: javaPages.qualifiedOverloads repete 'params'"),
+    ("javaPages:\n  Balance: {listName: items, names: short, qualifiedOverloads: []}\n",
+     "Balance: javaPages.qualifiedOverloads.*\\[\\]"),
+    ("javaPages:\n  Balance: {listName: items, names: short, qualifiedOverloads: params}\n",
+     "Balance: javaPages.qualifiedOverloads.*'params'"),
+    ("javaPages:\n  Balance: {listName: items, names: qualified, qualifiedOverloads: [params]}\n",
+     "Balance: javaPages.qualifiedOverloads.*names"),
 ])
 def test_invalidJavaPagesDataFailsNamingTheResourceTheKeyAndTheValue(extractSchema, tmpPath, text, message):
     with pytest.raises(ValueError, match=message):
@@ -360,8 +359,13 @@ def test_renderJavaCodeCarriesNoPageWithoutAShape(javaCode, javaDocs):
 
 
 @pytest.mark.parametrize("shape, expected", [
-    ({"listName": "balances", "names": "short"}, {"listName": "balances", "typeName": "Page"}),
-    ({"listName": "items", "names": "qualified"}, {"listName": "items", "typeName": "Balance.Page"}),
+    ({"listName": "balances", "names": "short"}, {"listName": "balances", "paramsTypeName": "Page",
+     "userTypeName": "Page", "plainTypeName": "Page", "paramsUserTypeName": "Page"}),
+    ({"listName": "items", "names": "qualified"}, {"listName": "items", "paramsTypeName": "Balance.Page",
+     "userTypeName": "Balance.Page", "plainTypeName": "Balance.Page", "paramsUserTypeName": "Balance.Page"}),
+    ({"listName": "items", "names": "short", "qualifiedOverloads": ["user", "paramsUser"]},
+     {"listName": "items", "paramsTypeName": "Page", "userTypeName": "Balance.Page", "plainTypeName": "Page",
+      "paramsUserTypeName": "Balance.Page"}),
 ])
 def test_renderJavaCodeResolvesTheListNameAndThePageTypeFromTheShape(javaCode, javaDocs, shape, expected):
     assert _balanceCode(javaCode, javaDocs, pageShape=shape)["page"] == expected
@@ -376,3 +380,47 @@ def test_renderDocsReturnUsesTheGivenListNameAndTodaysNameByDefault(javaDocs):
     assert "Widget.Page.widgets: list of Widget objects" in default
     assert "Widget.Page.items: list of Widget objects" in custom
     assert [line.replace("items", "widgets") for line in custom] == default
+
+
+UTILITY_PAYMENT_PAGE_RETURNS = {
+    "Map<String, Object> params": "UtilityPayment.Page",
+    "User user": "Page",
+    "": "Page",
+    "Map<String, Object> params, User user": "Page",
+}
+
+
+@requiresGenerator
+@requiresJavaSdk
+def test_generatedUtilityPaymentQualifiesOnlyThePageMapOverloadLikeTheReal(buildResource, tmpPath):
+    source, _, returns = _generatedPage(buildResource, tmpPath, "UtilityPayment", _realConventionsText())
+
+    assert returns == UTILITY_PAYMENT_PAGE_RETURNS == _pageReturns(_realSource("UtilityPayment"))
+    assert "    public static UtilityPayment.Page page(Map<String, Object> params) throws Exception {\n" in source
+    assert "    public static Page page(User user) throws Exception {\n" in source
+    assert "    public static Page page() throws Exception {\n" in source
+    assert "    public static Page page(Map<String, Object> params, User user) throws Exception {\n" in source
+
+
+@requiresGenerator
+@requiresJavac
+@requiresJavaSdk
+def test_generatedUtilityPaymentCompilesWithTheRealSiblingsAndHasNoDeadImport(
+    builtOnce, tmp_path_factory, javaRuntimeClasspath,
+):
+    code, out, target = builtOnce("UtilityPayment", "java")
+    assert code == 0, out
+    assert "DEAD_IMPORT" not in out
+    work = tmp_path_factory.mktemp("utilitypayment-page")
+    copied = work / "src/com/starkbank/UtilityPayment.java"
+    copied.parent.mkdir(parents=True)
+    shutil.copy(target / "src/main/java/com/starkbank/UtilityPayment.java", copied)
+
+    compiled = subprocess.run(
+        ["javac", "-Xlint:-options", "-d", str(work / "out"), "-cp", javaRuntimeClasspath,
+         "-sourcepath", str(REPO_ROOT / "_references/sdk-java/src/main/java"), str(copied)],
+        capture_output=True, text=True,
+    )
+
+    assert compiled.returncode == 0, compiled.stderr
+
