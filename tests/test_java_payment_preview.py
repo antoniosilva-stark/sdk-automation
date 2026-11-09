@@ -5,7 +5,7 @@ import shutil
 import yaml
 import pytest
 
-from conftest import REPO_ROOT, _loadTool, requiresGenerator, requiresJavac, requiresJavaSdk
+from conftest import _loadTool, requiresGenerator, requiresJavac, requiresJavaSdk
 from test_java_field_types import REAL_SOURCES, _generated, _realConventionsText
 from test_java_payment_request_log import SOURCEPATH
 
