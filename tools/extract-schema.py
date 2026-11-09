@@ -443,8 +443,43 @@ def declaredOperations(root: Path, resource: str) -> dict:
     if not flags:
         flags = ["x-sdk-data-only"]
 
+    nested = nestedResource(root, resource)
     return {"flags": flags, "unsupported": unsupported, "missingInit": False,
-            "logEntity": logEntity(root, resource), "subResource": inheritsSubResource(root, resource)}
+            "logEntity": logEntity(root, resource), "subResource": inheritsSubResource(root, resource),
+            "nested": nested[1] if nested else None}
+
+
+def nestedResource(root: Path, resource: str) -> tuple[str, str] | None:
+    """(subpacote, classe) do recurso aninhado: o subpacote cujo `__init__` exporta operacoes (`rule` e
+    `allowedinstallment` nao exportam nada, entao ficam fora) e que o `__init__` do recurso importa por
+    `from .<sub>.__<sub> import Classe`. O `log` tem flag propria. Dois aninhados, ou um sem classe exportada, o
+    template nao sabe emitir: falha nomeando o recurso em vez de gerar so um deles."""
+    package = Path(root) / "starkbank" / resource.lower()
+    initFile = package / "__init__.py"
+    if not initFile.is_file():
+        return None
+
+    resourceInit = ast.parse(initFile.read_text(encoding="utf-8"))
+    found = []
+    for subpackage in sorted(package.iterdir()):
+        subInit = subpackage / "__init__.py"
+        if subpackage.name == "log" or not subInit.is_file():
+            continue
+        exported = exportedNames(subInit.read_text(encoding="utf-8"))
+        if not any(name in OPERATION_FLAGS for name in exported):
+            continue
+        classes = [alias.name for node in resourceInit.body
+                   if isinstance(node, ast.ImportFrom) and node.module == f"{subpackage.name}.__{subpackage.name}"
+                   for alias in node.names if alias.name[:1].isupper()]
+        if len(classes) != 1:
+            raise ValueError(f"{resource}: o subpacote {subpackage.name} exporta operacoes mas o __init__ do recurso "
+                             f"nao importa exatamente uma classe de {subpackage.name}.__{subpackage.name}")
+        found.append((subpackage.name, classes[0]))
+
+    if len(found) > 1:
+        raise ValueError(f"{resource}: mais de um subpacote aninhado com operacoes: "
+                         f"{', '.join(name for name, _ in found)}")
+    return found[0] if found else None
 
 
 def inheritsSubResource(root: Path, resource: str) -> bool:
@@ -526,6 +561,12 @@ def declaredDocs(root: Path, resource: str) -> dict:
 
     docs = collectDocs(package / "__init__.py", modulePath(root, resource), resource)
     logDocs = collectDocs(package / "log" / "__init__.py", package / "log" / "__log.py", f"{resource}.log")
+    nested = nestedResource(root, resource)
+    if nested:
+        subpackage = nested[0]
+        docs = {**docs, subpackage: collectDocs(package / subpackage / "__init__.py",
+                                                package / subpackage / f"__{subpackage}.py",
+                                                f"{resource}.{subpackage}")}
     if not logDocs:
         return docs
     return {**docs, "log": logDocs}
@@ -860,10 +901,10 @@ def renderDocs(docs: dict, indent: int) -> list[str]:
     pad = " " * indent
     lines = [f"{pad}x-sdk-docs:"]
     for name, parsed in docs.items():
-        if name == "log":
-            lines.append(f"{pad}  log:")
-            for logName, logParsed in parsed.items():
-                lines.extend(renderOperationDocs(logName, logParsed, indent + 4))
+        if "summary" not in parsed:
+            lines.append(f"{pad}  {name}:")
+            for innerName, innerParsed in parsed.items():
+                lines.extend(renderOperationDocs(innerName, innerParsed, indent + 4))
             continue
         lines.extend(renderOperationDocs(name, parsed, indent + 2))
     return lines
@@ -939,6 +980,8 @@ def reportOperations(root: Path, resource: str) -> int:
         emit(f"{SUBRESOURCE_FLAG}: true")
     if operations["logEntity"]:
         emit(f"x-sdk-log-entity: {operations['logEntity']}")
+    if operations["nested"]:
+        emit(f"x-sdk-nested: {operations['nested']}")
     return 0
 
 
@@ -962,6 +1005,12 @@ def main() -> int:
     if not source.is_file():
         emit(f"[ERROR] módulo não encontrado: {source}")
         return 2
+
+    try:
+        declaredOperations(root, args.resource)
+    except ValueError as error:
+        emit(f"[ERROR] {error}")
+        return 1
 
     if args.operations:
         return reportOperations(root, args.resource)

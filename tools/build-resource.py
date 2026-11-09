@@ -120,6 +120,27 @@ def logResourceNames(spec: dict, conventions: Path) -> frozenset:
     return frozenset(flagged | {name for name, classes in innerClasses.items() if "Log" in classes})
 
 
+def renderNested(entry: dict, schema: dict, javaDocs) -> tuple[dict | None, list]:
+    """Operacoes do recurso aninhado (`x-sdk-nested`): as que o `x-sdk-docs.<subpacote>` documenta, com o Javadoc de
+    cada sobrecarga renderizado para a classe aninhada. O que o template nao emite falha em java-code."""
+    className = entry.get("x-sdk-nested")
+    if not className:
+        return (None, [])
+
+    docs = (schema.get("x-sdk-docs") or {}).get(className.lower()) or {}
+    flags = {f"x-sdk-{operation}" for operation in docs}
+    rendered = javaDocs.renderDocs(className, docs, flags, {"description": "", "fields": []})
+    return ({"className": className, "operations": list(docs), "docs": rendered["lines"]}, rendered["warnings"])
+
+
+def nestedFlags(resource: str, specFile: str = SPEC_FILE) -> set[str]:
+    """As flags que as operacoes aninhadas usam: os imports (Generator, Rest, List...) saem delas, nao so das do recurso."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    entry = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    nested, _ = renderNested(entry, resolveRef(spec, resource, REPO_ROOT / "apis") or {}, loadTool("java-docs"))
+    return {f"x-sdk-{operation}" for operation in (nested or {}).get("operations", [])}
+
+
 def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = None) -> dict:
     """Copia `apis/` para `stagedDir` e injeta o Javadoc e o corpo do Map-ctor pre-renderizados na entrada do
     recurso da copia.
@@ -157,6 +178,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         entity,
         pageListName=pageShape["listName"] if pageShape else None,
     )
+    nested, nestedWarnings = renderNested(spec["components"]["schemas"][resource], schema, javaDocs)
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
     isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
     logShape = extractSchema.javaLogShape(resource, conventionsFile)
@@ -178,6 +200,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         eventShape=eventShape,
         logResources=logResourceNames(spec, conventionsFile) if eventShape else frozenset(),
         hasParse="x-sdk-parse" in flags,
+        nested=nested,
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")
@@ -193,7 +216,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
     stagedSpec = stagedDir / SPEC_FILE
     stagedSpec.write_text(specText.replace(entryLine, f"{entryLine}{docsLine}", 1), encoding="utf-8")
-    return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}
+    return {"spec": stagedSpec, "warnings": rendered["warnings"] + nestedWarnings, "fallbacks": rendered["fallbacks"]}
 
 
 def javaImports(
@@ -299,7 +322,7 @@ def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FIL
     properties = []
     if run["generator"] == "java":
         properties = javaImports(
-            declaredFlags(resource, specFile),
+            declaredFlags(resource, specFile) | nestedFlags(resource, specFile),
             hasObjectArray(resource, specFile),
             createForm=createFormOf(resource),
             hasParsers=hasParsers(resource, specFile),

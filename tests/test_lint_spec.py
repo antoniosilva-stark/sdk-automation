@@ -379,7 +379,7 @@ def test_propertyNamedDataIsAllowedBecauseTheClassDataIsRenamed(lintSpec, tmpPat
 
 
 UNSUPPORTED_ON_SUBRESOURCE = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-update", "x-sdk-delete",
-                              "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log", "x-sdk-parse")
+                              "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log", "x-sdk-parse", "x-sdk-nested")
 
 
 def _subResourceReport(lintSpec, tmpPath, flags: dict, properties: dict | None = None):

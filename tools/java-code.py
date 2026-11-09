@@ -53,6 +53,7 @@ def renderJavaCode(
     logResources: frozenset = frozenset(),
     otherInnerClasses: dict | None = None,
     hasParse: bool = False,
+    nested: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -67,11 +68,13 @@ def renderJavaCode(
     `otherInnerClasses`: as classes internas dos demais recursos por nome qualificado (`Transfer.Rule`), so para o tipo
     `List<Transfer.Rule>` de um campo; a classe nao e emitida aqui. Os campos extras (javaExtraFields) ja chegam no schema
     (`addExtraFields`). `parse`: so para recurso com a flag `x-sdk-parse` (`hasParse`); o recurso com `javaEvents` le o evento
-    pela chave `event` (o lowerFirst do recurso, como o `key` do Python) e os demais repassam o conteudo ao `Parse`."""
+    pela chave `event` (o lowerFirst do recurso, como o `key` do Python) e os demais repassam o conteudo ao `Parse`.
+    `nested`: so para recurso com `x-sdk-nested` ({className, operations, docs}): as operacoes get/query/page que a classe
+    interna de mesmo nome imprime, com o Javadoc ja renderizado em `docs`; a classe precisa estar em `innerClasses`."""
     knownInnerClasses = {**(innerClasses or {}), **(otherInnerClasses or {})}
     fields = renderFields(schema, resource, overrides, profile, knownInnerClasses, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
-    innerClassData = renderInnerClasses(resource, innerClasses or {}, profile, hasLog=logShape is not None)
+    innerClassData = renderInnerClasses(resource, innerClasses or {}, profile, hasLog=logShape is not None, nested=nested)
     code = {
         "fields": fields,
         "ctorFields": ctorFields,
@@ -252,7 +255,13 @@ TEMPLATE_INNER_CLASSES = ("Page",)
 MAP_CONSTRUCTOR_SIGNATURE = "Map<String, Object>"
 
 
-def renderInnerClasses(resource: str, innerClasses: dict, profile: dict = JAVA_CODE_PROFILE, hasLog: bool = False) -> list:
+def renderInnerClasses(
+    resource: str,
+    innerClasses: dict,
+    profile: dict = JAVA_CODE_PROFILE,
+    hasLog: bool = False,
+    nested: dict | None = None,
+) -> list:
     """Classes internas simples ja prontas para o Mustache: o real as escreve a mao e a spec nao as descreve, entao a
     definicao e dado do Java. Cada construtor atribui os campos recebidos e `null` nos demais; o Map-ctor le so os
     campos de `map`. Campo primitivo nao aceita null, entao tem de ser recebido e lido. `inner` aninha classes com a
@@ -263,7 +272,10 @@ def renderInnerClasses(resource: str, innerClasses: dict, profile: dict = JAVA_C
         "reserved": (*TEMPLATE_INNER_CLASSES, "Log") if hasLog else TEMPLATE_INNER_CLASSES,
         "references": {resource, *innerClassPaths(resource, innerClasses)},
         "seen": set(),
+        "nested": nested,
     }
+    if nested and nested["className"] not in innerClasses:
+        raise ValueError(f"{resource}.{nested['className']}: x-sdk-nested sem entrada em javaInnerClasses")
     return [renderInnerClass(scope, resource, name, definition) for name, definition in innerClasses.items()]
 
 
@@ -293,6 +305,10 @@ def renderInnerClass(scope: dict, outerPath: str, name: str, definition: dict) -
     ]
     if "map" in definition:
         rendered["map"] = renderInnerMapConstructor(definition["map"], fields, scope["profile"])
+    if scope["nested"] and outerPath == scope["resource"] and name == scope["nested"]["className"]:
+        if "classData" not in definition:
+            raise ValueError(f"{where}: a classe aninhada com operacoes precisa de classData")
+        rendered["operations"] = nestedOperationLines(name, scope["nested"])
     rendered["inner"] = [renderInnerClass(scope, where, nestedName, nestedDefinition)
                          for nestedName, nestedDefinition in (definition.get("inner") or {}).items()]
     return rendered
@@ -314,9 +330,77 @@ def innerClassLines(rendered: dict, depth: int = 0) -> list:
         lines.append(f"{pad}        }}")
     if "map" in rendered:
         lines += innerMapConstructorLines(name, rendered["map"], pad)
+    lines += [f"{pad}{line}" if line else line for line in rendered.get("operations", [])]
     for nested in rendered["inner"]:
         lines += innerClassLines(nested, depth + 1)
     lines.append(f"{pad}    }}")
+    return lines
+
+
+NESTED_OPERATIONS = ("get", "query", "page")
+
+
+def nestedOperationLines(name: str, nested: dict) -> list:
+    """Operacoes da classe interna `name` (recuo de 8, o do corpo de uma classe interna de primeiro nivel), na ordem do
+    real: get, query, a `Page` e page. So as que `nested["operations"]` lista; o Javadoc de cada sobrecarga vem pronto em
+    `nested["docs"]` (chaves `getPlain`, `queryParamsUser`...). Os corpos sao os do real: o sem `user` delega ao com `user`
+    e este chama o `Rest` com o `data` da propria classe."""
+    unknown = [operation for operation in nested["operations"] if operation not in NESTED_OPERATIONS]
+    if unknown:
+        raise ValueError(f"{name}: operacao aninhada sem suporte no template: {unknown[0]}")
+
+    listName = f"{name[:1].lower()}{name[1:]}s"
+    variable = f"{name[:1].lower()}{name[1:]}"
+    blocks = {
+        "get": [
+            ("getPlain", f"{name} get(String id)", [f"return {name}.get(id, null);"]),
+            ("getUser", f"{name} get(String id, User user)", ["return Rest.getId(data, id, user);"]),
+        ],
+        "query": [
+            ("queryParams", f"Generator<{name}> query(Map<String, Object> params)",
+             [f"return {name}.query(params, null);"]),
+            ("queryUser", f"Generator<{name}> query(User user)", [f"return {name}.query(new HashMap<>(), user);"]),
+            ("queryPlain", f"Generator<{name}> query()", [f"return {name}.query(new HashMap<>(), null);"]),
+            ("queryParamsUser", f"Generator<{name}> query(Map<String, Object> params, User user)",
+             ["return Rest.getStream(data, params, user);"]),
+        ],
+        "page": [
+            ("pageParams", f"{name}.Page page(Map<String, Object> params)", ["return page(params, null);"]),
+            ("pageUser", f"{name}.Page page(User user)", ["return page(new HashMap<>(), user);"]),
+            ("pagePlain", f"{name}.Page page()", ["return page(new HashMap<>(), null);"]),
+            ("pageParamsUser", f"{name}.Page page(Map<String, Object> params, User user)", [
+                "com.starkcore.utils.Page page = Rest.getPage(data, params, user);",
+                f"List<{name}> {listName} = new ArrayList<>();",
+                f"for (SubResource {variable}: page.entities) {{",
+                f"    {listName}.add(({name}) {variable});",
+                "}",
+                f"return new {name}.Page({listName}, page.cursor);",
+            ]),
+        ],
+    }
+    pageClass = [
+        "",
+        "        public final static class Page {",
+        f"            public List<{name}> {listName};",
+        "            public String cursor;",
+        "",
+        f"            public Page(List<{name}> {listName}, String cursor) {{",
+        f"                this.{listName} = {listName};",
+        "                this.cursor = cursor;",
+        "            }",
+        "        }",
+    ]
+    lines = []
+    for operation in NESTED_OPERATIONS:
+        if operation not in nested["operations"]:
+            continue
+        if operation == "page":
+            lines += pageClass
+        for key, signature, body in blocks[operation]:
+            lines += ["", "        /**", *[f"         * {line}" for line in nested["docs"][key]], "         */"]
+            lines += [f"        public static {signature} throws Exception {{"]
+            lines += [f"            {line}" for line in body]
+            lines += ["        }"]
     return lines
 
 
@@ -351,12 +435,13 @@ def checkInnerClass(scope: dict, where: str, name, definition) -> None:
     for field, javaType in fields.items():
         checkInnerClassField(where, field, javaType, scope)
     constructors = definition.get("constructors") or []
+    constructorFields = {**fields, "id": "String"} if definition.get("extends") == "Resource" else fields
     for names in constructors:
-        checkInnerFieldNames(where, "construtor", names, fields, scope["profile"])
+        checkInnerFieldNames(where, "construtor", names, constructorFields, scope["profile"])
     if "map" in definition:
         checkInnerFieldNames(where, "map", definition["map"], fields, scope["profile"])
         checkInnerMapTypes(where, definition["map"], fields, scope)
-    checkInnerClassSignatures(where, constructors, fields, "map" in definition)
+    checkInnerClassSignatures(where, constructors, constructorFields, "map" in definition)
     if not isinstance(definition.get("final", True), bool):
         raise ValueError(f"{where}: final deve ser booleano")
     if "classData" in definition and not isIdentifier(definition["classData"], "[A-Z]"):
@@ -467,12 +552,14 @@ def renderInnerConstructor(names: list, fields: dict, extendsResource: bool = Fa
     if not names:
         return {"signature": "", "body": ["super(null);"] if extendsResource else []}
 
-    parameters = [f"{fields[name]} {name}" for name in names]
     body = [f"this.{field} = {field};" if field in names else f"this.{field} = null;" for field in fields]
     if not extendsResource:
-        return {"signature": ", ".join(parameters), "body": body}
+        return {"signature": ", ".join(f"{fields[name]} {name}" for name in names), "body": body}
 
-    return {"signature": ", ".join([*parameters, "String id"]), "body": ["super(id);", *body]}
+    # `id` entre os nomes fixa a posicao do parametro herdado (Event.Attempt: primeiro); sem ele vai por ultimo (PaymentRequest.Log)
+    parameters = ["String id" if name == "id" else f"{fields[name]} {name}" for name in names]
+    parameters += [] if "id" in names else ["String id"]
+    return {"signature": ", ".join(parameters), "body": ["super(id);", *body]}
 
 
 def renderInnerMapConstructor(names: list, fields: dict, profile: dict) -> dict:

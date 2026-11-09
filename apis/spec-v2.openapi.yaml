@@ -3314,6 +3314,7 @@ components:
       x-sdk-parse: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-nested: Attempt
       $ref: ./schemas/event.yaml#/components/schemas/Event
     EventCreate:
       $ref: ./schemas/event.yaml#/components/schemas/EventCreate

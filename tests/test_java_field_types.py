@@ -649,8 +649,12 @@ def test_innerClassEntryHasTheRealFieldsWithTheirTypesInDeclarationOrder(resourc
 
 
 def _withoutInheritedId(definition: dict, parameters: list) -> list:
-    """O `id` do ctor de uma classe que estende Resource e o ultimo parametro, repassado a `super(id)`, e nao campo."""
+    """O `id` do ctor de uma classe que estende Resource e repassado a `super(id)` e nao e campo: sem `id` nos nomes da
+    entrada ele e o ultimo parametro (PaymentRequest.Log); citado, a entrada fixa a posicao dele (Event.Attempt)."""
     if definition.get("extends") != "Resource" or not parameters:
+        return parameters
+    assert ("String", "id") in parameters
+    if any("id" in names for names in definition["constructors"]):
         return parameters
     assert parameters[-1] == ("String", "id")
     return parameters[:-1]
@@ -665,8 +669,8 @@ def test_innerClassEntryHasTheRealPositionalConstructorsWithFieldNamesAndTypesIn
     real = sorted([field for _, field in _withoutInheritedId(definition, parameters)] for parameters in positional)
     assert real == sorted(definition["constructors"])
     for parameters in positional:
-        assert all(javaType == definition["fields"][field]
-                   for javaType, field in _withoutInheritedId(definition, parameters))
+        typed = {**definition["fields"], "id": "String"}
+        assert all(javaType == typed[field] for javaType, field in _withoutInheritedId(definition, parameters))
 
 
 @requiresJavaSdk
@@ -711,6 +715,8 @@ _NOT_SIMPLE_FILES = {"Event"}
 _NOT_SIMPLE_NESTED = {"Page", "Deserializer"}
 # o Log de PaymentRequest nao tem get/query/page: nao e um javaLogs, e sim uma classe interna que estende Resource
 _LOG_AS_INNER = {("PaymentRequest", "Log")}
+# o Event inteiro fica fora (subclasses e Deserializer), mas o Attempt e uma classe interna comum com as operacoes que o gerador imprime
+_ATTEMPT_AS_INNER = {("Event", "Attempt")}
 
 
 def _realInnerClasses() -> set:
@@ -728,7 +734,7 @@ def _realInnerClasses() -> set:
             found.add((path.stem, name))
             found.update((path.stem, f"{name}.{inner}") for inner in nested.findall(_realInnerBlock(path.stem, name))
                          if inner not in _NOT_SIMPLE_NESTED)
-    return found
+    return found | {pair for pair in _ATTEMPT_AS_INNER if _realInnerBlock(*pair)}
 
 
 @requiresJavaSdk

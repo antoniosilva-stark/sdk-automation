@@ -164,6 +164,90 @@ components:
               section: "optional"
           returns:
             - "Parsed Event object"
+        attempt:
+          get:
+            summary: "Retrieve a specific event.Attempt"
+            description:
+              - "Receive a single event.Attempt object previously created by the Stark Bank API by its id"
+            params:
+              - name: "id"
+                type: "string"
+                description: "object unique id. ex: \"5656565656565656\""
+                section: "required"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "event.Attempt object with updated attributes"
+          query:
+            summary: "Retrieve event.Attempts"
+            description:
+              - "Receive a generator of event.Attempt objects previously created in the Stark Bank API"
+            params:
+              - name: "limit"
+                type: "integer, default None"
+                description: "maximum number of objects to be retrieved. Unlimited if None. ex: 35"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "eventIds"
+                type: "list of strings, default None"
+                description: "list of Event ids to filter attempts. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "webhookIds"
+                type: "list of strings, default None"
+                description: "list of Webhook ids to filter attempts. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "generator of event.Attempt objects with updated attributes"
+          page:
+            summary: "Retrieve paged event.Attempts"
+            description:
+              - "Receive a list of up to 100 event.Attempt objects previously created in the Stark Bank API and the cursor to the next page."
+              - "Use this function instead of query if you want to manually page your requests."
+            params:
+              - name: "cursor"
+                type: "string, default None"
+                description: "cursor returned on the previous page function call"
+                section: "optional"
+              - name: "limit"
+                type: "integer, default 100"
+                description: "maximum number of objects to be retrieved. It must be an integer between 1 and 100. ex: 50"
+                section: "optional"
+              - name: "after"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only after specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "before"
+                type: "datetime.date or string, default None"
+                description: "date filter for objects created only before specified date. ex: datetime.date(2020, 3, 10)"
+                section: "optional"
+              - name: "eventIds"
+                type: "list of strings, default None"
+                description: "list of Event ids to filter attempts. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "webhookIds"
+                type: "list of strings, default None"
+                description: "list of Webhook ids to filter attempts. ex: [\"5656565656565656\", \"4545454545454545\"]"
+                section: "optional"
+              - name: "user"
+                type: "Organization/Project object, default None"
+                description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+                section: "optional"
+            returns:
+              - "list of event.Attempt objects with updated attributes"
+              - "cursor to retrieve the next page of event.Attempt objects"
 
     EventCreate:
       type: object

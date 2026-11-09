@@ -80,13 +80,13 @@ def schemasOf(document: dict) -> dict:
 
 
 def flattenDocs(docs: dict | None) -> dict:
-    """`log` aninha as operacoes do Log: `log.get` e `get` sao docstrings diferentes."""
+    """`log` e o subpacote aninhado aninham as operacoes: `log.get` e `get` sao docstrings diferentes."""
     flat = {}
     for name, entry in (docs or {}).items():
-        if name != "log":
+        if "summary" in entry:
             flat[name] = entry
             continue
-        flat.update({f"log.{inner}": value for inner, value in flattenDocs(entry).items()})
+        flat.update({f"{name}.{inner}": value for inner, value in flattenDocs(entry).items()})
     return flat
 
 

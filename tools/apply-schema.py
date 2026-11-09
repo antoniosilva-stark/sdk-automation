@@ -22,7 +22,7 @@ SUPPORTED_FLAGS = frozenset({
     "x-sdk-put", "x-sdk-subresource", "x-sdk-parse",
 })
 
-VALUED_FLAGS = frozenset({"x-sdk-log-entity"})
+VALUED_FLAGS = frozenset({"x-sdk-log-entity", "x-sdk-nested"})
 
 
 def loadFast(text: str):

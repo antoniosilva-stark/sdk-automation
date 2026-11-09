@@ -223,13 +223,16 @@ javaConstructorTypes:
 # (Invoice.Payment) e `qualified` escreve `SubResource.ClassData` (MerchantSession.AllowedInstallment); o real nao e
 # uniforme, entao e um eixo por classe, como javaLogs.classData. Mais duas chaves opcionais: `extends` (`SubResource`, o
 # default, ou `Resource`: o `id` e o ultimo parametro de cada construtor com campos, repassado a `super(id)`, e o sem
-# argumentos chama `super(null)`; sem campo `id` nem `map`) e `inner` (classes aninhadas, no mesmo formato, com nome unico
+# argumentos chama `super(null)`; sem campo `id` nem `map`; citar `id` em um construtor fixa a posicao do parametro, que sem
+# isso e o ultimo) e `inner` (classes aninhadas, no mesmo formato, com nome unico
 # no recurso). O tipo de um campo pode ser o proprio recurso ou o caminho qualificado de uma classe interna dele
 # (`PaymentRequest.Log.User`), mas esse tipo nao entra em `map`. Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
 # PaymentRequest.Log nao e um javaLogs: nao tem get/query/page (e o PaymentRequest nao tem `x-sdk-log`), entao e uma classe
 # interna que estende Resource, com a User aninhada; e dele que o Event tira o tipo do log da subscription payment-request.
 # Transfer.Rule e uma classe simples como as outras: o `Deserializer` aninhado do real nao e gerado e segue dispensado
 # em apis/java-handwritten.yaml. O VerifiedTransfer usa `List<Transfer.Rule>` (javaTypes) sem declarar a classe.
+# Event.Attempt tem tambem as operacoes get/query/page: o recurso com `x-sdk-nested: Attempt` na spec as imprime dentro da
+# classe interna de mesmo nome, que precisa ter `classData`; a doc de cada uma vem de `x-sdk-docs.attempt` (o subpacote do sdk-python).
 # Fora (outras entregas): Page dentro de Log (ME 9.4), Transfer.Rule.Deserializer, PaymentRequest.Deserializer,
 # MerchantSession.Purchase e o Deserializer do Event (ME 9.8).
 javaInnerClasses:
@@ -256,6 +259,13 @@ javaInnerClasses:
       fields: {key: String, value: "String[]"}
       constructors: [[key, value], []]
       map: [key, value]
+  Event:
+    Attempt:
+      extends: Resource
+      fields: {code: String, message: String, eventId: String, webhookId: String, created: String}
+      constructors: [[id, code, message, eventId, webhookId, created], []]
+      classData: EventAttempt
+      classDataType: short
   Invoice:
     Description:
       fields: {key: String, value: String}
@@ -398,7 +408,8 @@ javaPages:
 #   subscriptions: (obrigatorio) as subscriptions na ordem do switch do real, sem repeticao.
 #   gson:          (opcional) as subscriptions que o real deserializa com `GsonEvent.getInstance().fromJson(...)` em vez de
 #                  `context.deserialize(...)`; subconjunto de subscriptions (payment-request).
-# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. Fora: o Attempt do Event.
+# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. O Attempt do Event e gerado a parte: classe
+# interna em javaInnerClasses.Event.Attempt, com as operacoes que a flag `x-sdk-nested` do Event pede.
 javaEvents:
   Event:
     subscriptions: [transfer, boleto, boleto-payment, utility-payment, boleto-holmes, invoice, deposit, brcode-payment,
