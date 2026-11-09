@@ -3351,6 +3351,7 @@ components:
     CorporatePurchase:
       x-sdk-get: true
       x-sdk-log: true
+      x-sdk-page: true
       x-sdk-parse: true
       x-sdk-query: true
       x-sdk-log-entity: purchase

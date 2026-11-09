@@ -10,9 +10,7 @@ PAGE_OVERLOADS = ("Map<String, Object> params", "User user", "", "Map<String, Ob
 
 # Page externa do real cujo recurso nao tem `x-sdk-page` na spec: o template nunca a emite, entao o javaPages nao a alcanca.
 # O teste prova que cada um segue sem a flag e com a Page no real, entao a lista nao envelhece.
-PAGE_EXCLUSIONS = {
-    "CorporatePurchase": "sem x-sdk-page na spec: a Page e a query do real nao saem do template",
-}
+PAGE_EXCLUSIONS = {}
 
 # Overload cujo retorno diverge dos outros tres no proprio real (descuido do sdk-java): o eixo `names` e um por recurso e
 # nao o representa, entao o teste o nomeia em vez de o esconder.

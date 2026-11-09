@@ -387,6 +387,7 @@ javaPages:
   CorporateCard: {listName: cards, names: short}
   CorporateHolder: {listName: holders, names: qualified}
   CorporateInvoice: {listName: invoices, names: short}
+  CorporatePurchase: {listName: corporatePurchases, names: qualified}
   CorporateTransaction: {listName: corporateTransactions, names: qualified}
   CorporateWithdrawal: {listName: withdrawals, names: qualified}
   DarfPayment: {listName: payments, names: short}

@@ -729,7 +729,7 @@ def test_operationWithoutDocstringWarnsAndIsLeftOut(extractSchema, tmpPath, monk
 
 def test_exportWithoutFlagIsWarnedAndNotDocumented(extractSchema, tmpPath, monkeypatch, capsys):
     operations = WIDGET_OPERATIONS + '\n\ndef validate(content):\n    """# Validate a Widget"""\n    return content\n'
-    root = _documentedSdk(tmpPath, "get, validate", operations)
+    root = _documentedSdk(tmpPath, "get, query, page, validate", operations)
     monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
 
     code = extractSchema.main()
@@ -737,7 +737,7 @@ def test_exportWithoutFlagIsWarnedAndNotDocumented(extractSchema, tmpPath, monke
 
     assert code == 0
     assert "[WARN] Widget.validate exportada sem flag" in captured.err
-    assert list(yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]) == ["get"]
+    assert list(yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]) == ["get", "query", "page"]
 
 
 def test_resourceWithoutInitHasNoDocsKey(tmpPath):

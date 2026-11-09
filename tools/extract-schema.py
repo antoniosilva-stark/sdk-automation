@@ -500,6 +500,17 @@ def exportedNames(initSource: str) -> list[str]:
     return names
 
 
+def declaredOperationNames(initFile: Path, moduleFile: Path) -> set:
+    """O sdk-python esqueceu de exportar `CorporatePurchase.page` no __init__ embora a funcao esteja definida no modulo
+    com docstring completa; o sdk-java real e o sdk-node tem a operacao, entao a definicao no modulo basta."""
+    names = {name for name in exportedNames(initFile.read_text(encoding="utf-8")) if name in OPERATION_FLAGS}
+    if not moduleFile.is_file():
+        return names
+    defined = {node.name for node in ast.parse(moduleFile.read_text(encoding="utf-8")).body
+               if isinstance(node, ast.FunctionDef)}
+    return names | (defined & OPERATION_FLAGS.keys())
+
+
 def declaredOperations(root: Path, resource: str) -> dict:
     module = resource.lower()
     package = Path(root) / "starkbank" / module
@@ -508,7 +519,8 @@ def declaredOperations(root: Path, resource: str) -> dict:
         return {"flags": [], "unsupported": [], "missingInit": True}
 
     exported = [name for name in exportedNames(initFile.read_text(encoding="utf-8")) if name[:1].islower()]
-    flags = sorted({OPERATION_FLAGS[name] for name in exported if name in OPERATION_FLAGS})
+    declared = declaredOperationNames(initFile, modulePath(root, resource))
+    flags = sorted({OPERATION_FLAGS[name] for name in declared})
     unsupported = sorted({name for name in exported if name not in OPERATION_FLAGS and name != "log"})
 
     if (package / "log").is_dir():
@@ -612,13 +624,13 @@ def collectDocs(initFile: Path, moduleFile: Path, label: str) -> dict:
     if not initFile.is_file() or not moduleFile.is_file():
         return {}
 
-    exported = set(exportedNames(initFile.read_text(encoding="utf-8")))
+    declared = declaredOperationNames(initFile, moduleFile)
     functions = {node.name: node for node in ast.parse(moduleFile.read_text(encoding="utf-8")).body
                  if isinstance(node, ast.FunctionDef)}
 
     docs = {}
     for name in OPERATION_FLAGS:
-        if name not in exported:
+        if name not in declared:
             continue
         doc = ast.get_docstring(functions[name]) if name in functions else None
         if not doc:
