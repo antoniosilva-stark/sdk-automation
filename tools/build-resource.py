@@ -180,13 +180,14 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
     pageShape = extractSchema.javaPageShape(resource, conventionsFile) if "x-sdk-page" in flags else None
+    omittedParams = extractSchema.javaOmittedOperationParams(resource, conventionsFile)
     rendered = javaDocs.renderDocs(
         resource,
         schema.get("x-sdk-docs") or {},
         flags,
         entity,
         pageListName=pageShape["listName"] if pageShape else None,
-        omittedParams=extractSchema.javaOmittedOperationParams(resource, conventionsFile),
+        omittedParams=omittedParams,
     )
     nested, nestedWarnings = renderNested(spec["components"]["schemas"][resource], schema, javaDocs)
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
@@ -225,8 +226,10 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     if queryShape is not None:
         code["query"] = javaCode.renderQuery(resource, queryShape, flags)
     for operation in ("get", "pdf"):
-        hasMap = "x-sdk-" + operation in flags and javaDocs.hasOptionalParamOverloads(
-            operation, javaDocs.operationDoc(schema.get("x-sdk-docs") or {}, operation))
+        # o mesmo doc que o java-docs ve: sem o parametro omitido, o codigo e o Javadoc seguem o mesmo caminho
+        operationDoc = javaDocs.withoutOmittedParams(
+            javaDocs.operationDoc(schema.get("x-sdk-docs") or {}, operation) or {}, omittedParams.get(operation) or {})
+        hasMap = "x-sdk-" + operation in flags and javaDocs.hasOptionalParamOverloads(operation, operationDoc)
         if hasMap:
             code[f"{operation}Params"] = True
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"

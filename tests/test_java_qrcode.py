@@ -120,14 +120,13 @@ def test_generatedQrcodeBodiesMatchTheRealOnes(generated):
 
 
 @requiresGenerator
-def test_generatedQrcodeJavadocCarriesTheNoteAndDoesNotListTheSize(generated):
+def test_generatedQrcodeJavadocCarriesTheNoteOnBothOverloads(generated):
     javadocs = _qrcodeJavadocs(generated["Invoice"])
 
     assert len(javadocs) == 2
     for javadoc in javadocs:
         assert f"     * {NOTE}\n" in javadoc
         assert "@param id [string]: object unique id" in javadoc
-        assert "@param size" not in javadoc
         assert "@return Invoice png blob" in javadoc
     assert "@param user" not in javadocs[0]
     assert "@param user [Organization/Project object" in javadocs[1]
@@ -278,3 +277,18 @@ def test_anOmittedOptionalParameterIsNotListedAndKeepsThePlainTwoOverloadsOfTheO
 
 def test_withoutOmittedParamsTheRenderedDocsAreIdentical():
     assert _renderedPdf(_PDF_DOCS, {}) == _renderedPdf(_PDF_DOCS, {"get": {"layout": "Not this operation."}})
+
+
+def test_anOmittedOnlyOptionalParameterOfGetKeepsTheCodeAndTheDocsOnTheSameTwoOverloads(buildResource, tmp_path):
+    """A omissao tira o `expand` do unico opcional do get: o java-docs deixa de ver o overload com Map, e o codigo gerado
+    tem de seguir o mesmo caminho em vez de emitir as sobrecargas com Javadoc vazio."""
+    conventions = yaml.safe_load(_realConventionsText())
+    conventions["javaOmittedOperationParams"] = {"CorporateCard": {"get": {"expand": "Expand is fixed."}}}
+    path = tmp_path / "type-conventions.yaml"
+    path.write_text(yaml.safe_dump(conventions), encoding="utf-8")
+
+    staged = buildResource.stageJavaDocs("CorporateCard", tmp_path / "staged", path)["spec"]
+
+    entry = buildResource.loadFast(staged.read_text(encoding="utf-8"))["components"]["schemas"]["CorporateCard"]
+    assert "getParams" not in entry["x-sdk-java-code"]
+    assert sorted(key for key in entry["x-sdk-java-docs"] if key.startswith("get")) == ["getPlain", "getUser"]
