@@ -48,10 +48,10 @@ def test_fullySupportedOperationsCountAsFullParity(tmpPath):
 
 
 def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
-    report = _report(tmpPath, "get, query, qrcode")
+    report = _report(tmpPath, "get, query, validate")
 
     assert report["fullParity"] == []
-    assert report["withPending"] == [{"resource": "Widget", "pending": ["qrcode"]}]
+    assert report["withPending"] == [{"resource": "Widget", "pending": ["validate"]}]
 
 
 def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
@@ -66,7 +66,7 @@ def test_flagsComeFromTemplateNotAParallelList(coverageReport):
 
     assert "x-sdk-page" in flags
     assert "x-sdk-cancel" in flags
-    assert "x-sdk-qrcode" not in flags
+    assert "x-sdk-invented" not in flags
     assert "x-sdk-data-only" in flags
 
 

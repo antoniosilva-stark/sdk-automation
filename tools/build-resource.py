@@ -57,7 +57,7 @@ GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
 LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
 SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log", "x-sdk-subresource")
 REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
-              "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
+              "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-qrcode", "x-sdk-log")
 
 
 def declaredFlags(resource: str, specFile: str = SPEC_FILE) -> set[str]:
@@ -186,6 +186,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         flags,
         entity,
         pageListName=pageShape["listName"] if pageShape else None,
+        omittedParams=extractSchema.javaOmittedOperationParams(resource, conventionsFile),
     )
     nested, nestedWarnings = renderNested(spec["components"]["schemas"][resource], schema, javaDocs)
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
@@ -265,7 +266,7 @@ def javaImports(
         properties.append("usesRest=true")
     if hasParsers:
         properties.append("usesParsers=true")
-    if "x-sdk-pdf" in flags or hasLogPdf:
+    if flags & {"x-sdk-pdf", "x-sdk-qrcode"} or hasLogPdf:
         properties.append("usesInputStream=true")
     if "x-sdk-parse" in flags:
         properties.append("usesParse=true")

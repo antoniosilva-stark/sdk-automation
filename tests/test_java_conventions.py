@@ -25,7 +25,7 @@ RESOURCE_IDS = [name for name, _ in RESOURCES]
 
 # Ordem total derivada dos pares do eixo F2 da ME 4 (get<query 27 a 4, query<page 33 a 0, get<pdf 8 a 0,
 # page<delete 7 a 2, get<create 13 a 9, create<pdf 7 a 1, pdf<delete 5 a 1...); `put` so tem o SplitProfile (1 a 0).
-METHOD_ORDER = ("put", "get", "query", "page", "create", "update", "pdf", "delete", "cancel")
+METHOD_ORDER = ("put", "get", "query", "page", "create", "update", "pdf", "qrcode", "delete", "cancel")
 LOG_METHOD_ORDER = ("get", "query", "page")
 # Maiorias do eixo F2b: get 21 a 6, query 19 a 12, page 24 a 4; o Log e unanime (23 a 0) em `(params) (user) () (params,user)`.
 OVERLOADS = {
@@ -206,7 +206,7 @@ def test_aResourceWithEveryOperationKeepsTheWholeOrder(generated):
         if name not in names:
             names.append(name)
 
-    assert names == ["get", "query", "page", "create", "update", "pdf"]
+    assert names == ["get", "query", "page", "create", "update", "pdf", "qrcode"]
     logNames = []
     for name, _, _ in _methods(source, "        "):
         if name not in logNames:

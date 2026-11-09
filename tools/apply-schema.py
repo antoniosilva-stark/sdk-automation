@@ -19,7 +19,7 @@ CREATE_SUFFIX = "Create"
 SUPPORTED_FLAGS = frozenset({
     "x-sdk-create", "x-sdk-get", "x-sdk-query", "x-sdk-page", "x-sdk-log",
     "x-sdk-delete", "x-sdk-update", "x-sdk-pdf", "x-sdk-cancel", "x-sdk-data-only",
-    "x-sdk-put", "x-sdk-subresource", "x-sdk-parse",
+    "x-sdk-put", "x-sdk-subresource", "x-sdk-parse", "x-sdk-qrcode",
 })
 
 VALUED_FLAGS = frozenset({"x-sdk-log-entity", "x-sdk-nested"})

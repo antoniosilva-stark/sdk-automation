@@ -428,3 +428,15 @@ javaEvents:
 # Valida-se contra o real em tests/test_java_query_shapes.py: Institution e o unico recurso do real com essa forma.
 javaQueryShapes:
   Institution: {returns: list, classData: short}
+
+# Parametro que o sdk-python recebe e o real deixa de receber, Recurso -> operacao -> parametro -> nota. E uma convencao do
+# real, nao do sdk-python: o java-docs nao lista o parametro nos `@param` e acrescenta a nota (uma linha de Javadoc, sem
+# `*/` nem barra invertida) ao texto de descricao, como o real. O parametro tem de existir na doc da operacao e ser
+# opcional, nunca `id` nem `user`; a operacao some das regras de sobrecarga com Map (get e pdf) como se nao o tivesse.
+# Valida-se contra o real em tests/test_java_qrcode.py: o real so recebe `id` e `user` no qrcode.
+javaOmittedOperationParams:
+  Invoice:
+    qrcode:
+      size: >-
+        Note: the pixel size of each QR code "box" (min 1, max 50, API default 7) cannot currently be customized through
+        this SDK method; the API's default sizing is always used.

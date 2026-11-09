@@ -472,6 +472,22 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     }
 {{/vendorExtensions.x-sdk-java-code.pdfParams}}
 {{/vendorExtensions.x-sdk-pdf}}
+{{#vendorExtensions.x-sdk-qrcode}}
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.qrcodePlain}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.qrcodePlain}}     */
+    public static InputStream qrcode(String id) throws Exception {
+        return {{classname}}.qrcode(id, null);
+    }
+
+    /**
+{{#vendorExtensions.x-sdk-java-docs.qrcodeUser}}     * {{{.}}}
+{{/vendorExtensions.x-sdk-java-docs.qrcodeUser}}     */
+    public static InputStream qrcode(String id, User user) throws Exception {
+        return Rest.getContent({{classDataName}}, id, "qrcode", user, new HashMap<>());
+    }
+{{/vendorExtensions.x-sdk-qrcode}}
 {{#vendorExtensions.x-sdk-delete}}
 
     /**

@@ -26,7 +26,8 @@ RESERVED_PROPERTY_NAMES = {
 CODE_LOG_ENTITY = "LOG_ENTITY"
 CODE_SUBRESOURCE_UNSUPPORTED = "SUBRESOURCE_UNSUPPORTED"
 SUBRESOURCE_UNSUPPORTED_FLAGS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-update", "x-sdk-delete",
-                                 "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log", "x-sdk-parse", "x-sdk-nested")
+                                 "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log", "x-sdk-parse", "x-sdk-qrcode",
+                                 "x-sdk-nested")
 PROVENANCE_PREFIX = "# fonte: starkbank/sdk-python@"
 
 MIN_READ_PROPS = 3
@@ -34,7 +35,7 @@ MIN_CREATE_PROPS = 1
 
 OPERATION_FLAGS = (
     "x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
-    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-parse", "x-sdk-data-only",
+    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-parse", "x-sdk-qrcode", "x-sdk-data-only",
 )
 WRITE_FLAGS = ("x-sdk-create", "x-sdk-put")
 

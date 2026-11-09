@@ -46,6 +46,9 @@ JAVA_RESERVED_WORDS = frozenset({
 # Valores aceitos do javaQueryShapes; a ausencia de entrada e o `query` em Generator com o ClassData qualificado do template.
 JAVA_QUERY_VALUES = {"returns": ("list",), "classData": ("short",)}
 
+# Parametros que a assinatura Java sempre tem, entao a secao javaOmittedOperationParams nao os omite.
+JAVA_OMITTED_PARAM_PROTECTED = frozenset({"id", "user"})
+
 # Chaves do javaEvents e o formato de uma subscription (kebab-case minusculo: dele sai o nome do recurso, `boleto-holmes`
 # -> BoletoHolmes). O default de `gson` e nenhuma subscription.
 JAVA_EVENT_KEYS = ("subscriptions", "gson")
@@ -94,6 +97,7 @@ OPERATION_FLAGS = {
     "pdf": "x-sdk-pdf",
     "cancel": "x-sdk-cancel",
     "parse": "x-sdk-parse",
+    "qrcode": "x-sdk-qrcode",
 }
 
 TYPES = {
@@ -394,6 +398,50 @@ def checkQueryShape(resource: str, shape) -> None:
             raise ValueError(f"{resource}: javaQueryShapes.{key} ausente")
         if not isinstance(shape[key], str) or shape[key] not in allowed:
             raise ValueError(f"{resource}: javaQueryShapes.{key} invalido: {shape[key]!r}, esperado um de {list(allowed)}")
+
+
+def javaOmittedOperationParams(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    """`{operacao: {parametro: nota}}` do recurso: o que o sdk-python recebe e o Java deixa de receber."""
+    omitted = loadConventions(Path(conventions)).get("javaOmittedOperationParams") or {}
+    if not isinstance(omitted, dict):
+        raise ValueError("javaOmittedOperationParams deve ser um mapa recurso -> operacao -> parametro -> nota")
+    checkKnownResources("javaOmittedOperationParams", omitted)
+    for name, operations in omitted.items():
+        checkOmittedOperationParams(name, operations)
+    return omitted.get(resource) or {}
+
+
+def checkOmittedOperationParams(resource: str, operations) -> None:
+    if not isinstance(operations, dict) or not operations:
+        raise ValueError(
+            f"{resource}: javaOmittedOperationParams deve ser um mapa operacao -> parametro -> nota, veio {operations!r}"
+        )
+    schemaDocs = loadFast((SCHEMAS_DIR / f"{resource.lower()}.yaml").read_text(encoding="utf-8"))
+    docs = (schemaDocs["components"]["schemas"][resource].get("x-sdk-docs")) or {}
+    for operation, parameters in operations.items():
+        key = f"{resource}.{operation}"
+        if not isinstance(operation, str) or not isinstance(docs.get(operation), dict):
+            raise ValueError(
+                f"{key}: javaOmittedOperationParams operacao sem x-sdk-docs em apis/schemas/{resource.lower()}.yaml"
+            )
+        if not isinstance(parameters, dict) or not parameters:
+            raise ValueError(f"{key}: javaOmittedOperationParams deve ser um mapa parametro -> nota, veio {parameters!r}")
+        sections = {param.get("name"): param.get("section") for param in docs[operation].get("params") or []}
+        for parameter, note in parameters.items():
+            checkOmittedParam(f"{key}.{parameter}", parameter, note, sections)
+
+
+def checkOmittedParam(key: str, parameter, note, sections: dict) -> None:
+    if parameter in JAVA_OMITTED_PARAM_PROTECTED:
+        raise ValueError(f"{key}: javaOmittedOperationParams nao omite {parameter!r}, que a assinatura Java sempre tem")
+    if parameter not in sections:
+        raise ValueError(f"{key}: javaOmittedOperationParams parametro inexistente na doc da operacao")
+    if sections[parameter] == SECTION_REQUIRED:
+        raise ValueError(f"{key}: javaOmittedOperationParams nao omite o obrigatorio {parameter!r}")
+    if not isJavadocLine(note):
+        raise ValueError(
+            f"{key}: javaOmittedOperationParams nota invalida: {note!r}, esperado texto de uma linha sem '*/' nem barra invertida"
+        )
 
 
 def lowerFirst(name: str) -> str:

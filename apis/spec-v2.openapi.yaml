@@ -3244,6 +3244,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-pdf: true
+      x-sdk-qrcode: true
       x-sdk-query: true
       x-sdk-update: true
       x-sdk-log-entity: invoice

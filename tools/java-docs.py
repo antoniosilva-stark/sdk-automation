@@ -59,6 +59,7 @@ OPERATION_KINDS = {
     "get": "id", "delete": "id", "cancel": "id", "pdf": "id",
     "update": "patch",
     "parse": "parse",
+    "qrcode": "id",
     "query": "filters", "page": "filters",
     "log.get": "id", "log.query": "filters", "log.page": "filters", "log.pdf": "id",
 }
@@ -89,11 +90,15 @@ def renderDocs(
     entity: dict,
     profile: dict = JAVA_PROFILE,
     pageListName: str | None = None,
+    omittedParams: dict | None = None,
 ) -> dict:
     """Linhas de Javadoc ja prontas, por chave plana; o Mustache so as emoldura.
 
     Chaves planas (`getPlain`, `queryParamsUser`, `logPageParams`...) porque o Mustache resolve nome ausente
-    no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo."""
+    no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo.
+
+    `omittedParams` (`{operacao: {parametro: nota}}`, javaOmittedOperationParams): o parametro que o Java nao recebe sai da
+    doc da operacao e a nota entra no fim da descricao."""
     context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
                "snakeNames": snakeNames(docs, entity), "pageListName": pageListName,
                "singletonGet": hasSingletonGet(flags, docs)}
@@ -107,7 +112,7 @@ def renderDocs(
         if doc is None:
             context["fallbacks"].append(operation)
             doc = genericDoc(operation, className)
-        lines.update(renderOperation(context, operation, doc))
+        lines.update(renderOperation(context, operation, doc, (omittedParams or {}).get(operation) or {}))
     lines = {key: [neutralizeComment(line) for line in block] for key, block in lines.items()}
     rendered = {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
     if "x-sdk-create" in flags:
@@ -263,8 +268,17 @@ def operationKey(operation: str, variant: str) -> str:
     return f"{head}{tail.capitalize()}{variant}"
 
 
-def renderOperation(context: dict, operation: str, doc: dict) -> dict:
+def withoutOmittedParams(doc: dict, omitted: dict) -> dict:
+    """A doc sem os parametros omitidos e com as notas no fim da descricao; sem omissao, a mesma doc."""
+    if not omitted:
+        return doc
+    params = [param for param in doc.get("params") or [] if param.get("name") not in omitted]
+    return {**doc, "params": params, "description": [*(doc.get("description") or []), *omitted.values()]}
+
+
+def renderOperation(context: dict, operation: str, doc: dict, omitted: dict | None = None) -> dict:
     kind = OPERATION_KINDS[operation]
+    doc = withoutOmittedParams(doc, omitted or {})
     plan = createPlan(context["className"], doc) if operation == "create" else None
     doc = listFormDoc(operation, context["className"], doc) if kind == "list" and not isSingle(plan) else doc
     hasParamsOverloads = (kind == "filters" or bool(plan and plan["hasExpand"])
@@ -533,6 +547,7 @@ def genericReturns(operation: str, className: str) -> list:
         "cancel": [f"canceled {className} object"],
         "pdf": [f"{className} pdf file content"],
         "parse": [f"Parsed {className} object"],
+        "qrcode": [f"{className} png blob"],
         "log.get": [f"{className} Log object with updated attributes"],
         "log.pdf": [f"{className} Log pdf file"],
         "log.query": [f"generator of {className} Log objects with updated attributes"],
@@ -549,6 +564,7 @@ def genericDoc(operation: str, className: str) -> dict:
         "cancel": f"Cancel {article(className)} {className} entity",
         "pdf": f"Retrieve a specific {className} pdf file",
         "parse": f"Create a single verified {className} from a content string",
+        "qrcode": f"Retrieve a specific {className} QR Code png",
         "log.pdf": f"Retrieve a specific {className} Log pdf file",
     }
     descriptions = {
