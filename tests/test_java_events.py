@@ -169,23 +169,25 @@ def test_generatedDeserializerHasEveryCaseTheDefaultAndTheNullReturnOfTheReal(ge
 
 
 @requiresGenerator
-def test_generatedEventImportsWhatTheDeserializerUsesAndNothingForParse(generatedEvent):
+def test_generatedEventImportsWhatTheDeserializerAndParseUseAndNoSignatureClass(generatedEvent):
     assert "import com.google.gson.*;\n" in generatedEvent
     assert "import com.starkcore.utils.GsonEvent;\n" in generatedEvent
     assert "import java.lang.reflect.Type;\n" in generatedEvent
-    assert "Ecdsa" not in generatedEvent
-    assert "InvalidSignatureError" not in generatedEvent
+    assert "import com.starkbank.utils.Parse;\n" in generatedEvent
+    assert "import com.starkbank.ellipticcurve" not in generatedEvent
+    assert "import com.starkbank.error.InvalidSignatureError" not in generatedEvent
 
 
 @requiresGenerator
-def test_withoutAGsonSubsetTheEventImportsNoGsonEventAndNoCaseUsesIt(buildResource, tmpPath):
+def test_withoutAGsonSubsetNoCaseUsesGsonEventAndOnlyParseKeepsTheImport(buildResource, tmpPath):
     conventions = yaml.safe_load(_realConventionsText())
     del conventions["javaEvents"]["Event"]["gson"]
     source = _generated(buildResource, tmpPath, "Event", yaml.safe_dump(conventions, sort_keys=False))
 
     assert "import com.google.gson.*;\n" in source
-    assert "import com.starkcore.utils.GsonEvent;" not in source
-    assert "GsonEvent" not in source
+    assert "import com.starkcore.utils.GsonEvent;\n" in source
+    assert "GsonEvent.getInstance().fromJson(jsonObject" not in source
+    assert source.count("GsonEvent") == 2
     assert source.count("context.deserialize(jsonObject,") == 19
 
 

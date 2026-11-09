@@ -52,6 +52,7 @@ def renderJavaCode(
     eventShape: dict | None = None,
     logResources: frozenset = frozenset(),
     otherInnerClasses: dict | None = None,
+    hasParse: bool = False,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -65,7 +66,8 @@ def renderJavaCode(
     os recursos que tem Log (flag `x-sdk-log` ou `Log` em javaInnerClasses), que o recurso de cada subscription tem de ser.
     `otherInnerClasses`: as classes internas dos demais recursos por nome qualificado (`Transfer.Rule`), so para o tipo
     `List<Transfer.Rule>` de um campo; a classe nao e emitida aqui. Os campos extras (javaExtraFields) ja chegam no schema
-    (`addExtraFields`)."""
+    (`addExtraFields`). `parse`: so para recurso com a flag `x-sdk-parse` (`hasParse`); o recurso com `javaEvents` le o evento
+    pela chave `event` (o lowerFirst do recurso, como o `key` do Python) e os demais repassam o conteudo ao `Parse`."""
     knownInnerClasses = {**(innerClasses or {}), **(otherInnerClasses or {})}
     fields = renderFields(schema, resource, overrides, profile, knownInnerClasses, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
@@ -86,8 +88,16 @@ def renderJavaCode(
             "typeName": "Page" if pageShape["names"] == "short" else f"{resource}.Page",
         }
     if eventShape is not None:
-        code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames, logResources)
+        code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames, logResources, hasParse)
+    if hasParse:
+        code["parse"] = renderParse(resource, eventShape)
     return code
+
+
+def renderParse(resource: str, eventShape: dict | None) -> dict:
+    if eventShape is None:
+        return {"isEvent": False}
+    return {"isEvent": True, "key": f"{resource[:1].lower()}{resource[1:]}"}
 
 
 def omitFields(schema: dict, resource: str, omitted: list) -> dict:
@@ -142,7 +152,14 @@ def schemaTypeOf(javaType: str, profile: dict) -> dict:
     return {"type": "object"}
 
 
-def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: frozenset, logResources: frozenset) -> dict:
+def renderEvents(
+    resource: str,
+    shape: dict,
+    ctorFields: list,
+    resourceNames: frozenset,
+    logResources: frozenset,
+    hasParse: bool = False,
+) -> dict:
     """Deserializer e subclasses prontos para o Mustache. Da subscription (`boleto-holmes`) saem o recurso do log
     (BoletoHolmes), a subclasse (`<Recurso><Evento>`, BoletoHolmesEvent) e o tipo do `log` (BoletoHolmes.Log); a subclasse
     de `subscription` desconhecida tem `log` JsonObject. Os parametros do construtor das subclasses sao os da base."""
@@ -164,7 +181,7 @@ def renderEvents(resource: str, shape: dict, ctorFields: list, resourceNames: fr
             f"{'String' if field['isId'] else field['javaType']} {field['name']}" for field in ctorFields
         ),
         "superArguments": ", ".join(field["name"] for field in ctorFields),
-        "usesGsonEvent": bool(gson),
+        "usesGsonEvent": bool(gson) or hasParse,
     }
 
 

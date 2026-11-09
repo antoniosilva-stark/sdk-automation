@@ -398,7 +398,7 @@ javaPages:
 #   subscriptions: (obrigatorio) as subscriptions na ordem do switch do real, sem repeticao.
 #   gson:          (opcional) as subscriptions que o real deserializa com `GsonEvent.getInstance().fromJson(...)` em vez de
 #                  `context.deserialize(...)`; subconjunto de subscriptions (payment-request).
-# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. Fora: `parse` e o Attempt do Event.
+# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. Fora: o Attempt do Event.
 javaEvents:
   Event:
     subscriptions: [transfer, boleto, boleto-payment, utility-payment, boleto-holmes, invoice, deposit, brcode-payment,

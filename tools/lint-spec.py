@@ -34,7 +34,7 @@ MIN_CREATE_PROPS = 1
 
 OPERATION_FLAGS = (
     "x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
-    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-data-only",
+    "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-parse", "x-sdk-data-only",
 )
 WRITE_FLAGS = ("x-sdk-create", "x-sdk-put")
 

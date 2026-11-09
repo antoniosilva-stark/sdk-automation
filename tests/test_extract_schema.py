@@ -288,12 +288,12 @@ def test_putIsDerivedWhenPythonExportsIt(extractSchema, tmpPath):
 
 
 def test_operationWithoutFlagIsAnnouncedNotIgnored(extractSchema, tmpPath):
-    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, parse, response")
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, validate, response")
 
     operations = extractSchema.declaredOperations(root, "Widget")
 
     assert operations["flags"] == ["x-sdk-get", "x-sdk-query"]
-    assert operations["unsupported"] == ["parse", "response"]
+    assert operations["unsupported"] == ["response", "validate"]
 
 
 def test_logComesFromTheDirectoryPresence(extractSchema, tmpPath):
@@ -349,7 +349,7 @@ def test_operationsAreEmittedWithTheDedicatedFlag(tmpPath):
 
 
 def test_operationsStdoutIsPureYaml(tmpPath):
-    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, parse, response")
+    root = _withInit(_fakeSdk(tmpPath), "widget", "get, query, validate, response")
     code, out = runTool("extract-schema.py", "Widget", "--from", str(root), "--operations")
 
     assert code == 0, out
@@ -728,15 +728,15 @@ def test_operationWithoutDocstringWarnsAndIsLeftOut(extractSchema, tmpPath, monk
 
 
 def test_exportWithoutFlagIsWarnedAndNotDocumented(extractSchema, tmpPath, monkeypatch, capsys):
-    operations = WIDGET_OPERATIONS + '\n\ndef parse(content):\n    """# Parse a Widget"""\n    return content\n'
-    root = _documentedSdk(tmpPath, "get, parse", operations)
+    operations = WIDGET_OPERATIONS + '\n\ndef validate(content):\n    """# Validate a Widget"""\n    return content\n'
+    root = _documentedSdk(tmpPath, "get, validate", operations)
     monkeypatch.setattr(sys, "argv", ["extract-schema.py", "Widget", "--from", str(root)])
 
     code = extractSchema.main()
     captured = capsys.readouterr()
 
     assert code == 0
-    assert "[WARN] Widget.parse exportada sem flag" in captured.err
+    assert "[WARN] Widget.validate exportada sem flag" in captured.err
     assert list(yaml.safe_load(captured.out)["components"]["schemas"]["Widget"]["x-sdk-docs"]) == ["get"]
 
 
@@ -1046,7 +1046,7 @@ def test_resourceClassEmitsNoSubresourceFlag(tmpPath):
 
 def test_subresourceFlagDoesNotCountAsAnOperation(extractSchema, tmpPath):
     body = WIDGET_MODULE.replace("class Widget(Resource):", "class Widget(SubResource):")
-    root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "parse")
+    root = _withInit(_fakeSdk(tmpPath, body=body), "widget", "validate")
 
     assert extractSchema.declaredOperations(root, "Widget")["flags"] == ["x-sdk-data-only"]
 

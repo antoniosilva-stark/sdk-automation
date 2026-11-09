@@ -143,6 +143,27 @@ components:
               section: "optional"
           returns:
             - "target Event with updated attributes"
+        parse:
+          summary: "Create single notification Event from a content string"
+          description:
+            - "Create a single Event object received from event listening at subscribed user endpoint."
+            - "If the provided digital signature does not check out with the StarkBank public key, a"
+            - "starkbank.error.InvalidSignatureError will be raised."
+          params:
+            - name: "content"
+              type: "string"
+              description: "response content from request received at user endpoint (not parsed)"
+              section: "required"
+            - name: "signature"
+              type: "string"
+              description: "base-64 digital signature received at response header \"Digital-Signature\""
+              section: "required"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Parsed Event object"
 
     EventCreate:
       type: object

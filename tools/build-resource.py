@@ -177,6 +177,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         logEntity=spec["components"]["schemas"][resource].get("x-sdk-log-entity"),
         eventShape=eventShape,
         logResources=logResourceNames(spec, conventionsFile) if eventShape else frozenset(),
+        hasParse="x-sdk-parse" in flags,
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")
@@ -224,6 +225,8 @@ def javaImports(
         properties.append("usesParsers=true")
     if "x-sdk-pdf" in flags or hasLogPdf:
         properties.append("usesInputStream=true")
+    if "x-sdk-parse" in flags:
+        properties.append("usesParse=true")
     return properties
 
 

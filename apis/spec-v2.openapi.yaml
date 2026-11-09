@@ -3311,6 +3311,7 @@ components:
       x-sdk-delete: true
       x-sdk-get: true
       x-sdk-page: true
+      x-sdk-parse: true
       x-sdk-query: true
       x-sdk-update: true
       $ref: ./schemas/event.yaml#/components/schemas/Event
@@ -3348,6 +3349,7 @@ components:
     CorporatePurchase:
       x-sdk-get: true
       x-sdk-log: true
+      x-sdk-parse: true
       x-sdk-query: true
       x-sdk-log-entity: purchase
       $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchase

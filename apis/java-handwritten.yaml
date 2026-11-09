@@ -54,15 +54,6 @@ CorporatePurchase:
   - kind: require
     text: 'require ausente: import com.google.gson.Gson;'
     reason: 'com.google.gson.Gson is used only inside the hand-written CorporatePurchase.response (sdk-java f60902a, CorporatePurchase.java line 503).'
-  - kind: require
-    text: 'require ausente: import com.starkbank.utils.Parse;'
-    reason: 'com.starkbank.utils.Parse is used only inside the hand-written CorporatePurchase.parse overloads (sdk-java f60902a, CorporatePurchase.java line 465, 486).'
-  - kind: signature
-    text: 'signature ausente: public static CorporatePurchase parse(String content, String signature, User user)'
-    reason: 'CorporatePurchase.parse(content, signature, user) (sdk-java f60902a, CorporatePurchase.java:464) verifies the webhook signature and builds the authorization request with Parse.parseAndVerify(data, content, signature, user) (line 465); the generated moulds have no parse operation.'
-  - kind: signature
-    text: 'signature ausente: public static CorporatePurchase parse(String content, String signature)'
-    reason: 'CorporatePurchase.parse(content, signature) (sdk-java f60902a, CorporatePurchase.java:485) delegates to Parse.parseAndVerify with a null user (line 486); the generated moulds have no parse operation.'
   - kind: signature
     text: 'signature ausente: public static String response(Map<String, Object> params)'
     reason: 'CorporatePurchase.response(params) (sdk-java f60902a, CorporatePurchase.java:502) dumps the sub-issuer answer to the authorization request with new Gson().toJson(params) (line 504); the generated moulds have no such operation.'

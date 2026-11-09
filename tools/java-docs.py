@@ -55,6 +55,7 @@ OPERATION_KINDS = {
     "create": "list", "put": "list",
     "get": "id", "delete": "id", "cancel": "id", "pdf": "id",
     "update": "patch",
+    "parse": "parse",
     "query": "filters", "page": "filters",
     "log.get": "id", "log.query": "filters", "log.page": "filters", "log.pdf": "id",
 }
@@ -389,6 +390,8 @@ def parameterLines(context: dict, operation: str, kind: str, doc: dict, withPara
         return listLines(context, operation, pythonParams, withParams)
     if operation == "get" and context["singletonGet"]:
         return []
+    if kind == "parse":
+        return [f"@param {paramText(context, param)}" for param in pythonParams]
     if kind == "id":
         return [idLine(context, pythonParams)]
     if kind == "patch":
@@ -515,6 +518,7 @@ def genericReturns(operation: str, className: str) -> list:
         "delete": [f"deleted {className} object"],
         "cancel": [f"canceled {className} object"],
         "pdf": [f"{className} pdf file content"],
+        "parse": [f"Parsed {className} object"],
         "log.get": [f"{className} Log object with updated attributes"],
         "log.pdf": [f"{className} Log pdf file"],
         "log.query": [f"generator of {className} Log objects with updated attributes"],
@@ -530,6 +534,7 @@ def genericDoc(operation: str, className: str) -> dict:
         "update": f"Update {className} entity",
         "cancel": f"Cancel {article(className)} {className} entity",
         "pdf": f"Retrieve a specific {className} pdf file",
+        "parse": f"Create a single verified {className} from a content string",
         "log.pdf": f"Retrieve a specific {className} Log pdf file",
     }
     descriptions = {

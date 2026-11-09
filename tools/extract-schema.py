@@ -90,6 +90,7 @@ OPERATION_FLAGS = {
     "update": "x-sdk-update",
     "pdf": "x-sdk-pdf",
     "cancel": "x-sdk-cancel",
+    "parse": "x-sdk-parse",
 }
 
 TYPES = {
