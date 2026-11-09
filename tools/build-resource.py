@@ -226,10 +226,8 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     if queryShape is not None:
         code["query"] = javaCode.renderQuery(resource, queryShape, flags)
     for operation in ("get", "pdf"):
-        # o mesmo doc que o java-docs ve: sem o parametro omitido, o codigo e o Javadoc seguem o mesmo caminho
-        operationDoc = javaDocs.withoutOmittedParams(
-            javaDocs.operationDoc(schema.get("x-sdk-docs") or {}, operation) or {}, omittedParams.get(operation) or {})
-        hasMap = "x-sdk-" + operation in flags and javaDocs.hasOptionalParamOverloads(operation, operationDoc)
+        hasMap = "x-sdk-" + operation in flags and javaDocs.hasMapOverloads(
+            schema.get("x-sdk-docs") or {}, operation, omittedParams)
         if hasMap:
             code[f"{operation}Params"] = True
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"

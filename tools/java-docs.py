@@ -276,6 +276,13 @@ def withoutOmittedParams(doc: dict, omitted: dict) -> dict:
     return {**doc, "params": params, "description": [*(doc.get("description") or []), *omitted.values()]}
 
 
+def hasMapOverloads(docs: dict, operation: str, omitted: dict) -> bool:
+    """A decisao do codigo (build-resource) sobre as sobrecargas com Map, tomada sobre o mesmo doc que o renderOperation
+    ve: depois de tirar os parametros omitidos."""
+    doc = withoutOmittedParams(operationDoc(docs, operation) or {}, (omitted or {}).get(operation) or {})
+    return hasOptionalParamOverloads(operation, doc)
+
+
 def renderOperation(context: dict, operation: str, doc: dict, omitted: dict | None = None) -> dict:
     kind = OPERATION_KINDS[operation]
     doc = withoutOmittedParams(doc, omitted or {})
