@@ -105,12 +105,39 @@ def test_theEntryMappingIsTheSetOfPairsOfTheSdkPythonIsinstanceChain():
     ({"message": ""}, "PaymentRequest: javaTypeInference.message invalida"),
     ({"message": 'say "hi"'}, "PaymentRequest: javaTypeInference.message invalida"),
     ({"message": "one\ntwo"}, "PaymentRequest: javaTypeInference.message invalida"),
+    ({"message": "one\rtwo"}, "PaymentRequest: javaTypeInference.message invalida"),
+    ({"message": "one\\two"}, "PaymentRequest: javaTypeInference.message invalida"),
+    ({"message": "   "}, "PaymentRequest: javaTypeInference.message invalida"),
+    ({"message": 7}, "PaymentRequest: javaTypeInference.message invalida"),
+    ({"field": "class"}, "PaymentRequest: javaTypeInference.field invalido: 'class'"),
+    ({"from": "return"}, "PaymentRequest: javaTypeInference.from invalido: 'return'"),
+    ({"field": 3}, "PaymentRequest: javaTypeInference.field invalido: 3"),
+    ({"mapping": {"Transfer": 1}}, "PaymentRequest: javaTypeInference.mapping.Transfer valor invalido: 1"),
+    ({"mapping": {"Transfer": None}}, "PaymentRequest: javaTypeInference.mapping.Transfer valor invalido: None"),
+    ({"mapping": {"Transfer": ["transfer"]}},
+     "PaymentRequest: javaTypeInference.mapping.Transfer valor invalido: ['transfer']"),
+    ({"mapping": {1: "transfer"}}, "PaymentRequest: javaTypeInference.mapping classe invalida: 1"),
 ])
 def test_aMalformedEntryFailsNamingTheResourceAndTheKey(extractSchema, tmpPath, change, message):
     conventions = _conventions(tmpPath, {**_entry(), **change})
 
     with pytest.raises(ValueError, match=re.escape(message)):
         extractSchema.javaTypeInference("PaymentRequest", conventions)
+
+
+def test_aMessageWithCommonPunctuationAndAccentsIsAccepted(extractSchema, tmpPath):
+    message = "Pagamento invalido, use Transfer ou Boleto; (veja a doc) - nao e aceito: 100%."
+    entry = {**_entry(), "message": message, "field": "type", "from": "payment"}
+
+    assert extractSchema.javaTypeInference("PaymentRequest", _conventions(tmpPath, entry))["message"] == message
+
+
+def test_aKebabCaseValueWithDigitsAndAMultiWordClassAreAccepted(extractSchema, tmpPath):
+    entry = {**_entry(), "mapping": {"BoletoPayment": "boleto-payment-2"}}
+
+    assert extractSchema.javaTypeInference("PaymentRequest", _conventions(tmpPath, entry))["mapping"] == {
+        "BoletoPayment": "boleto-payment-2"
+    }
 
 
 @pytest.mark.parametrize("key", ["field", "from", "mapping", "message"])
