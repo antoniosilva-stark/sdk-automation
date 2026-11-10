@@ -54,6 +54,7 @@ def renderJavaCode(
     otherInnerClasses: dict | None = None,
     hasParse: bool = False,
     nested: dict | None = None,
+    typeInference: dict | None = None,
 ) -> dict:
     """`x-sdk-java-code` do recurso: `fields` (declaracao) e o corpo do Map-ctor, os dois sobre o mesmo tipo por
     campo, para o cast nunca divergir da declaracao. `ctorFields`: os mesmos campos na ordem e com o tipo do
@@ -70,7 +71,9 @@ def renderJavaCode(
     (`addExtraFields`). `parse`: so para recurso com a flag `x-sdk-parse` (`hasParse`); o recurso com `javaEvents` le o evento
     pela chave `event` (o lowerFirst do recurso, como o `key` do Python) e os demais repassam o conteudo ao `Parse`.
     `nested`: so para recurso com `x-sdk-nested` ({className, operations, docs}): as operacoes get/query/page que a classe
-    interna de mesmo nome imprime, com o Javadoc ja renderizado em `docs`; a classe precisa estar em `innerClasses`."""
+    interna de mesmo nome imprime, com o Javadoc ja renderizado em `docs`; a classe precisa estar em `innerClasses`.
+    `typeInference`: so para recurso com `javaTypeInference`, o campo que os construtores inferem de outro quando chega nulo
+    e o `get<Campo>` privado com a cadeia `instanceof`."""
     knownInnerClasses = {**(innerClasses or {}), **(otherInnerClasses or {})}
     fields = renderFields(schema, resource, overrides, profile, knownInnerClasses, resourceNames)
     ctorFields = renderConstructorFields(fields, resource, ctorOrder, ctorTypes or {}, profile)
@@ -91,7 +94,27 @@ def renderJavaCode(
         code["events"] = renderEvents(resource, eventShape, ctorFields, resourceNames, logResources, hasParse)
     if hasParse:
         code["parse"] = renderParse(resource, eventShape)
+    if typeInference is not None:
+        code["typeInference"] = renderTypeInference(resource, typeInference, fields)
     return code
+
+
+def renderTypeInference(resource: str, inference: dict, fields: list) -> dict:
+    javaTypeByName = {field["name"]: field["javaType"] for field in fields}
+    for key, javaType in (("field", "String"), ("from", "Resource")):
+        name = inference[key]
+        if name not in javaTypeByName:
+            raise ValueError(f"{resource}: javaTypeInference.{key} {name!r} nao e campo do recurso")
+        if javaTypeByName[name] != javaType:
+            raise ValueError(f"{resource}: javaTypeInference.{key} {name!r} deve ser {javaType}, e {javaTypeByName[name]}")
+    field = inference["field"]
+    return {
+        "field": field,
+        "from": inference["from"],
+        "getter": f"get{field[0].upper()}{field[1:]}",
+        "chain": [{"className": className, "value": value} for className, value in inference["mapping"].items()],
+        "message": inference["message"],
+    }
 
 
 def renderQuery(resource: str, shape: dict, flags: set) -> dict:

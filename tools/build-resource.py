@@ -212,6 +212,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         logResources=logResourceNames(spec, conventionsFile) if eventShape else frozenset(),
         hasParse="x-sdk-parse" in flags,
         nested=nested,
+        typeInference=extractSchema.javaTypeInference(resource, conventionsFile),
     )
 
     shutil.copytree(apisDir, stagedDir / "apis")

@@ -32,10 +32,13 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
     /**
 {{#vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     * {{{.}}}
 {{/vendorExtensions.x-sdk-java-docs.ctorAllDoc}}     */
-    public {{classname}}({{#vendorExtensions.x-sdk-java-code.ctorFields}}{{#isId}}String id{{/isId}}{{^isId}}{{{javaType}}} {{name}}{{/isId}}{{^-last}}, {{/-last}}{{/vendorExtensions.x-sdk-java-code.ctorFields}}) {
+    public {{classname}}({{#vendorExtensions.x-sdk-java-code.ctorFields}}{{#isId}}String id{{/isId}}{{^isId}}{{{javaType}}} {{name}}{{/isId}}{{^-last}}, {{/-last}}{{/vendorExtensions.x-sdk-java-code.ctorFields}}){{#vendorExtensions.x-sdk-java-code.typeInference}} throws Exception{{/vendorExtensions.x-sdk-java-code.typeInference}} {
 {{^vendorExtensions.x-sdk-subresource}}        super(id);
 {{/vendorExtensions.x-sdk-subresource}}{{#vendorExtensions.x-sdk-java-code.ctorFields}}{{^isId}}        this.{{name}} = {{name}};
-{{/isId}}{{/vendorExtensions.x-sdk-java-code.ctorFields}}    }
+{{/isId}}{{/vendorExtensions.x-sdk-java-code.ctorFields}}{{#vendorExtensions.x-sdk-java-code.typeInference}}        if (this.{{field}} == null) {
+            this.{{field}} = {{getter}}({{from}});
+        }
+{{/vendorExtensions.x-sdk-java-code.typeInference}}    }
 
     /**
 {{#vendorExtensions.x-sdk-java-docs.ctorMapDoc}}     * {{{.}}}
@@ -46,6 +49,10 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{/vendorExtensions.x-sdk-subresource}}        HashMap<String, Object> dataCopy = new HashMap<>({{classDataName}});
 {{#vendorExtensions.x-sdk-java-code.ctorMapBody}}        {{{.}}}
 {{/vendorExtensions.x-sdk-java-code.ctorMapBody}}
+{{#vendorExtensions.x-sdk-java-code.typeInference}}        if (this.{{field}} == null) {
+            this.{{field}} = {{getter}}({{from}});
+        }
+{{/vendorExtensions.x-sdk-java-code.typeInference}}
 
         if (!dataCopy.isEmpty()) {
             throw new Exception("Unknown parameters used in constructor: [" + String.join(", ", dataCopy.keySet()) + "]");
@@ -548,6 +555,15 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
         return Parse.parseAndVerify({{classDataName}}, content, signature, user);
     }
 {{/vendorExtensions.x-sdk-parse}}
+{{#vendorExtensions.x-sdk-java-code.typeInference}}
+
+    private static String {{getter}}(Resource {{from}}) throws Exception {
+{{#chain}}        if ({{from}} instanceof {{className}}) {
+            return "{{{value}}}";
+        }
+{{/chain}}        throw new Exception("{{{message}}}");
+    }
+{{/vendorExtensions.x-sdk-java-code.typeInference}}
 {{#vendorExtensions.x-sdk-log}}
 {{#vendorExtensions.x-sdk-java-code.log}}
 

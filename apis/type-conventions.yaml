@@ -219,6 +219,26 @@ javaConstructorTypes:
   Transaction:
     fee: int
 
+# Campo que o construtor do real infere de outro quando chega nulo (PaymentRequest.type a partir do payment). Recurso ->
+# `field` (o campo inferido, String), `from` (o campo Resource de onde vem), `mapping` (classe Java do mesmo pacote ->
+# valor kebab-case, sem valor repetido, na ordem em que o real testa o `instanceof`) e `message` (o texto da Exception
+# quando nenhuma classe casa, sem aspas duplas nem barra invertida). O gerador emite o bloco `if (this.<field> == null)`
+# nos construtores all-args (que passa a declarar `throws Exception`) e Map, e o `get<Field>` privado e estatico. Medido
+# contra sdk-java f60902a; valida-se contra o real e contra o `_parse_payment` do sdk-python em tests/test_java_type_inference.py.
+javaTypeInference:
+  PaymentRequest:
+    field: type
+    from: payment
+    mapping:
+      Transfer: transfer
+      Transaction: transaction
+      BoletoPayment: boleto-payment
+      UtilityPayment: utility-payment
+      TaxPayment: tax-payment
+      DarfPayment: darf-payment
+      BrcodePayment: brcode-payment
+    message: Payment must either be a Transfer, a Transaction, a BoletoPayment, a BrcodePayment, a UtilityPayment, a TaxPayment or a DarfPayment.
+
 # Classes internas simples que o real escreve a mao (a spec nao descreve sub-objeto) e o gerador emite a partir deste
 # dado. Recurso -> classe interna -> `fields` (declaracao, ordem do real), `constructors` (construtores publicos
 # posicionais: campos recebidos, os demais ficam null; [] e o sem argumentos), `map` (campos LIDOS do `X(Map)`, os demais

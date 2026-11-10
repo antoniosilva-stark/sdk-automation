@@ -6,6 +6,7 @@ import sys
 import yaml
 import argparse
 import subprocess
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -46,6 +47,8 @@ JAVA_RESERVED_WORDS = frozenset({
     "short", "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try",
     "void", "volatile", "while", "true", "false", "null",
 })
+
+JAVA_TYPE_INFERENCE_KEYS = ("field", "from", "mapping", "message")
 
 # Valores aceitos do javaQueryShapes; a ausencia de entrada e o `query` em Generator com o ClassData qualificado do template.
 JAVA_QUERY_VALUES = {"returns": ("list",), "classData": ("short",)}
@@ -164,6 +167,53 @@ def javaConstructorTypes(resource: str, conventions: Path = CONVENTIONS_FILE) ->
     types = loadConventions(Path(conventions)).get("javaConstructorTypes") or {}
     checkKnownResources("javaConstructorTypes", types)
     return types.get(resource) or {}
+
+
+def javaTypeInference(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    inferences = loadConventions(Path(conventions)).get("javaTypeInference") or {}
+    if not isinstance(inferences, dict):
+        raise ValueError("javaTypeInference deve ser um mapa recurso -> {field, from, mapping, message}")
+    checkKnownResources("javaTypeInference", inferences)
+    for name, inference in inferences.items():
+        checkTypeInference(name, inference)
+    return inferences.get(resource)
+
+
+def checkTypeInference(resource: str, inference) -> None:
+    if not isinstance(inference, dict):
+        raise ValueError(f"{resource}: javaTypeInference deve ser um mapa {{field, from, mapping, message}}, veio {inference!r}")
+    unknown = sorted(str(key) for key in set(inference) - set(JAVA_TYPE_INFERENCE_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaTypeInference chave desconhecida: {unknown[0]}")
+    for key in JAVA_TYPE_INFERENCE_KEYS:
+        if key not in inference:
+            raise ValueError(f"{resource}: javaTypeInference.{key} ausente")
+    for key in ("field", "from"):
+        if not isFieldName(inference[key], JAVA_RESERVED_WORDS):
+            raise ValueError(
+                f"{resource}: javaTypeInference.{key} invalido: {inference[key]!r}, esperado um identificador lowerCamel"
+            )
+    checkTypeInferenceMapping(resource, inference["mapping"])
+    message = inference["message"]
+    if not isinstance(message, str) or not message.strip() or re.search(r'["\\\r\n]', message):
+        raise ValueError(
+            f"{resource}: javaTypeInference.message invalida: {message!r}, esperado texto de uma linha sem aspas duplas nem barra invertida"
+        )
+
+
+def checkTypeInferenceMapping(resource: str, mapping) -> None:
+    if not isinstance(mapping, dict) or not mapping:
+        raise ValueError(f"{resource}: javaTypeInference.mapping deve ser um mapa nao vazio classe -> valor, veio {mapping!r}")
+    for className, value in mapping.items():
+        if not isinstance(className, str) or not re.fullmatch(r"[A-Z][A-Za-z0-9]*", className):
+            raise ValueError(f"{resource}: javaTypeInference.mapping classe invalida: {className!r}")
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", value):
+            raise ValueError(
+                f"{resource}: javaTypeInference.mapping.{className} valor invalido: {value!r}, esperado kebab-case"
+            )
+    repeated = sorted(value for value, count in Counter(mapping.values()).items() if count > 1)
+    if repeated:
+        raise ValueError(f"{resource}: javaTypeInference.mapping repete o valor {repeated[0]!r}")
 
 
 def javaInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
