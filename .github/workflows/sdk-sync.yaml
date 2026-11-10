@@ -575,7 +575,7 @@ jobs:
           fi
 
       # E2E SO NO FORK: a secao de gaps compara o gerado com o sdk-java real da starkbank no pin; so informa o
-      # revisor e nunca barra a PR (continue-on-error em todos os passos desta secao)
+      # revisor e nunca barra a PR (continue-on-error nos passos desta secao). O passo "Open pull request" nao muda.
       - name: Checkout the real sdk-java for the gap section
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -605,14 +605,6 @@ jobs:
           python3 tools/gap-report.py section --slice "$GAPS/slices/$SLUG.json" > "$GAPS/section.txt"
           cat "$GAPS/section.txt" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        continue-on-error: true
-        with:
-          name: gap-report
-          path: ${{ runner.temp }}/gaps
-          if-no-files-found: ignore
-
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
         working-directory: target
@@ -631,20 +623,7 @@ jobs:
           TARGET="$OWNER/$TARGET_REPO"
           # filtra pelo dono: um fork com a mesma branch nao pode contar como a PR do bot
           OPEN=$(gh api "repos/$TARGET/pulls?state=open&head=$OWNER:$BRANCH" --jq length)
-          SECTION="$RUNNER_TEMP/gaps/section.txt"
           if [ "$OPEN" -gt 0 ]; then
-            # a secao e recalculada a cada run: reescreve so a regiao entre os marcadores
-            if [ -s "$SECTION" ]; then
-              # so informa: falha ao reescrever o corpo avisa e segue, nunca derruba o run
-              if ! (
-                NUMBER=$(gh api "repos/$TARGET/pulls?state=open&head=$OWNER:$BRANCH" --jq '.[0].number') &&
-                gh api "repos/$TARGET/pulls/$NUMBER" --jq '.body // ""' > "$RUNNER_TEMP/current-body.txt" &&
-                python3 ../tools/gap-report.py merge-body --body "$RUNNER_TEMP/current-body.txt" --section "$SECTION" > "$RUNNER_TEMP/pr-body.txt" &&
-                gh api -X PATCH "repos/$TARGET/pulls/$NUMBER" -F "body=@$RUNNER_TEMP/pr-body.txt" > /dev/null
-              ); then
-                echo "[WARN] secao de gaps nao atualizada no corpo da PR existente."
-              fi
-            fi
             if [ "$CHANGED" = "true" ]; then
               echo "PR ja aberta para $BRANCH — o push atualizou a branch."
               exit 0
@@ -660,15 +639,107 @@ jobs:
             exit 0
           fi
 
-          printf '%s\n' "Criacao do recurso $RESOURCE ($LANGUAGE), ausente neste SDK, gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos." > "$RUNNER_TEMP/base-body.txt"
-          cp "$RUNNER_TEMP/base-body.txt" "$RUNNER_TEMP/pr-body.txt"
-          if [ -s "$SECTION" ]; then
-            python3 ../tools/gap-report.py merge-body --body "$RUNNER_TEMP/base-body.txt" --section "$SECTION" > "$RUNNER_TEMP/pr-body.txt" || cp "$RUNNER_TEMP/base-body.txt" "$RUNNER_TEMP/pr-body.txt"
-          fi
-
           gh pr create \
             --repo "$TARGET" \
             --title "Add $RESOURCE resource" \
-            --body-file "$RUNNER_TEMP/pr-body.txt" \
+            --body "Criacao do recurso $RESOURCE ($LANGUAGE), ausente neste SDK, gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos." \
             --base "$BASE" \
             --head "$BRANCH"
+
+      - name: Publish the gap section in the pull request body
+        if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          TARGET_REPO: ${{ steps.target.outputs.repo }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: |
+          SECTION="$RUNNER_TEMP/gaps/section.txt"
+          if [ ! -s "$SECTION" ]; then
+            echo "sem secao de gaps neste run: corpo da PR intacto."
+            exit 0
+          fi
+
+          TARGET="$OWNER/$TARGET_REPO"
+          NUMBER=$(gh api "repos/$TARGET/pulls?state=open&head=$OWNER:$BRANCH" --jq '.[0].number // empty')
+          if [ -z "$NUMBER" ]; then
+            echo "nenhuma PR aberta para $BRANCH: secao nao publicada."
+            exit 0
+          fi
+
+          gh api "repos/$TARGET/pulls/$NUMBER" --jq '.body // ""' > "$RUNNER_TEMP/current-body.txt"
+          python3 tools/gap-report.py merge-body --body "$RUNNER_TEMP/current-body.txt" --section "$SECTION" > "$RUNNER_TEMP/pr-body.txt"
+          gh api -X PATCH "repos/$TARGET/pulls/$NUMBER" -F "body=@$RUNNER_TEMP/pr-body.txt" > /dev/null
+          echo "secao de gaps publicada na PR #$NUMBER"
+
+  # Informativo e sem token: mede o gerado (artefato com o resumo que o build calculou) contra o sdk-java real e
+  # publica o artefato gap-report. Ninguem depende dele e a falha dele nao barra o run.
+  gap-report:
+    needs: [build]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: staging
+          path: staging
+
+      - name: Verify the artifact is the one the build produced
+        env:
+          EXPECTED_DIGEST: ${{ needs.build.outputs.digest }}
+        run: python3 tools/artifact-digest.py staging --expect "$EXPECTED_DIGEST"
+
+      - name: Validate resource name
+        id: resource
+        env:
+          RESOURCE: ${{ inputs.resource }}
+        run: |
+          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the real sdk-java for the gap section
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: starkbank/sdk-java
+          ref: f60902a1702aab081a25012bd200db00a9e25c4e
+          persist-credentials: false
+          path: real
+
+      - name: Build the gap report
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          SLUG: ${{ steps.resource.outputs.slug }}
+        run: |
+          GAPS="$RUNNER_TEMP/gaps"
+          mkdir -p "$GAPS/slices"
+          CODE=0
+          python3 tools/compare-with-real.py --generated staging --source real --json "$GAPS/report.json" "$RESOURCE" > "$GAPS/compare.txt" || CODE=$?
+          # 1 = dispensa obsoleta: a medicao existe; 2 ou mais = sem medicao
+          if [ "$CODE" -gt 1 ]; then
+            cat "$GAPS/compare.txt"
+            exit "$CODE"
+          fi
+          python3 tools/gap-report.py slice --report "$GAPS/report.json" --resource "$RESOURCE" --generated staging --source real --out "$GAPS/slices/$SLUG.json"
+          python3 tools/gap-report.py consolidate --slices "$GAPS/slices" --out "$GAPS/consolidated.json"
+          python3 tools/gap-report.py section --slice "$GAPS/slices/$SLUG.json" > "$GAPS/section.txt"
+          cat "$GAPS/section.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gap-report
+          path: ${{ runner.temp }}/gaps
