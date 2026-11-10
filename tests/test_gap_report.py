@@ -191,15 +191,33 @@ DANGEROUS = [
 @pytest.mark.parametrize("raw", DANGEROUS)
 def test_safeTextLeavesOnlyAllowedCharacters(raw):
     cleaned = gapReport.safeText(text=raw)
-    assert all(character.isascii() and (character.isalnum() or character in " _.,()<>?[]|:-") for character in cleaned)
+    assert all(character.isascii() and (character.isalnum() or character in " _.,()<>?[]|:-;=\"") for character in cleaned)
     assert "```" not in cleaned
     assert "@" not in cleaned
     assert "!--" not in cleaned
 
 
+REAL_KEYS = [
+    "require ausente: import com.starkbank.utils.SubResource;",
+    'field ausente: static ClassData data = new ClassData(Purchase.class, "Purchase");',
+]
+
+
 def test_safeTextKeepsStableKeyCharacters():
     key = f"Foo | signature | {SIG_A}"
-    assert gapReport.safeText(text=key) == key.replace(";", "_")
+    assert gapReport.safeText(text=key) == key
+
+
+@pytest.mark.parametrize("key", REAL_KEYS)
+def test_safeTextKeepsSemicolonEqualsAndQuotesOfRealKeys(key):
+    assert gapReport.safeText(text=key) == key
+
+
+def test_renderSectionShowsRealKeysLiterally():
+    gaps = [("require", REAL_KEYS[0]), ("field", REAL_KEYS[1])]
+    section = gapReport.renderSection(slice=sliceOf(entry=entryOf(gaps=gaps), classes={}))
+    for key in REAL_KEYS:
+        assert key in section
 
 
 def test_safeTextLimitsLength():
@@ -234,7 +252,7 @@ def test_renderSectionHasMarkersCountsAndSingleFencedBlock():
     assert "imports 1" in section
     assert section.count("```") == 2
     assert "Foo | signature | " in section
-    assert "Foo | import | import java.util.Map_" in section
+    assert "Foo | import | import java.util.Map;" in section
 
 
 def test_renderSectionNeverLeaksReason():
@@ -459,6 +477,24 @@ def test_cliConsolidateFailsOnMalformedSlice(workspace, capsys):
     code = gapReport.main(["consolidate", "--slices", str(directory), "--out", str(workspace["tmp"] / "o.json")])
     assert code == 2
     assert "[ERROR]" in capsys.readouterr().out
+
+
+def test_cliConsolidateFailsOnMissingDirectory(workspace, capsys):
+    out = workspace["tmp"] / "o.json"
+    code = gapReport.main(["consolidate", "--slices", str(workspace["tmp"] / "nope"), "--out", str(out)])
+    assert code == 2
+    assert "nao e um diretorio" in capsys.readouterr().out
+    assert not out.exists()
+
+
+def test_cliConsolidateFailsOnDirectoryWithoutSlices(workspace, capsys):
+    directory = workspace["tmp"] / "empty"
+    directory.mkdir()
+    out = workspace["tmp"] / "o.json"
+    code = gapReport.main(["consolidate", "--slices", str(directory), "--out", str(out)])
+    assert code == 2
+    assert "nenhuma fatia *.json" in capsys.readouterr().out
+    assert not out.exists()
 
 
 def test_cliMergeBodyFailsOnMalformedBody(workspace, capsys):

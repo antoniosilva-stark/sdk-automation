@@ -24,7 +24,7 @@ MAX_ITEMS = 50
 MAX_TEXT = 300
 MAX_BODY = 60000
 SLICE_KEYS = {"resource": str, "measured": bool, "gaps": list, "waived": list}
-_UNSAFE = re.compile(r"[^A-Za-z0-9 _.,()<>?\[\]|:-]")
+_UNSAFE = re.compile(r"[^A-Za-z0-9 _.,()<>?\[\]|:;=\"-]")
 
 
 @functools.cache
@@ -323,7 +323,12 @@ def runSlice(args) -> int:
 
 
 def runConsolidate(args) -> int:
-    paths = sorted(Path(args.slices).glob("*.json"))
+    directory = Path(args.slices)
+    if not directory.is_dir():
+        raise ValueError(f"--slices: {directory} nao e um diretorio")
+    paths = sorted(directory.glob("*.json"))
+    if not paths:
+        raise ValueError(f"--slices: nenhuma fatia *.json em {directory}")
     slices = [checkSlice(item=readJson(str(path)), where=path.name) for path in paths]
     writeJson(data=consolidate(slices=slices, classes=loadClasses(args.classes)), path=args.out)
     return 0
