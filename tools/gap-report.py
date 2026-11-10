@@ -269,7 +269,10 @@ def mergeBody(body: str, section: str) -> str:
     end = body.index(MARKER_END)
     if end < start:
         raise ValueError("corpo com marcadores invalidos: fim antes do inicio")
-    return body[:start] + section + body[end + len(MARKER_END):]
+    # o corpo volta do gh com uma quebra de linha a mais: normalizar o fim evita que cada run acrescente uma
+    # o corpo volta do gh com uma quebra de linha a mais: normalizar o fim evita que cada run acrescente uma
+    rest = body[end + len(MARKER_END):].rstrip()
+    return f"{body[:start]}{section}{rest}\n"
 
 
 def checkSlice(item, where: str) -> dict:

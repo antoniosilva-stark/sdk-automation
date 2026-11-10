@@ -431,7 +431,8 @@ def test_mergeBodyReplacesTheRegionAndPreservesTheRest():
     old = f"{gapReport.MARKER_START}\nvelho\n{gapReport.MARKER_END}"
     body = f"antes\n\n  {old}\n\ndepois é\t\n"
     section = sectionOf()
-    assert gapReport.mergeBody(body=body, section=section) == f"antes\n\n  {section}\n\ndepois é\t\n"
+    # o conteudo depois da secao e preservado; so o espaco do fim vira uma unica quebra de linha
+    assert gapReport.mergeBody(body=body, section=section) == f"antes\n\n  {section}\n\ndepois é\n"
 
 
 def test_mergeBodyIsIdempotent():
@@ -644,3 +645,22 @@ def test_sectionAndMergeBodyRunWithoutPyYaml(tmp_path):
     assert merged.returncode == 0, merged.stderr
     assert merged.stdout.startswith("texto fixo\n")
     assert gapReport.MARKER_START in merged.stdout and gapReport.MARKER_END in merged.stdout
+
+
+@pytest.mark.parametrize("body", ["texto fixo\n", "texto fixo", "", "a\n\n\n"])
+def test_mergeBodyIsAFixedPointWhenTheBodyComesBackWithATrailingNewline(body):
+    # `gh api --jq` imprime o corpo e mais uma quebra de linha: reaplicar nao pode fazer o corpo crescer a cada run
+    section = gapReport.renderSection(slice=sliceOf())
+    once = gapReport.mergeBody(body=body, section=section)
+    again = gapReport.mergeBody(body=once + "\n", section=section)
+    assert again == once
+    assert gapReport.mergeBody(body=again + "\n", section=section) == once
+
+
+def test_mergeBodyKeepsTheTextThatFollowsTheSection():
+    section = gapReport.renderSection(slice=sliceOf())
+    body = f"antes\n\n{gapReport.MARKER_START}\nvelho\n{gapReport.MARKER_END}\n\ndepois\n"
+    merged = gapReport.mergeBody(body=body, section=section)
+    assert merged.startswith("antes\n\n" + gapReport.MARKER_START)
+    assert merged.endswith(gapReport.MARKER_END + "\n\ndepois\n")
+
