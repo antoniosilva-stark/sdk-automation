@@ -25,6 +25,7 @@ MAX_TEXT = 300
 MAX_BODY = 60000
 SLICE_KEYS = {"resource": str, "measured": bool, "gaps": list, "waived": list}
 _UNSAFE = re.compile(r"[^A-Za-z0-9 _.,()<>?\[\]|:;=\"-]")
+_UNSAFE_PROSE = re.compile(r"[^A-Za-z0-9 _.,:-]")
 
 
 @functools.cache
@@ -176,7 +177,14 @@ def obsoleteKeys(slices: list[dict], classes: dict) -> list[str]:
 
 
 def safeText(text) -> str:
-    cleaned = _UNSAFE.sub("_", str(text))
+    return _truncated(_UNSAFE.sub("_", str(text)))
+
+
+def safeProse(text) -> str:
+    return _truncated(_UNSAFE_PROSE.sub("_", str(text)))
+
+
+def _truncated(cleaned: str) -> str:
     if len(cleaned) <= MAX_TEXT:
         return cleaned
     return cleaned[:MAX_TEXT] + "..."
@@ -186,11 +194,11 @@ def renderSection(slice: dict) -> str:
     lines = [
         MARKER_START,
         "### Nao gerado / completar a mao",
-        f"Recurso {safeText(slice['resource'])} medido contra o sdk-java real em {safeText(slice['sha'])}; "
+        f"Recurso {safeProse(slice['resource'])} medido contra o sdk-java real em {safeProse(slice['sha'])}; "
         "so informa o revisor, nao altera o gate.",
     ]
     if not slice["measured"]:
-        lines.append(f"nao medido: {safeText(slice['state'])}")
+        lines.append(f"nao medido: {safeProse(slice['state'])}")
         return "\n".join([*lines, MARKER_END])
 
     lines.extend(countLines(slice))
@@ -201,7 +209,7 @@ def renderSection(slice: dict) -> str:
 def countLines(slice: dict) -> list[str]:
     gaps = slice["gaps"]
     counts = Counter(gap["class"] for gap in gaps)
-    breakdown = ", ".join(f"{safeText(name)} {counts[name]}" for name in ALL_CLASSES)
+    breakdown = ", ".join(f"{safeProse(name)} {counts[name]}" for name in ALL_CLASSES)
     lines = [
         f"Gaps: {len(gaps)} ({breakdown})",
         f"Dispensados (escritos a mao no real): {len(slice['waived'])}",

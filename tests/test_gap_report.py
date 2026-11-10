@@ -225,6 +225,94 @@ def test_safeTextLimitsLength():
     assert cleaned == "a" * 300 + "..."
 
 
+HOSTILE_PROSE = [
+    '<img src="x.png" onerror="a=1;b">',
+    "<script>alert(1)</script>",
+    "[x](http:e.com)",
+    "<details><summary>x</summary>",
+]
+
+
+def test_safeProseLeavesOnlyTheStrictSet():
+    cleaned = gapReport.safeProse(text='aZ09 _.,:-<>()[]|?;="\n')
+    assert cleaned == "aZ09 _.,:-" + "_" * 12
+
+
+def test_safeProseKeepsNormalProseValues():
+    for value in [SHA, "nao gerado", "ausente no real", "erro", "Foo", "bloqueado-por-dependencia"]:
+        assert gapReport.safeProse(text=value) == value
+
+
+def test_safeProseLimitsLength():
+    assert gapReport.safeProse(text="a" * 1000) == "a" * 300 + "..."
+
+
+def proseLinesOf(section):
+    lines, fenced = [], False
+    for line in section.split("\n"):
+        if line == "```":
+            fenced = not fenced
+            continue
+        if fenced or line in (gapReport.MARKER_START, gapReport.MARKER_END):
+            continue
+        lines.append(line)
+    return lines
+
+
+@pytest.mark.parametrize("raw", HOSTILE_PROSE)
+@pytest.mark.parametrize("measured", [True, False])
+def test_renderSectionProseOutsideTheFenceHasNoMarkupCharacters(raw, measured):
+    slice = sliceOf(entry=entryOf(resource=raw, similarity=0.9 if measured else None, state=raw, gaps=[("signature", SIG_A)]))
+    slice["sha"] = raw
+    section = gapReport.renderSection(slice=slice)
+    for line in proseLinesOf(section):
+        assert not any(character in line for character in '<>"=[]'), line
+    for line in proseLinesOf(section):
+        if line.startswith(("Recurso ", "nao medido:")):
+            assert "(" not in line and ")" not in line, line
+    assert section.count(gapReport.MARKER_START) == 1
+    assert section.count(gapReport.MARKER_END) == 1
+    assert section.count("```") == (2 if measured else 0)
+
+
+def test_renderSectionOfANormalSliceIsUnchanged():
+    expected = (
+        "<!-- sdk-automation:gaps:start -->\n"
+        "### Nao gerado / completar a mao\n"
+        "Recurso Foo medido contra o sdk-java real em abc1234; so informa o revisor, nao altera o gate.\n"
+        "Gaps: 3 (bloqueado-por-dependencia 0, muda-api-publica 1, sem-classificar 1, sem-fonte 1, tem-fonte 0)\n"
+        "Dispensados (escritos a mao no real): 1\n"
+        "INFO extras, fora da soma: membros 1, imports 1\n"
+        "```\n"
+        "gaps:\n"
+        "[muda-api-publica]\n"
+        "Foo | constructor | constructor ausente: public Foo(String id)\n"
+        "[sem-classificar]\n"
+        "Foo | signature | signature ausente: public static Foo b()\n"
+        "[sem-fonte]\n"
+        "Foo | signature | signature ausente: public static Foo a()\n"
+        "dispensados:\n"
+        "Foo | signature | signature ausente: public static Foo handmade()\n"
+        "extras a mais:\n"
+        "Foo | signature | public static Foo extra()\n"
+        "Foo | import | import java.util.Map;\n"
+        "```\n"
+        "<!-- sdk-automation:gaps:end -->"
+    )
+    assert sectionOf() == expected
+
+
+def test_renderSectionOfAnUnmeasuredSliceIsUnchanged():
+    section = gapReport.renderSection(slice=sliceOf(entry=entryOf(similarity=None, state="ausente no real")))
+    assert section == (
+        "<!-- sdk-automation:gaps:start -->\n"
+        "### Nao gerado / completar a mao\n"
+        "Recurso Foo medido contra o sdk-java real em abc1234; so informa o revisor, nao altera o gate.\n"
+        "nao medido: ausente no real\n"
+        "<!-- sdk-automation:gaps:end -->"
+    )
+
+
 def sectionOf(**overrides):
     gaps = [("signature", SIG_A), ("constructor", CTOR), ("signature", SIG_B)]
     waived = [{"kind": "signature", "text": WAIVED_SIG, "reason": REASON}]
