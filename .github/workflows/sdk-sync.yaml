@@ -345,6 +345,42 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      # E2E SO NO FORK: mede o gerado contra o sdk-java real da starkbank no pin e publica o artefato gap-report; so informa
+      # (continue-on-error) e nunca barra o run. Fica depois do upload do staging, que continua logo apos o resumo.
+      - name: Measure the generated resource against the real sdk-java
+        if: steps.built.outputs.intent == 'create'
+        continue-on-error: true
+        env:
+          RESOURCE: ${{ inputs.resource }}
+          SLUG: ${{ steps.resource.outputs.slug }}
+        run: |
+          # referencia de leitura (nao e o alvo): so o commit fixado, sem executar nada dele
+          REAL="$RUNNER_TEMP/real-sdk-java"
+          git init -q "$REAL"
+          git -C "$REAL" fetch -q --depth 1 https://github.com/starkbank/sdk-java.git f60902a1702aab081a25012bd200db00a9e25c4e
+          git -C "$REAL" checkout -q --detach FETCH_HEAD
+          GAPS="$RUNNER_TEMP/gaps"
+          mkdir -p "$GAPS/slices"
+          CODE=0
+          python3 tools/compare-with-real.py --generated staging --source "$REAL" --json "$GAPS/report.json" "$RESOURCE" > "$GAPS/compare.txt" || CODE=$?
+          # 1 = dispensa obsoleta: a medicao existe; 2 ou mais = sem medicao
+          if [ "$CODE" -gt 1 ]; then
+            cat "$GAPS/compare.txt"
+            exit "$CODE"
+          fi
+          python3 tools/gap-report.py slice --report "$GAPS/report.json" --resource "$RESOURCE" --generated staging --source "$REAL" --out "$GAPS/slices/$SLUG.json"
+          python3 tools/gap-report.py consolidate --slices "$GAPS/slices" --out "$GAPS/consolidated.json"
+          python3 tools/gap-report.py section --slice "$GAPS/slices/$SLUG.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.built.outputs.intent == 'create'
+        continue-on-error: true
+        with:
+          name: gap-report
+          path: ${{ runner.temp }}/gaps
+          if-no-files-found: ignore
+          retention-days: 1
+
   # Codigo do repositorio alvo (pom.xml, plugins) roda aqui, sem secret e sem poder de escrita
   # sobre o artefato: este job so le o que o build verificou.
   compile:
@@ -574,37 +610,6 @@ jobs:
             git -c core.hooksPath=/dev/null push "$REMOTE" "HEAD:refs/heads/$BRANCH"
           fi
 
-      # E2E SO NO FORK: a secao de gaps compara o gerado com o sdk-java real da starkbank no pin; so informa o
-      # revisor e nunca barra a PR (continue-on-error nos passos desta secao). O passo "Open pull request" nao muda.
-      - name: Checkout the real sdk-java for the gap section
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: starkbank/sdk-java
-          ref: f60902a1702aab081a25012bd200db00a9e25c4e
-          persist-credentials: false
-          path: real
-
-      - name: Build the gap section
-        continue-on-error: true
-        env:
-          RESOURCE: ${{ inputs.resource }}
-          SLUG: ${{ steps.resource.outputs.slug }}
-        run: |
-          GAPS="$RUNNER_TEMP/gaps"
-          mkdir -p "$GAPS/slices"
-          CODE=0
-          python3 tools/compare-with-real.py --generated staging --source real --json "$GAPS/report.json" "$RESOURCE" > "$GAPS/compare.txt" || CODE=$?
-          # 1 = dispensa obsoleta: a medicao existe; 2 ou mais = sem medicao
-          if [ "$CODE" -gt 1 ]; then
-            cat "$GAPS/compare.txt"
-            exit "$CODE"
-          fi
-          python3 tools/gap-report.py slice --report "$GAPS/report.json" --resource "$RESOURCE" --generated staging --source real --out "$GAPS/slices/$SLUG.json"
-          python3 tools/gap-report.py consolidate --slices "$GAPS/slices" --out "$GAPS/consolidated.json"
-          python3 tools/gap-report.py section --slice "$GAPS/slices/$SLUG.json" > "$GAPS/section.txt"
-          cat "$GAPS/section.txt" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Open pull request
         if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
         working-directory: target
@@ -646,6 +651,14 @@ jobs:
             --base "$BASE" \
             --head "$BRANCH"
 
+      # E2E SO NO FORK: o texto da secao e refeito aqui, so com stdlib, a partir da fatia JSON do artefato gap-report
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
+        continue-on-error: true
+        with:
+          name: gap-report
+          path: gaps-in
+
       - name: Publish the gap section in the pull request body
         if: steps.commit.outputs.changed == 'true' || steps.branch.outputs.exists == 'true'
         continue-on-error: true
@@ -654,10 +667,11 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
           BRANCH: ${{ steps.branch.outputs.branch }}
+          SLUG: ${{ steps.resource.outputs.slug }}
         run: |
-          SECTION="$RUNNER_TEMP/gaps/section.txt"
-          if [ ! -s "$SECTION" ]; then
-            echo "sem secao de gaps neste run: corpo da PR intacto."
+          SLICE="gaps-in/slices/$SLUG.json"
+          if [ ! -s "$SLICE" ]; then
+            echo "sem fatia de gaps neste run: corpo da PR intacto."
             exit 0
           fi
 
@@ -668,78 +682,8 @@ jobs:
             exit 0
           fi
 
+          python3 tools/gap-report.py section --slice "$SLICE" > "$RUNNER_TEMP/section.txt"
           gh api "repos/$TARGET/pulls/$NUMBER" --jq '.body // ""' > "$RUNNER_TEMP/current-body.txt"
-          python3 tools/gap-report.py merge-body --body "$RUNNER_TEMP/current-body.txt" --section "$SECTION" > "$RUNNER_TEMP/pr-body.txt"
+          python3 tools/gap-report.py merge-body --body "$RUNNER_TEMP/current-body.txt" --section "$RUNNER_TEMP/section.txt" > "$RUNNER_TEMP/pr-body.txt"
           gh api -X PATCH "repos/$TARGET/pulls/$NUMBER" -F "body=@$RUNNER_TEMP/pr-body.txt" > /dev/null
           echo "secao de gaps publicada na PR #$NUMBER"
-
-  # Informativo e sem token: mede o gerado (artefato com o resumo que o build calculou) contra o sdk-java real e
-  # publica o artefato gap-report. Ninguem depende dele e a falha dele nao barra o run.
-  gap-report:
-    needs: [build]
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-
-      - run: pip install -r requirements.txt
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: staging
-          path: staging
-
-      - name: Verify the artifact is the one the build produced
-        env:
-          EXPECTED_DIGEST: ${{ needs.build.outputs.digest }}
-        run: python3 tools/artifact-digest.py staging --expect "$EXPECTED_DIGEST"
-
-      - name: Validate resource name
-        id: resource
-        env:
-          RESOURCE: ${{ inputs.resource }}
-        run: |
-          SLUG=$(python3 tools/place-generated.py "$RESOURCE" --slug)
-          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout the real sdk-java for the gap section
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: starkbank/sdk-java
-          ref: f60902a1702aab081a25012bd200db00a9e25c4e
-          persist-credentials: false
-          path: real
-
-      - name: Build the gap report
-        env:
-          RESOURCE: ${{ inputs.resource }}
-          SLUG: ${{ steps.resource.outputs.slug }}
-        run: |
-          GAPS="$RUNNER_TEMP/gaps"
-          mkdir -p "$GAPS/slices"
-          CODE=0
-          python3 tools/compare-with-real.py --generated staging --source real --json "$GAPS/report.json" "$RESOURCE" > "$GAPS/compare.txt" || CODE=$?
-          # 1 = dispensa obsoleta: a medicao existe; 2 ou mais = sem medicao
-          if [ "$CODE" -gt 1 ]; then
-            cat "$GAPS/compare.txt"
-            exit "$CODE"
-          fi
-          python3 tools/gap-report.py slice --report "$GAPS/report.json" --resource "$RESOURCE" --generated staging --source real --out "$GAPS/slices/$SLUG.json"
-          python3 tools/gap-report.py consolidate --slices "$GAPS/slices" --out "$GAPS/consolidated.json"
-          python3 tools/gap-report.py section --slice "$GAPS/slices/$SLUG.json" > "$GAPS/section.txt"
-          cat "$GAPS/section.txt" >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: gap-report
-          path: ${{ runner.temp }}/gaps
