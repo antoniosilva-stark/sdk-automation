@@ -1,5 +1,7 @@
+import sys
 import json
 import itertools
+import subprocess
 import importlib.util
 
 import pytest
@@ -613,3 +615,32 @@ def test_cliSliceFailsOnReportWithoutResources(workspace, capsys):
     code, _ = runSlice(workspace)
     assert code == 2
     assert "[ERROR]" in capsys.readouterr().out
+
+
+def test_sectionAndMergeBodyRunWithoutPyYaml(tmp_path):
+    # o job que tem o token so roda stdlib: so as classes (slice/consolidate) precisam de yaml
+    slicePath = writeJson(tmp_path / "slice.json", sliceOf())
+    bodyPath = tmp_path / "body.txt"
+    bodyPath.write_text("texto fixo\n", encoding="utf-8")
+    sectionPath = tmp_path / "section.txt"
+    launcher = (
+        "import sys, runpy; sys.modules['yaml'] = None; "
+        f"sys.argv = ['gap-report.py'] + sys.argv[1:]; runpy.run_path({str(TOOLS_DIR / 'gap-report.py')!r}, run_name='__main__')"
+    )
+
+    section = subprocess.run(
+        [sys.executable, "-c", launcher, "section", "--slice", str(slicePath)],
+        capture_output=True,
+        text=True,
+    )
+    assert section.returncode == 0, section.stderr
+    sectionPath.write_text(section.stdout, encoding="utf-8")
+
+    merged = subprocess.run(
+        [sys.executable, "-c", launcher, "merge-body", "--body", str(bodyPath), "--section", str(sectionPath)],
+        capture_output=True,
+        text=True,
+    )
+    assert merged.returncode == 0, merged.stderr
+    assert merged.stdout.startswith("texto fixo\n")
+    assert gapReport.MARKER_START in merged.stdout and gapReport.MARKER_END in merged.stdout

@@ -7,8 +7,6 @@ from collections import Counter
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
 
-import yaml
-
 TOOLS_DIR = Path(__file__).resolve().parent
 CLASSES_FILE = TOOLS_DIR.parent / "apis/gap-classes.yaml"
 CLASSES_SECTION = "gap-classes"
@@ -75,6 +73,9 @@ def checkClassEntries(resource: str, entries) -> dict[tuple[str, str], str]:
 
 
 def loadClasses(path) -> dict[str, dict[tuple[str, str], str]]:
+    # import local: section e merge-body rodam no job com o token, que so tem a stdlib; so as classes precisam de yaml
+    import yaml
+
     path = Path(path)
     extractSchema = loadTool("extract-schema")
     try:
