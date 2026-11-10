@@ -300,7 +300,10 @@ jobs:
           echo "Alvo: $OWNER/$REPO"
 
       - name: Resolve the reference SDKs
-        run: make clone-sdk-ref
+        # E2E SO NO FORK: a existencia e medida contra o sdk-java do fork (sem SplitProfile), nao contra o starkbank
+        run: |
+          git clone -q --depth 1 https://github.com/antoniosilva-stark/sdk-java.git "$RUNNER_TEMP/sdk-java-fork"
+          SDK_JAVA="$RUNNER_TEMP/sdk-java-fork" make clone-sdk-ref
 
       - name: Build and verify resource
         id: built
