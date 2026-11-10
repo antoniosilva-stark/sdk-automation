@@ -1,0 +1,33 @@
+# So informa a secao de gaps da PR gerada; nao muda o gate. Gap sem entrada aparece como sem-classificar.
+# Recurso -> lista de {kind, text, class}; kind e text sao os literais do gap do comparador.
+# class: tem-fonte | sem-fonte | muda-api-publica | bloqueado-por-dependencia
+
+MerchantPurchase:
+  - kind: signature
+    text: "signature ausente: public static MerchantPurchase delete(String id)"
+    class: sem-fonte
+  - kind: signature
+    text: "signature ausente: public static MerchantPurchase delete(String id, User user)"
+    class: sem-fonte
+  - kind: constructor
+    text: "constructor ausente: public MerchantPurchase(String id, long amount, int installmentCount, String holderName, String holderEmail, String holderPhone, String holderId, String softDescriptor, String fundingType, String billingCountryCode, String billingCity, String billingStateCode, String billingStreetLine1, String billingStreetLine2, String billingZipCode, Map<String, Object> metadata, String cardEnding, String cardId, String challengeMode, String confirmationMode, String challengeUrl, String created, String currencyCode, String endToEndId, int fee, String network, String source, String status, String[] tags, String updated)"
+    class: muda-api-publica
+PaymentPreview:
+  - kind: signature
+    text: "signature ausente: public static List<?> create(List<?> previews)"
+    class: sem-fonte
+  - kind: signature
+    text: "signature ausente: public static List<?> create(List<?> previews, User user)"
+    class: sem-fonte
+MerchantSession:
+  - kind: require
+    text: "require ausente: import com.starkbank.utils.SubResource;"
+    class: sem-fonte
+CorporateTransaction:
+  - kind: signature
+    text: "signature ausente: public static CorporateTransaction get()"
+    class: sem-fonte
+Transfer:
+  - kind: constructor
+    text: "constructor ausente: public Transfer(String id, long amount, String name, String taxId, String bankCode, String branchCode, String accountNumber, String accountType, String externalId, String scheduled, String description, String[] tags, List<Rule> rules, Integer fee, String status, String[] transactionIds, HashMap<String, Object> metadata, String created, String updated)"
+    class: muda-api-publica
