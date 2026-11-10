@@ -49,7 +49,9 @@ public {{^vendorExtensions.x-sdk-java-code.open}}final {{/vendorExtensions.x-sdk
 {{/vendorExtensions.x-sdk-subresource}}        HashMap<String, Object> dataCopy = new HashMap<>({{classDataName}});
 {{#vendorExtensions.x-sdk-java-code.ctorMapBody}}        {{{.}}}
 {{/vendorExtensions.x-sdk-java-code.ctorMapBody}}
-{{#vendorExtensions.x-sdk-java-code.typeInference}}        if (this.{{field}} == null) {
+{{#vendorExtensions.x-sdk-java-code.typeInference}}
+
+        if (this.{{field}} == null) {
             this.{{field}} = {{getter}}({{from}});
         }
 {{/vendorExtensions.x-sdk-java-code.typeInference}}

@@ -125,9 +125,9 @@ def test_aMalformedEntryFailsNamingTheResourceAndTheKey(extractSchema, tmpPath, 
         extractSchema.javaTypeInference("PaymentRequest", conventions)
 
 
-def test_aMessageWithCommonPunctuationAndAccentsIsAccepted(extractSchema, tmpPath):
+def test_aMessageWithCommonPunctuationIsAccepted(extractSchema, tmpPath):
     message = "Pagamento invalido, use Transfer ou Boleto; (veja a doc) - nao e aceito: 100%."
-    entry = {**_entry(), "message": message, "field": "type", "from": "payment"}
+    entry = {**_entry(), "message": message}
 
     assert extractSchema.javaTypeInference("PaymentRequest", _conventions(tmpPath, entry))["message"] == message
 
@@ -192,6 +192,15 @@ def test_generatedPaymentRequestInfersTheTypeInBothConstructorsAndDeclaresThePri
     assert mapBody.index('this.type = (String) dataCopy.remove("type");') < mapBody.index(block)
     assert generatedPaymentRequest.count("private static String getType(Resource payment) throws Exception {") == 1
     assert generatedPaymentRequest.count("getType(payment)") == 2
+
+
+@requiresGenerator
+def test_theMapConstructorSeparatesTheInferenceBlockWithBlankLinesLikeTheReal(generatedPaymentRequest):
+    mapStart = generatedPaymentRequest.index("public PaymentRequest(Map<String, Object> data) throws Exception {")
+    mapBody = generatedPaymentRequest[mapStart:generatedPaymentRequest.index("Unknown parameters", mapStart)]
+    block = "        if (this.type == null) {\n            this.type = getType(payment);\n        }\n"
+
+    assert f"        this.created = null;\n\n{block}\n        if (!dataCopy.isEmpty()) {{\n" in mapBody
 
 
 @requiresGenerator
