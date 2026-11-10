@@ -148,6 +148,17 @@ def test_consolidateCountsByClassAndKeepsExtrasOutOfTheTotal():
     assert [item["resource"] for item in result["slices"]] == ["Bar", "Baz", "Foo"]
 
 
+def test_consolidateCountsWaivedApartFromTheGapsTotal():
+    waived = [{"kind": "signature", "text": WAIVED_SIG, "reason": REASON}]
+    slices = [
+        sliceOf(entry=entryOf(gaps=[("signature", SIG_A)], waived=waived * 2)),
+        sliceOf(entry=entryOf(resource="Bar", waived=waived)),
+    ]
+    result = gapReport.consolidate(slices=slices, classes=CLASSES)
+    assert result["gapsTotal"] == 1
+    assert result["waivedTotal"] == 3
+
+
 def test_consolidateIsIndependentOfInputOrder():
     slices = [withGaps(resource="A", count=1), withGaps(resource="B", count=2), withGaps(resource="C", count=0)]
     results = {

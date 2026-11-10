@@ -22,7 +22,6 @@ MARKER_START = "<!-- sdk-automation:gaps:start -->"
 MARKER_END = "<!-- sdk-automation:gaps:end -->"
 MAX_ITEMS = 50
 MAX_TEXT = 300
-MAX_BODY = 60000
 SLICE_KEYS = {"resource": str, "measured": bool, "gaps": list, "waived": list}
 _UNSAFE = re.compile(r"[^A-Za-z0-9 _.,()<>?\[\]|:;=\"-]")
 _UNSAFE_PROSE = re.compile(r"[^A-Za-z0-9 _.,:-]")
