@@ -270,7 +270,6 @@ def mergeBody(body: str, section: str) -> str:
     if end < start:
         raise ValueError("corpo com marcadores invalidos: fim antes do inicio")
     # o corpo volta do gh com uma quebra de linha a mais: normalizar o fim evita que cada run acrescente uma
-    # o corpo volta do gh com uma quebra de linha a mais: normalizar o fim evita que cada run acrescente uma
     rest = body[end + len(MARKER_END):].rstrip()
     return f"{body[:start]}{section}{rest}\n"
 
