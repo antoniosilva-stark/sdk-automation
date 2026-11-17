@@ -130,6 +130,17 @@ def renderQuery(resource: str, shape: dict, flags: set) -> dict:
     return {"returnsList": shape["returns"] == "list", "shortClassData": shape["classData"] == "short"}
 
 
+def renderCreateShape(resource: str, shape: dict, create: dict | None) -> dict:
+    """O create em lista do real que devolve `List<?>` e chama o parametro de `param`. So existe sobre o create em lista
+    sem `expand`, a unica forma que o bloco do template cobre; outra forma geraria um create diferente do real calada."""
+    key = f"{resource}: javaCreateShapes.returns {shape['returns']!r}"
+    if create is None or not create["isList"]:
+        raise ValueError(f"{key} exige um create em lista")
+    if create["hasExpand"]:
+        raise ValueError(f"{key} nao vale com expand")
+    return {**create, "wildcard": True, "listParam": shape["param"]}
+
+
 def renderParse(resource: str, eventShape: dict | None) -> dict:
     if eventShape is None:
         return {"isEvent": False}

@@ -53,6 +53,10 @@ JAVA_TYPE_INFERENCE_KEYS = ("field", "from", "mapping", "message")
 # Valores aceitos do javaQueryShapes; a ausencia de entrada e o `query` em Generator com o ClassData qualificado do template.
 JAVA_QUERY_VALUES = {"returns": ("list",), "classData": ("short",)}
 
+# Valores aceitos do javaCreateShapes; a ausencia de entrada e o `create` em lista que devolve List<Recurso>.
+JAVA_CREATE_RETURNS = ("wildcard",)
+JAVA_CREATE_KEYS = ("returns", "param")
+
 # Parametros que a assinatura Java sempre tem, entao a secao javaOmittedOperationParams nao os omite.
 JAVA_OMITTED_PARAM_PROTECTED = frozenset({"id", "user"})
 
@@ -155,6 +159,14 @@ def javaOpenClass(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
     openClasses = loadConventions(Path(conventions)).get("javaOpenClasses") or []
     checkKnownResources("javaOpenClasses", openClasses)
     return resource in openClasses
+
+
+def javaLegacySubResource(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
+    legacy = loadConventions(Path(conventions)).get("javaLegacySubResource") or []
+    if not isinstance(legacy, list):
+        raise ValueError("javaLegacySubResource deve ser uma lista de recursos")
+    checkKnownResources("javaLegacySubResource", legacy)
+    return resource in legacy
 
 
 def javaConstructorOrder(resource: str, conventions: Path = CONVENTIONS_FILE) -> list | None:
@@ -471,6 +483,33 @@ def checkQueryShape(resource: str, shape) -> None:
             raise ValueError(f"{resource}: javaQueryShapes.{key} ausente")
         if not isinstance(shape[key], str) or shape[key] not in allowed:
             raise ValueError(f"{resource}: javaQueryShapes.{key} invalido: {shape[key]!r}, esperado um de {list(allowed)}")
+
+
+def javaCreateShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    """`{returns, param}` do create em lista que o real escreve devolvendo `List<?>` e com o parametro de outro nome."""
+    shapes = loadConventions(Path(conventions)).get("javaCreateShapes") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaCreateShapes deve ser um mapa recurso -> {returns, param}")
+    checkKnownResources("javaCreateShapes", shapes)
+    for name, shape in shapes.items():
+        checkCreateShape(name, shape)
+    return shapes.get(resource)
+
+
+def checkCreateShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaCreateShapes deve ser um mapa {{returns, param}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_CREATE_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaCreateShapes chave desconhecida: {unknown[0]}")
+    for key in JAVA_CREATE_KEYS:
+        if key not in shape:
+            raise ValueError(f"{resource}: javaCreateShapes.{key} ausente")
+    if not isinstance(shape["returns"], str) or shape["returns"] not in JAVA_CREATE_RETURNS:
+        raise ValueError(
+            f"{resource}: javaCreateShapes.returns invalido: {shape['returns']!r}, esperado um de {list(JAVA_CREATE_RETURNS)}")
+    if not isinstance(shape["param"], str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", shape["param"]):
+        raise ValueError(f"{resource}: javaCreateShapes.param invalido: {shape['param']!r}, esperado um identificador lowerCamelCase")
 
 
 def javaOmittedOperationParams(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:

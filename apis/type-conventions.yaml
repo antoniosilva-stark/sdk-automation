@@ -444,6 +444,18 @@ javaEvents:
       merchant-purchase, merchant-session, merchant-installment, merchant-card]
     gson: [payment-request]
 
+# Recursos cujo `SubResource` importado e o legado `com.starkbank.utils.SubResource`, que o real so usa no MerchantSession
+# (medido contra sdk-java f60902a; os demais que importam SubResource usam `com.starkcore.utils.SubResource`). A classe interna estende o
+# legado e o `for` sobre `page.entities`, que sao do starkcore, escreve o nome qualificado, como o real. So vale para
+# recurso que importa SubResource. Valida-se contra o real em tests/test_java_legacy_subresource.py.
+javaLegacySubResource:
+  - MerchantSession
+
+# `create` em lista que o real escreve devolvendo `List<?>` e com o parametro de outro nome (PaymentPreview: `previews`).
+# Sem entrada o create devolve List<Recurso> e o parametro e o do recurso no plural. Vale so sem `expand`.
+javaCreateShapes:
+  PaymentPreview: {returns: wildcard, param: previews}
+
 # `query` de subrecurso que o real escreve em lista, Recurso -> {returns, classData}, as duas chaves obrigatorias. E uma
 # convencao do real, nao do sdk-python (que so tem `query`): o corpo le uma pagina com Rest.getPage, copia as entidades para
 # uma `List<Recurso>` e a devolve pelo campo da `private final static class Page`, no lugar do `Generator` do template.

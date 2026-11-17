@@ -91,6 +91,7 @@ def renderDocs(
     profile: dict = JAVA_PROFILE,
     pageListName: str | None = None,
     omittedParams: dict | None = None,
+    listParam: str | None = None,
 ) -> dict:
     """Linhas de Javadoc ja prontas, por chave plana; o Mustache so as emoldura.
 
@@ -98,9 +99,10 @@ def renderDocs(
     no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo.
 
     `omittedParams` (`{operacao: {parametro: nota}}`, javaOmittedOperationParams): o parametro que o Java nao recebe sai da
-    doc da operacao e a nota entra no fim da descricao."""
+    doc da operacao e a nota entra no fim da descricao. `listParam` (javaCreateShapes.param) e o nome que o real da ao
+    parametro-lista do create, o mesmo que o `@param` cita."""
     context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
-               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName,
+               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName, "listParam": listParam,
                "singletonGet": hasSingletonGet(flags, docs)}
     lines = {
         "dataDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"]),
@@ -457,7 +459,8 @@ def mapCreateLines(context: dict, plan: dict, pythonParams: list) -> list:
 def entityListLine(context: dict, operation: str, pythonParams: list) -> str:
     """O Java recebe a lista (`{{classVarName}}s`); o Python as vezes recebe os campos soltos (Webhook)."""
     className = context["className"]
-    name = f"{className[:1].lower()}{className[1:]}s"
+    # o nome do javaCreateShapes e do create; o put em lista segue o parametro do template (`{{classVarName}}s`)
+    name = (context.get("listParam") if operation == "create" else None) or f"{className[:1].lower()}{className[1:]}s"
     first = pythonParams[0] if pythonParams else {}
     isList = first.get("type", "").startswith("list of")
     verb = "created/updated" if operation == "put" else "created"

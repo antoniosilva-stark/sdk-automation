@@ -181,6 +181,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
     entity = javaDocs.describeEntity(schema, createSchema)
     pageShape = extractSchema.javaPageShape(resource, conventionsFile) if "x-sdk-page" in flags else None
     omittedParams = extractSchema.javaOmittedOperationParams(resource, conventionsFile)
+    createShape = extractSchema.javaCreateShape(resource, conventionsFile)
     rendered = javaDocs.renderDocs(
         resource,
         schema.get("x-sdk-docs") or {},
@@ -188,6 +189,7 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         entity,
         pageListName=pageShape["listName"] if pageShape else None,
         omittedParams=omittedParams,
+        listParam=createShape["param"] if createShape else None,
     )
     nested, nestedWarnings = renderNested(spec["components"]["schemas"][resource], schema, javaDocs)
     overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
@@ -223,6 +225,10 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
         code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
     if javaDocs.hasSingletonGet(flags, schema.get("x-sdk-docs") or {}):
         code["singletonGet"] = True
+    if extractSchema.javaLegacySubResource(resource, conventionsFile):
+        if not flags & set(SUBRESOURCE_USERS):
+            raise ValueError(f"{resource}: javaLegacySubResource cita um recurso que nao importa SubResource")
+        code["legacySubResource"] = True
     queryShape = extractSchema.javaQueryShape(resource, conventionsFile)
     if queryShape is not None:
         code["query"] = javaCode.renderQuery(resource, queryShape, flags)
@@ -231,6 +237,8 @@ def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = Non
             schema.get("x-sdk-docs") or {}, operation, omittedParams)
         if hasMap:
             code[f"{operation}Params"] = True
+    if createShape is not None:
+        rendered["create"] = javaCode.renderCreateShape(resource, createShape, rendered.get("create"))
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
     docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
