@@ -21,32 +21,30 @@ def writeClasses(tmp_path, text):
 
 def test_versionedFileLoadsAndEveryResourceIsKnown():
     classes = gapReport.loadClasses(path=gapReport.CLASSES_FILE)
-    assert set(classes) == {"MerchantPurchase", "PaymentPreview", "MerchantSession", "CorporateTransaction", "Transfer"}
+    assert set(classes) == {"MerchantPurchase", "CorporateTransaction", "Transfer"}
     assert all(value in gapReport.VALID_CLASSES for entries in classes.values() for value in entries.values())
 
 
-def test_versionedFileHoldsExactlyTheEightClassifiedGaps():
+def test_versionedFileHoldsExactlyTheFiveClassifiedGaps():
     classes = gapReport.loadClasses(path=gapReport.CLASSES_FILE)
-    assert sum(len(entries) for entries in classes.values()) == 8
+    assert sum(len(entries) for entries in classes.values()) == 5
     byClass = {}
     for resource, entries in classes.items():
         for (kind, _), value in entries.items():
             byClass.setdefault(value, []).append((resource, kind))
-    assert sorted(byClass["sem-fonte"]) == sorted([
+    assert byClass["sem-fonte"] == [("CorporateTransaction", "signature")]
+    assert sorted(byClass["muda-api-publica"]) == [
+        ("MerchantPurchase", "constructor"),
         ("MerchantPurchase", "signature"),
         ("MerchantPurchase", "signature"),
-        ("PaymentPreview", "signature"),
-        ("PaymentPreview", "signature"),
-        ("MerchantSession", "require"),
-        ("CorporateTransaction", "signature"),
-    ])
-    assert sorted(byClass["muda-api-publica"]) == [("MerchantPurchase", "constructor"), ("Transfer", "constructor")]
+        ("Transfer", "constructor"),
+    ]
     assert set(byClass) == {"sem-fonte", "muda-api-publica"}
 
 
-def test_merchantPurchaseDeleteByIdStaysClassified():
+def test_merchantPurchaseDeleteByIdIsClassifiedAsAPublicApiChange():
     classes = gapReport.loadClasses(path=gapReport.CLASSES_FILE)
-    assert classes["MerchantPurchase"][("signature", DELETE_GAP)] == "sem-fonte"
+    assert classes["MerchantPurchase"][("signature", DELETE_GAP)] == "muda-api-publica"
 
 
 def test_classOfReturnsTheEntryClass():
