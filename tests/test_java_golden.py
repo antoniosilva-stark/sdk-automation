@@ -361,12 +361,10 @@ def _compared(real: dict, generated: dict) -> tuple[int, int]:
 #     golden nao fica verde escondendo isso: o relatorio imprime a contagem por severidade.
 SEVERITIES = ("runtime-errado", "tipo-perdido", "cosmetico")
 
-PRIMITIVE = "tipo primitivo do real (long/int, 15 de 55 arquivos); o gerador emite o boxed, porque o Python nao tem primitivo"
 PRIMITIVE_CAST = "o real le `amount` com cast direto (int), que trunca; o gerador le Number.longValue (RF9)"
 LIST_PARAM = "excecao da 6b: o nome do parametro de lista vem do plural do recurso; o real usa nome proprio"
 DEPRECATED = ("excecao da 6b: @Deprecated do real nao vem do docstring Python (Transaction.create: v2.31.0 no Python,"
               " v2.24.0 no Java); o corpo do real so lanca, sem chamar Rest")
-LOG_ERRORS = "excecao da 6b: Log.errors sai List<ErrorElement> (7 de 24 Log); o real mais frequente usa String[] (14 de 24)"
 DOCSTRING_EXTRA = "o docstring Python tem conteudo que o Javadoc do real nao tem"
 DOCSTRING_MISSING = "conteudo ausente do docstring Python que o real tem"
 DOCSTRING_ORDER = "a ordem dos campos do real difere do docstring Python, que e a fonte do schema"
@@ -388,24 +386,28 @@ LOG_ATTRIBUTES = "real [SP] na minoria: `Attributes:` no Log (6 cabecalhos contr
 LOG_FIELD_ORDER = "real [SP] na minoria: campos do Log em outra ordem; a dominante e `created type errors X`, 16 de 24"
 IMPORT_ORDER = ("real na minoria do proprio real: Rest>Resource>Generator (11 de 42; dominante Generator>Resource>Rest, 20)"
                 " e java.util fora de ordem alfabetica (13 contra 21)")
-BALANCE_IMPORTS = "o real importa o que nao usa (Generator, List, HashMap, ArrayList); o gate DEAD_IMPORT reprova import morto"
+BALANCE_IMPORTS = ("ordem de import do real na minoria (ver IMPORT_ORDER); o gerador importa Map para o ctor Map que o real"
+                   " do Balance nao tem")
+BALANCE_USER_DOC = "o real deixa um `*` solto no fim da linha `@param user` do get(User) do Balance (descuido do sdk-java)"
 
-FREE_OBJECT = ("tipo-perdido",
-               "Entrega 9: objeto livre `metadata`: o real usa HashMap<String, Object>; o gerador emite Object")
+PARSE_STATIC = ("o auxiliar parseX do gerador e `private static`; o real o declara de instancia em 11 de 12"
+                " (so o do VerifiedTransfer e static)")
+EXTRA_FIELD_ORDER = ("campo de javaExtraFields e declarado e documentado depois dos campos da spec; o real o escreve junto"
+                     " do campo que o antecede no ctor (a posicao no ctor all-args e a de javaConstructorOrder)")
 RULE = ("tipo-perdido",
-        "Entrega 9: o gerador nao emite o sub-objeto Transfer.Rule (classe interna, Deserializer, parseRules);"
-        " `rules` sai List<Object> e o ctor Map faz cast nao verificado")
-LOG_QUALIFIED = ("cosmetico",
-                 "Entrega 9: o gerador qualifica `Transfer.Log` onde o real usa `Log` (13 de 23 `List<Log>` contra 10"
-                 " `List<X.Log>`)")
-BALANCE_GET = ("runtime-errado",
-               "Entrega 9: Balance e singleton: o real tem `get()` e `get(User)` com Rest.getStream; o gerador emite"
-               " `get(String id)` com Rest.getId. A guarda de build-resource bloqueia a criacao")
+        "Entrega 9: o gerador nao emite o Transfer.Rule.Deserializer (Gson manual, dispensado em java-handwritten.yaml);"
+        " o Rule gerado fica sem registro no GsonAdapters")
+HELPER_ORDER = ("cosmetico",
+                "Entrega 9: o gerador emite o auxiliar parseX depois das operacoes e o ctor Map da classe interna depois do"
+                " sem argumentos; o real os escreve logo depois do ctor Map externo e antes do ctor sem argumentos")
+SUPPRESS = ("cosmetico",
+            "Entrega 9: o gerador emite `@SuppressWarnings(\"unchecked\")` no ctor Map quando um cast e generico (a lista de"
+            " `rules` passa pelo parseRules); o ctor Map do Transfer do real nao o tem")
+RULE_DOC = ("cosmetico",
+            "Entrega 9: o gerador nao emite Javadoc de classe interna nem dos construtores dela (a spec nao descreve o"
+            " sub-objeto Transfer.Rule)")
 BALANCE_MAP_CTOR = ("cosmetico",
                     "Entrega 9: Balance nao tem ctor Map no real; o gerador emite o ctor (superficie publica a mais)")
-SINGLE_CREATE = ("runtime-errado",
-                 "Entrega 9: create de objeto unico: o real tem `create(Map)` com Rest.postSingle; o gerador emite"
-                 " `create(List)` com Rest.post. A guarda de build-resource bloqueia a criacao")
 
 EXPECTED: dict[str, dict[str, str]] = {
     "SplitProfile": {
@@ -426,7 +428,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "doc|sections -[Attributes:] +[Attributes (return-only):]|Log.Log(all-args)":
             LOG_ATTRIBUTES,
         "fields|order|moved=[Log.type, Log.errors, Log.profile]":
-            LOG_ERRORS,
+            LOG_FIELD_ORDER,
         "imports|real=Rest,Resource,Generator,SubResource,ErrorElement | Map,List,HashMap,ArrayList gen=Generator,Resource,Rest,SubResource,ErrorElement | ArrayList,HashMap,List,Map":
             IMPORT_ORDER,
     },
@@ -435,12 +437,6 @@ EXPECTED: dict[str, dict[str, str]] = {
             QUERY_ORDER,
         "rest|create real={} gen={'post': 1}":
             DEPRECATED,
-        "allArgs|Transaction(all-args)|order|moved=[senderId, fee, balance, created]":
-            DOCSTRING_ORDER,
-        "allArgs|Transaction(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "allArgs|Transaction(all-args)|type|fee real=int gen=Integer":
-            PRIMITIVE,
         "doc|sections -[Parameters (required):, Parameters (optional):] +[]|Transaction(Map<String, Object>)":
             REQUIRED_OPTIONAL,
         "doc|filters -[receivedId, id] +[receiverId]|Transaction(Map<String, Object>)":
@@ -451,22 +447,16 @@ EXPECTED: dict[str, dict[str, str]] = {
             DEPRECATED,
         "fields|order|moved=[senderId, fee]":
             DOCSTRING_ORDER,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
         "mapctor|amount real=directcast:int gen=number:longValue":
             PRIMITIVE_CAST,
     },
     "Transfer": {
-        "methods|order|moved=[query(Map<String, Object>, User), delete(String), delete(String, User)]":
-            TRANSFER_ORDER,
+        "signature|returns private List<Rule> -> private static List<Rule>|parseRules(List<Object>)":
+            PARSE_STATIC,
         "allArgs|Transfer(all-args)|extra|displayDescription":
             DOCSTRING_EXTRA,
         "allArgs|Transfer(all-args)|order|moved=[id]":
             ID_POSITION,
-        "allArgs|Transfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "allArgs|Log.Log(all-args)|type|errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "doc|tags -[] +[param:displayDescription]|Transfer(all-args)":
             DOCSTRING_EXTRA,
         "doc|sections -[Parameters (optional):] +[]|Transfer(Map<String, Object>)":
@@ -479,22 +469,14 @@ EXPECTED: dict[str, dict[str, str]] = {
             DOCSTRING_EXTRA,
         "fields|extra|displayDescription":
             DOCSTRING_EXTRA,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "fields|type|Log.errors real=String[] gen=List<ErrorElement>":
-            LOG_ERRORS,
         "mapctor|displayDescription real=None gen=cast:String":
             DOCSTRING_EXTRA,
     },
     "Balance": {
-        "allArgs|Balance(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "allArgs|Balance(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Resource,Rest | HashMap,Map":
+        "imports|real=Rest,Resource,Generator | List,HashMap,ArrayList gen=Generator,Resource,Rest | ArrayList,HashMap,List,Map":
             BALANCE_IMPORTS,
+        "doc|user real=@param user [Organization/Project object, default null]: Organization or Project object. Not necessary if starkbank.Settings.user was set before function call * gen=@param user [Organization/Project object, default null]: Organization or Project object. Not necessary if starkbank.Settings.user was set before function call|get(User)":
+            BALANCE_USER_DOC,
     },
     "Webhook": {
         "methods|order|moved=[query(Map<String, Object>, User)]":
@@ -509,26 +491,16 @@ EXPECTED: dict[str, dict[str, str]] = {
             ID_RETURN_ONLY,
     },
     "VerifiedTransfer": {
-        "allArgs|VerifiedTransfer(all-args)|missing|accountType":
-            DOCSTRING_MISSING,
-        "allArgs|VerifiedTransfer(all-args)|order|moved=[id]":
-            ID_POSITION,
-        "allArgs|VerifiedTransfer(all-args)|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "doc|tags -[param:accountType] +[]|VerifiedTransfer(all-args)":
-            DOCSTRING_MISSING,
+        "doc|tags moved=[param:accountType]|VerifiedTransfer(all-args)":
+            EXTRA_FIELD_ORDER,
         "doc|sections -[Parameters (optional):] +[]|VerifiedTransfer(Map<String, Object>)":
             OPTIONAL_HEADER,
-        "doc|filters -[accountType, id] +[]|VerifiedTransfer(Map<String, Object>)":
-            DOCSTRING_MISSING,
+        "doc|filters -[id] +[] moved=[accountType]|VerifiedTransfer(Map<String, Object>)":
+            EXTRA_FIELD_ORDER,
         "doc|tags -[param:transfers] +[param:verifiedTransfers]|create(List<?>), create(List<?>, User)":
             LIST_PARAM,
-        "fields|missing|accountType":
-            DOCSTRING_MISSING,
-        "fields|type|amount real=long gen=Long":
-            PRIMITIVE,
-        "mapctor|accountType real=cast:String gen=None":
-            DOCSTRING_MISSING,
+        "fields|order|moved=[accountType]":
+            EXTRA_FIELD_ORDER,
         "imports|real=Rest,Resource | Map,List,HashMap,ArrayList gen=Resource,Rest | ArrayList,HashMap,List,Map":
             IMPORT_ORDER,
     },
@@ -542,106 +514,39 @@ KNOWN_GENERATOR_LIMITS: dict[str, dict[str, tuple[str, str]]] = {
 
     },
     "Transfer": {
-        "methods|missing|parseRules(List<Object>)":
-            RULE,
-        "methods|missing|class Rule":
-            RULE,
-        "methods|missing|Rule.Rule(all-args)":
-            RULE,
-        "methods|missing|Rule.Rule(Map<String, Object>)":
-            RULE,
-        "methods|missing|Rule.Rule()":
-            RULE,
+        "methods|order|moved=[parseRules(List<Object>), query(Map<String, Object>, User), delete(String), delete(String, User), Rule.Rule(Map<String, Object>)]":
+            HELPER_ORDER,
         "methods|missing|class Rule.Deserializer":
             RULE,
         "methods|missing|Rule.Deserializer.deserialize(JsonElement, Type, JsonDeserializationContext)":
             RULE,
-        "allArgs|Transfer(all-args)|type|rules real=List<Rule> gen=List<Object>":
-            RULE,
-        "allArgs|Transfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
-        "allArgs|Log.Page.Page(all-args)|type|logs real=List<Log> gen=List<Transfer.Log>":
-            LOG_QUALIFIED,
+        "doc|presence real=True gen=False|class Rule, Rule.Rule(all-args), Rule.Rule(Map<String, Object>)":
+            RULE_DOC,
         "annotations|-[] +[SuppressWarnings]|Transfer(Map<String, Object>)":
-            RULE,
-        "signature|returns public static Log -> public static Transfer.Log|Log.get(String), Log.get(String, User)":
-            LOG_QUALIFIED,
-        "signature|returns public static Generator<Log> -> public static Generator<Transfer.Log>|Log.query(Map<String, Object>), Log.query(User), Log.query(), Log.query(Map<String, Object>, User)":
-            LOG_QUALIFIED,
-        "signature|returns public static Log.Page -> public static Transfer.Log.Page|Log.page(Map<String, Object>), Log.page(User), Log.page(), Log.page(Map<String, Object>, User)":
-            LOG_QUALIFIED,
-        "fields|missing|Rule.key":
-            RULE,
-        "fields|missing|Rule.value":
-            RULE,
-        "fields|type|rules real=List<Rule> gen=List<Object>":
-            RULE,
-        "fields|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
-        "fields|type|Log.Page.logs real=List<Log> gen=List<Transfer.Log>":
-            LOG_QUALIFIED,
-        "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
-            RULE,
-        "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource,ErrorElement | InputStream,ArrayList,HashMap,List,Map":
+            SUPPRESS,
+        "imports|real=Generator,Resource,Rest,SubResource,GsonEvent | JsonDeserializationContext,JsonDeserializer,JsonElement,JsonObject,JsonParseException | InputStream,Type,ArrayList,HashMap,List,Map gen=Generator,Resource,Rest,SubResource | InputStream,ArrayList,HashMap,List,Map":
             RULE,
     },
     "Balance": {
-        "methods|missing|get(User)":
-            BALANCE_GET,
-        "methods|missing|get()":
-            BALANCE_GET,
         "methods|extra|Balance(Map<String, Object>)":
             BALANCE_MAP_CTOR,
-        "methods|extra|get(String)":
-            BALANCE_GET,
-        "methods|extra|get(String, User)":
-            BALANCE_GET,
-        "rest|get real={'getStream': 1} gen={'getId': 1}":
-            BALANCE_GET,
-        "mapctor|amount real=None gen=null":
+        "mapctor|amount real=None gen=other:0":
             BALANCE_MAP_CTOR,
         "mapctor|currency real=None gen=null":
             BALANCE_MAP_CTOR,
         "mapctor|updated real=None gen=null":
             BALANCE_MAP_CTOR,
     },
-    "Webhook": {
-        "methods|missing|create(Map<String, Object>)":
-            SINGLE_CREATE,
-        "methods|missing|create(Map<String, Object>, User)":
-            SINGLE_CREATE,
-        "methods|extra|create(List<?>)":
-            SINGLE_CREATE,
-        "methods|extra|create(List<?>, User)":
-            SINGLE_CREATE,
-        "rest|create real={'postSingle': 1} gen={'post': 1}":
-            SINGLE_CREATE,
-    },
+    "Webhook": {},
     "VerifiedTransfer": {
-        "methods|missing|parseRules(List<Object>)":
-            RULE,
-        "allArgs|VerifiedTransfer(all-args)|type|rules real=List<Transfer.Rule> gen=List<Object>":
-            RULE,
-        "allArgs|VerifiedTransfer(all-args)|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
-        "fields|type|rules real=List<Transfer.Rule> gen=List<Object>":
-            RULE,
-        "fields|type|metadata real=HashMap<String, Object> gen=Object":
-            FREE_OBJECT,
-        "mapctor|rules real=other:parseRules((List<Object>) dataCopy.remove(\"rules\")) gen=cast:List":
-            RULE,
+        "methods|order|moved=[parseRules(List<Object>)]":
+            HELPER_ORDER,
     },
 }
 
 
-# A guarda de build-resource bloqueia a criacao de Webhook (create de objeto unico) e de Balance (singleton), entao o
-# golden os gera com --advisory, que nao a roda: aqui se mede a estrutura contra o real, e a guarda prova o bloqueio
-# (tests/test_build_resource.py). Os dois nao se sobrepoem de proposito.
-GOLDEN_FLAGS = {"Webhook": ("--advisory",), "Balance": ("--advisory",)}
-
-
 def _structures(builtOnce, assertGenerated, resource: str, generated: str | None = None) -> tuple[dict, dict, str]:
-    code, out, target = builtOnce(resource, "java", *GOLDEN_FLAGS.get(resource, ()))
+    code, out, target = builtOnce(resource, "java")
     assert code == 0, out
     tool = assertGenerated.loadTool("derive-contract")
     source = generated or (target / "src/main/java/com/starkbank" / f"{resource}.java").read_text(encoding="utf-8")
@@ -689,12 +594,24 @@ def test_generatedJavaMatchesTheRealSdkOnStructure(builtOnce, assertGenerated, r
     assert not stale, f"{resource}: entrada que parou de casar, remova do registro:\n" + "\n".join(f"  {key}" for key in stale)
 
 
+# Um segmento `*` inteiro e curinga; um `*` solto dentro do texto do real (a linha @param user do Balance) e dado.
+WILDCARD_SEGMENT = re.compile(r"(?:^|\|)\*(?:\||$)")
+
+
+def test_wildcardSegmentMatchesAWholeStarSegmentAndNotAStarInsideText():
+    assert WILDCARD_SEGMENT.search("methods|*")
+    assert WILDCARD_SEGMENT.search("*|get")
+    assert WILDCARD_SEGMENT.search("doc|*|user")
+    assert not WILDCARD_SEGMENT.search("doc|user|@param user [Organization] text *")
+    assert not WILDCARD_SEGMENT.search("methods|get*")
+
+
 def test_everyExpectedDivergenceCarriesAWrittenMotive():
     assert set(EXPECTED) == set(GOLDEN_RESOURCES)
     for resource, entries in EXPECTED.items():
         for key, motive in entries.items():
             assert len(motive.split()) >= 5, f"{resource}: motivo curto demais para {key}"
-            assert "*" not in key, f"{resource}: curinga na chave {key}"
+            assert not WILDCARD_SEGMENT.search(key), f"{resource}: curinga na chave {key}"
             assert "Entrega 9" not in motive, f"{resource}: {key} e limite do gerador, nao divergencia esperada"
 
 
@@ -716,7 +633,6 @@ def test_theGeneratorLimitsAreCountedBySeverityInTheFinalReport():
     sys.stdout.write(f"=== limites do gerador no golden, por severidade (Entrega 9): {totals}\n")
 
     assert sum(totals.values()) == sum(len(entries) for entries in KNOWN_GENERATOR_LIMITS.values())
-    assert totals["runtime-errado"] > 0, "o golden nao pode esconder o limite que muda o comportamento em runtime"
 
 
 def _swapBlocks(source: str, first: str, second: str) -> str:

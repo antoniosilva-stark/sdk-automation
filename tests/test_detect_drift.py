@@ -159,7 +159,7 @@ def test_logEntityChangeIsDrift():
 def test_flagsTheTemplateIgnoresAreNotDrift():
     drift = _loadTool("detect-drift.py")
 
-    assert drift.compareOperations("Widget", {"x-sdk-get": True, "x-sdk-parse": True}, {"x-sdk-get": True}) == []
+    assert drift.compareOperations("Widget", {"x-sdk-get": True, "x-sdk-invented": True}, {"x-sdk-get": True}) == []
 
 
 @requiresPythonSdk

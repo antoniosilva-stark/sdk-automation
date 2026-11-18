@@ -48,10 +48,10 @@ def test_fullySupportedOperationsCountAsFullParity(tmpPath):
 
 
 def test_operationWithoutTemplateSectionBecomesPendingNotExcluded(tmpPath):
-    report = _report(tmpPath, "get, query, qrcode")
+    report = _report(tmpPath, "get, query, validate")
 
     assert report["fullParity"] == []
-    assert report["withPending"] == [{"resource": "Widget", "pending": ["qrcode"]}]
+    assert report["withPending"] == [{"resource": "Widget", "pending": ["validate"]}]
 
 
 def test_classWithoutCrudIsReachableAsDataOnly(tmpPath):
@@ -66,7 +66,7 @@ def test_flagsComeFromTemplateNotAParallelList(coverageReport):
 
     assert "x-sdk-page" in flags
     assert "x-sdk-cancel" in flags
-    assert "x-sdk-qrcode" not in flags
+    assert "x-sdk-invented" not in flags
     assert "x-sdk-data-only" in flags
 
 
@@ -88,3 +88,14 @@ def test_realReachMeetsTheDeliveryTarget():
     assert report["total"] == 43
     assert reachable == 42
     assert [entry["resource"] for entry in report["outOfReach"]] == ["request"]
+
+
+def test_subresourceFlagIsNotAnOperationSection(coverageReport, tmpPath):
+    template = tmpPath / "model.mustache"
+    section = "x-sdk-subresource"
+    template.write_text("{{#vendorExtensions.%s}}x{{/vendorExtensions.%s}}" % (section, section), encoding="utf-8")
+    flags = coverageReport.templateFlags(template)
+    extractSchema = coverageReport.loadTool("extract-schema")
+
+    assert "x-sdk-subresource" not in extractSchema.OPERATION_FLAGS.values()
+    assert flags & set(extractSchema.OPERATION_FLAGS.values()) == set()

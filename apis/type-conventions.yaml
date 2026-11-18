@@ -9,3 +9,470 @@ integerFormats:
 stringFormats:
   pdf: uri
   link: uri
+
+# Tipo Java por campo, Recurso -> campo -> tipo. Medido contra sdk-java f60902a: o real tipa por familia de
+# recurso, nao por regra global (Transfer `long`, Invoice `Number`, Corporate* `Long`, DarfPayment `String`), entao so
+# entra aqui o campo em que o real foge do default do perfil de tools/java-code.py; o default vale para recurso novo.
+# O tipo precisa ser um que o Map-ctor sabe ler (perfil: String, Integer, Long, Number, Float, Double, Boolean, Object,
+# String[], List<Object>, mais long/int primitivos e Map/HashMap/List<String>/Resource por cast direto). `List<E>` e o
+# tipo do real, VERBATIM, para o campo que o schema descreve so como array de object: E e uma classe interna do proprio
+# recurso (em javaInnerClasses, com ou sem o qualificador `Recurso.`), uma classe interna de outro recurso pelo nome
+# qualificado (`Transfer.Rule` no VerifiedTransfer) ou outro recurso gerado; o Map-ctor converte cada Map em E por um
+# auxiliar `parseX`, como o real. Campo que o schema nao tem falha na geracao.
+javaTypes:
+  Balance:
+    amount: long
+  Boleto:
+    amount: long
+    fine: Number
+    interest: Number
+    descriptions: List<Boleto.Description>
+    discounts: List<Boleto.Discount>
+  BrcodePayment:
+    amount: Number
+    rules: List<BrcodePayment.Rule>
+  CorporateBalance:
+    limit: Long
+    maxLimit: Long
+  CorporateCard:
+    rules: List<CorporateRule>
+  CorporateHolder:
+    permissions: List<Permission>
+    rules: List<CorporateRule>
+  CorporatePurchase:
+    tax: Long
+    issuerAmount: Long
+    merchantAmount: Long
+    merchantFee: Long
+  CorporateRule:
+    counterAmount: Number
+    categories: List<MerchantCategory>
+    countries: List<MerchantCountry>
+    methods: List<CardMethod>
+  CorporateTransaction:
+    tags: String[]
+  # o real le os tres valores com Long.parseLong(String.valueOf(...)); o gerado le via ((Number) x).longValue()
+  DarfPayment:
+    nominalAmount: long
+    fineAmount: long
+    interestAmount: long
+    amount: String
+    fee: String
+  Deposit:
+    amount: long
+  DynamicBrcode:
+    amount: Number
+    expiration: Number
+    rules: List<DynamicBrcode.Rule>
+  Invoice:
+    amount: Number
+    expiration: Number
+    fine: Number
+    interest: Number
+    nominalAmount: Number
+    fineAmount: Number
+    interestAmount: Number
+    discountAmount: Number
+    descriptions: List<Invoice.Description>
+    discounts: List<Invoice.Discount>
+    rules: List<Invoice.Rule>
+    splits: List<Split>
+  InvoicePullSubscription:
+    pullRetryLimit: Long
+    amountMinLimit: Long
+    data: Map<String, Object>
+  MerchantCard:
+    tags: List<String>
+  MerchantInstallment:
+    amount: long
+    fee: int
+    transactionIds: List<String>
+  MerchantPurchase:
+    amount: long
+    installmentCount: int
+    metadata: Map<String, Object>
+  MerchantSession:
+    allowedFundingTypes: List<String>
+    expiration: Number
+    allowedIps: List<String>
+    allowedInstallments: List<AllowedInstallment>
+  PaymentPreview:
+    payment: Object
+  PaymentRequest:
+    payment: Resource
+    actions: List<PaymentRequest.Action>
+  Split:
+    amount: long
+  TaxPayment:
+    amount: String
+    fee: String
+  Transaction:
+    amount: long
+  Transfer:
+    amount: long
+    metadata: HashMap<String, Object>
+    rules: List<Rule>
+  VerifiedTransfer:
+    amount: long
+    metadata: HashMap<String, Object>
+    rules: List<Transfer.Rule>
+  Workspace:
+    allowedTaxIds: List<String>
+
+# Recursos cuja classe externa o real declara `public class`, sem `final`. O real nao e uniforme: 10 de 42 nao sao final
+# (medido contra sdk-java f60902a); os outros 32 sao `final`, e esse segue como default do perfil para recurso novo.
+# Valida-se contra o real em tests/test_java_field_types.py (cada nome nao e final e todo nao-final esta aqui).
+javaOpenClasses:
+  - DictKey
+  - Event
+  - Institution
+  - MerchantCard
+  - MerchantInstallment
+  - MerchantPurchase
+  - MerchantSession
+  - PaymentPreview
+  - Split
+  - SplitReceiver
+
+# Ordem dos parametros do construtor all-args (id incluido) e tipo do parametro quando difere do campo. O real nao a
+# deriva do docstring Python: e dado do Java, medido contra sdk-java f60902a no construtor publico mais longo de
+# cada classe externa. Recurso sem entrada usa a ordem e o tipo do campo no schema, que e o default para recurso novo.
+# Valida-se contra o real em tests/test_java_field_types.py (cada entrada e o real; todo recurso de mesmo conjunto de
+# nomes que o real esta coberto, e o campo de javaExtraFields conta como campo da ordem). Fora: CorporateWithdrawal (ctor
+# package-private) e os de conjunto de nomes diferente (Transfer e MerchantPurchase, que carregam campo da spec que o real nao tem).
+javaConstructorOrder:
+  Balance: [amount, currency, updated, id]
+  Boleto: [amount, name, taxId, streetLine1, streetLine2, district, city, stateCode, zipCode, due, fine,
+    interest, overdueLimit, receiverName, receiverTaxId, tags, descriptions, discounts, id, fee, line,
+    barCode, status, transactionIds, workspaceId, created, ourNumber]
+  BoletoPayment: [amount, taxId, tags, description, scheduled, line, barCode, id, fee, transactionIds, status, created]
+  BrcodePayment: [brcode, taxId, description, amount, scheduled, name, tags, rules, id, status, type, transactionIds,
+    fee, updated, created]
+  CorporateCard: [holderName, displayName, rules, tags, streetLine1, streetLine2, district, city, stateCode, zipCode,
+    id, holderId, type, status, number, securityCode, expiration, updated, created]
+  CorporateHolder: [id, name, centerId, permissions, status, rules, tags, updated, created]
+  CorporateInvoice: [id, name, brcode, due, link, amount, taxId, status, corporateTransactionId, tags, updated, created]
+  CorporateRule: [id, name, amount, interval, schedule, purposes, currencyCode, categories, countries, methods,
+    counterAmount, currencySymbol, currencyName]
+  DarfPayment: [id, description, revenueCode, taxId, competence, nominalAmount, fineAmount, interestAmount, due,
+    referenceNumber, scheduled, tags, status, amount, fee, transactionIds, updated, created]
+  DictKey: [id, type, accountType, name, taxId, ownerType, bankName, ispb, branchCode, accountNumber, status]
+  DynamicBrcode: [amount, expiration, tags, id, uuid, pictureUrl, displayDescription, rules, updated, created]
+  Event: [created, isDelivered, subscription, id, workspaceId]
+  Invoice: [amount, due, taxId, name, expiration, fine, interest, descriptions, discounts, rules, splits, pdf,
+    link, tags, nominalAmount, fineAmount, interestAmount, discountAmount, id, brcode, fee,
+    transactionIds, status, created, updated]
+  InvoicePullSubscription: [start, interval, pullMode, pullRetryLimit, type, amount, amountMinLimit, displayDescription,
+    due, externalId, referenceCode, end, data, name, taxId, tags, status, bacenId, installmentId, brcode, created,
+    updated, id]
+  MerchantInstallment: [id, amount, created, due, fee, fundingType, network, purchaseId, status, tags, transactionIds,
+    updated]
+  MerchantSession: [id, allowedFundingTypes, allowedInstallments, allowedIps, challengeMode, confirmationMode, holderId,
+    softDescriptor, created, expiration, status, tags, updated, uuid]
+  PaymentRequest: [id, centerId, payment, type, due, tags, amount, description, status, actions, updated, created]
+  SplitReceiver: [name, taxId, bankCode, branchCode, accountNumber, accountType, id, tags, status, created, updated]
+  TaxPayment: [id, line, barCode, description, tags, scheduled, status, amount, fee, transactionIds, type, updated,
+    created]
+  Transaction: [amount, description, externalId, receiverId, senderId, tags, fee, created, source, balance, id]
+  UtilityPayment: [amount, tags, description, scheduled, line, barCode, id, fee, type, transactionIds, status, created,
+    updated]
+  VerifiedAccount: [id, bankCode, bankName, branchCode, created, keyId, name, number, status, tags, taxId, type, updated]
+  VerifiedTransfer: [id, amount, accountId, accountType, externalId, scheduled, description, displayDescription, tags,
+    rules, fee, status, transactionIds, metadata, created, updated]
+  Workspace: [username, name, allowedTaxIds, status, id, organizationId, pictureUrl, created]
+
+# Campo do schema que o Java nao declara na classe externa, Recurso -> lista de campos. A spec e compartilhada com as
+# outras linguagens e descreve o campo; o real o tira da classe e do construtor, por isso o campo some da declaracao, do
+# construtor all-args, do Map-ctor e do Javadoc. O Event do real nao tem `log` na base: cada subclasse declara o seu
+# (javaEvents). Nao vale para o id, que o template sempre emite. Campo que o schema nao tem falha na geracao.
+javaOmittedFields:
+  Event: [log]
+
+# Campo que o real declara na classe externa e a spec (do sdk-python) nao tem, Recurso -> nome -> {type, description}. E o
+# inverso de javaOmittedFields: o campo e declarado (depois dos da spec), atribuido pelo ctor all-args, lido pelo Map-ctor
+# como qualquer campo nao somente de retorno e documentado no Javadoc; a posicao no ctor all-args e a de javaConstructorOrder,
+# que passa a contar o campo. O dado so tem campo que o Map-ctor do real le, e a spec compartilhada nao e tocada.
+#   type:        (obrigatorio) o tipo Java, o mesmo do campo no real, aceito como em javaTypes.
+#   description: (opcional) o texto da linha `@param` do Javadoc, o do real; sem ele a linha e so `nome [tipo]`, que e o
+#                que o gerador escreve sem descricao (o real de MerchantPurchase e MerchantSession nao documenta o campo).
+# Medido contra sdk-java f60902a e validado em tests/test_java_extra_fields.py: cada entrada e o real (tipo, ctor, Map-ctor,
+# texto) e nenhum campo da classe externa do real fica sem schema nem entrada nos cinco recursos.
+javaExtraFields:
+  InvoicePullSubscription:
+    installmentId:
+      type: String
+      description: 'unique id of the installment related to this request. ex: "5656565656565656"'
+  MerchantPurchase:
+    confirmationMode: {type: String}
+  MerchantSession:
+    confirmationMode: {type: String}
+  VerifiedTransfer:
+    accountType:
+      type: String
+      description: 'receiver bank account type. This parameter only has effect on Pix Transfers. ex: "checking", "savings", "salary" or "payment"'
+
+javaConstructorTypes:
+  CorporateRule:
+    counterAmount: Long
+  PaymentPreview:
+    payment: String
+  Transaction:
+    fee: int
+
+# Campo que o construtor do real infere de outro quando chega nulo (PaymentRequest.type a partir do payment). Recurso ->
+# `field` (o campo inferido, String), `from` (o campo Resource de onde vem), `mapping` (classe Java do mesmo pacote ->
+# valor kebab-case, sem valor repetido, na ordem em que o real testa o `instanceof`) e `message` (o texto da Exception
+# quando nenhuma classe casa, sem aspas duplas nem barra invertida). O gerador emite o bloco `if (this.<field> == null)`
+# nos construtores all-args (que passa a declarar `throws Exception`) e Map, e o `get<Field>` privado e estatico. Medido
+# contra sdk-java f60902a; valida-se contra o real e contra o `_parse_payment` do sdk-python em tests/test_java_type_inference.py.
+javaTypeInference:
+  PaymentRequest:
+    field: type
+    from: payment
+    mapping:
+      Transfer: transfer
+      Transaction: transaction
+      BoletoPayment: boleto-payment
+      UtilityPayment: utility-payment
+      TaxPayment: tax-payment
+      DarfPayment: darf-payment
+      BrcodePayment: brcode-payment
+    message: Payment must either be a Transfer, a Transaction, a BoletoPayment, a BrcodePayment, a UtilityPayment, a TaxPayment or a DarfPayment.
+
+# Classes internas simples que o real escreve a mao (a spec nao descreve sub-objeto) e o gerador emite a partir deste
+# dado. Recurso -> classe interna -> `fields` (declaracao, ordem do real), `constructors` (construtores publicos
+# posicionais: campos recebidos, os demais ficam null; [] e o sem argumentos), `map` (campos LIDOS do `X(Map)`, os demais
+# ficam null; ausente = sem esse construtor), `final` (default true), `classData` (nome do ClassData, so quando o real
+# o declara) e `classDataType`, obrigatorio com `classData`: `short` escreve `static ClassData data = new ClassData(...)`
+# (Invoice.Payment) e `qualified` escreve `SubResource.ClassData` (MerchantSession.AllowedInstallment); o real nao e
+# uniforme, entao e um eixo por classe, como javaLogs.classData. Mais duas chaves opcionais: `extends` (`SubResource`, o
+# default, ou `Resource`: o `id` e o ultimo parametro de cada construtor com campos, repassado a `super(id)`, e o sem
+# argumentos chama `super(null)`; sem campo `id` nem `map`; citar `id` em um construtor fixa a posicao do parametro, que sem
+# isso e o ultimo) e `inner` (classes aninhadas, no mesmo formato, com nome unico
+# no recurso). O tipo de um campo pode ser o proprio recurso ou o caminho qualificado de uma classe interna dele
+# (`PaymentRequest.Log.User`), mas esse tipo nao entra em `map`. Medido contra sdk-java f60902a; valida-se contra o real em tests/test_java_field_types.py, nos dois sentidos.
+# PaymentRequest.Log nao e um javaLogs: nao tem get/query/page (e o PaymentRequest nao tem `x-sdk-log`), entao e uma classe
+# interna que estende Resource, com a User aninhada; e dele que o Event tira o tipo do log da subscription payment-request.
+# Transfer.Rule e uma classe simples como as outras: o `Deserializer` aninhado do real nao e gerado e segue dispensado
+# em apis/java-handwritten.yaml. O VerifiedTransfer usa `List<Transfer.Rule>` (javaTypes) sem declarar a classe.
+# Event.Attempt tem tambem as operacoes get/query/page: o recurso com `x-sdk-nested: Attempt` na spec as imprime dentro da
+# classe interna de mesmo nome, que precisa ter `classData`; a doc de cada uma vem de `x-sdk-docs.attempt` (o subpacote do sdk-python).
+# Fora (outras entregas): Page dentro de Log (ME 9.4), Transfer.Rule.Deserializer, PaymentRequest.Deserializer,
+# MerchantSession.Purchase e o Deserializer do Event (ME 9.8).
+javaInnerClasses:
+  Boleto:
+    Description:
+      fields: {text: String, amount: Integer}
+      constructors: [[text], [text, amount], []]
+    Discount:
+      fields: {date: String, percentage: Number}
+      constructors: [[date, percentage], []]
+  BrcodePayment:
+    Rule:
+      fields: {key: String, value: Number}
+      constructors: [[key, value], []]
+      map: [key, value]
+  CorporateHolder:
+    Permission:
+      fields: {ownerId: String, ownerType: String, ownerEmail: String, ownerName: String, ownerPictureUrl: String,
+        ownerStatus: String, created: String}
+      constructors: [[ownerId, ownerType, ownerEmail, ownerName, ownerPictureUrl, ownerStatus, created]]
+      map: [ownerId, ownerType]
+  DynamicBrcode:
+    Rule:
+      fields: {key: String, value: "String[]"}
+      constructors: [[key, value], []]
+      map: [key, value]
+  Event:
+    Attempt:
+      extends: Resource
+      fields: {code: String, message: String, eventId: String, webhookId: String, created: String}
+      constructors: [[id, code, message, eventId, webhookId, created], []]
+      classData: EventAttempt
+      classDataType: short
+  Invoice:
+    Description:
+      fields: {key: String, value: String}
+      constructors: [[key, value], []]
+    Discount:
+      fields: {percentage: Number, due: String}
+      constructors: [[percentage, due], []]
+    Payment:
+      fields: {amount: Integer, name: String, taxId: String, bankCode: String, branchCode: String,
+        accountNumber: String, accountType: String, endToEndId: String, method: String}
+      constructors: [[amount, name, taxId, bankCode, branchCode, accountNumber, accountType, endToEndId, method], []]
+      classData: Payment
+      classDataType: short
+    Rule:
+      fields: {key: String, value: "String[]"}
+      constructors: [[key, value]]
+      map: [key, value]
+  MerchantSession:
+    AllowedInstallment:
+      fields: {totalAmount: long, count: int}
+      constructors: [[totalAmount, count]]
+      final: false
+      classData: AllowedInstallments
+      classDataType: qualified
+  PaymentRequest:
+    Action:
+      fields: {name: String, action: String, type: String, id: String}
+      constructors: [[name, action, type, id], []]
+    Log:
+      extends: Resource
+      fields: {created: String, updated: String, type: String, errors: "String[]", request: PaymentRequest,
+        user: PaymentRequest.Log.User}
+      constructors: [[created, updated, type, errors, request, user], []]
+      classData: PaymentRequestLog
+      classDataType: short
+      inner:
+        User:
+          fields: {email: String, id: String, name: String, pictureUrl: String, status: String, type: String}
+          constructors: [[email, id, name, pictureUrl, status, type], []]
+  Transfer:
+    Rule:
+      fields: {key: String, value: Object}
+      constructors: [[key, value], []]
+      map: [key, value]
+
+# Forma do Log interno, Recurso -> {names, errors, classData}, as tres chaves obrigatorias, mais duas opcionais. O real nao e
+# uniforme (medido contra sdk-java f60902a, 24 recursos com Log; 22 aqui, os 2 de forma propria ficam fora, ver
+# LOG_EXCLUSIONS em tests/test_java_logs.py):
+#   names:  `short` escreve `Log get(String id)`, `Generator<Log>`, `Log.Page page()`, `List<Log> logs` e `new Log.Page(...)`
+#           (13 de 22); `qualified` escreve `Recurso.Log`, `Recurso.Log.Page` e `new Page(...)` (9 de 22), que e o que o
+#           template emitia antes e segue valendo para recurso sem entrada.
+#   errors: tipo do campo e do parametro do construtor all-args do Log: `String[]` (13 de 22), `List<ErrorElement>` (6) ou
+#           `none` (3), sem campo, sem parametro e sem `@param errors`. So `List<ErrorElement>` importa ErrorElement.
+#   classData: a linha `static ClassData data = new ClassData(<X>.class, ...)` do Log: `short` escreve `Log.class` (11 de 22) e
+#           `qualified` `Recurso.Log.class` (11 de 22, o que o template emitia). E um eixo a parte dos nomes: DarfPayment e
+#           TaxPayment usam nomes `short` e `Recurso.Log.class`.
+#   extraFields: (opcional) campo String do Log alem de created, type, errors, entidade e id, nome -> texto da linha `@param`
+#           do Javadoc do ctor (a descricao vem do docstring do Log no sdk-python). Declarado depois da entidade e
+#           atribuido pelo ctor all-args (BoletoHolmes `updated`, CorporatePurchase `description` e `corporateTransactionId`).
+#   ctor:   (opcional) ordem dos parametros do ctor all-args, uma permutacao de created, type, [errors], nome da entidade,
+#           id e dos extras. Sem a chave vale created, type, [errors], entidade, id e os extras, o que o template emitia.
+# Valida-se contra o real em tests/test_java_logs.py (cada entrada e o real, extras e ordem do ctor inclusos; todo Log do real
+# que o modelo escreve esta aqui).
+javaLogs:
+  Boleto: {names: short, errors: "String[]", classData: short}
+  BoletoHolmes:
+    names: short
+    errors: none
+    classData: short
+    extraFields: {updated: latest update datetime for the log}
+  BoletoPayment: {names: short, errors: "String[]", classData: short}
+  BrcodePayment: {names: short, errors: "String[]", classData: short}
+  CorporateCard: {names: qualified, errors: none, classData: qualified}
+  CorporateHolder: {names: qualified, errors: none, classData: qualified}
+  CorporatePurchase:
+    names: qualified
+    errors: "List<ErrorElement>"
+    classData: qualified
+    extraFields:
+      description: 'purchase descriptions. ex: "my_description"'
+      corporateTransactionId: transaction ID related to the CorporateCard.
+    ctor: [created, type, errors, purchase, description, id, corporateTransactionId]
+  DarfPayment: {names: short, errors: "String[]", classData: qualified}
+  Deposit: {names: short, errors: "String[]", classData: short}
+  Invoice: {names: short, errors: "String[]", classData: short}
+  InvoicePullRequest: {names: short, errors: "String[]", classData: short}
+  InvoicePullSubscription: {names: short, errors: "String[]", classData: short}
+  MerchantCard: {names: qualified, errors: "String[]", classData: qualified}
+  MerchantPurchase: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  MerchantSession: {names: qualified, errors: "String[]", classData: qualified}
+  Split: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  SplitProfile: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  SplitReceiver: {names: qualified, errors: "List<ErrorElement>", classData: qualified}
+  TaxPayment: {names: short, errors: "String[]", classData: qualified}
+  Transfer: {names: short, errors: "String[]", classData: short}
+  UtilityPayment: {names: short, errors: "String[]", classData: short}
+  VerifiedAccount: {names: short, errors: "List<ErrorElement>", classData: short}
+
+# Forma da Page externa, Recurso -> {listName, names}, as duas chaves obrigatorias, so para recurso com `x-sdk-page` cuja Page
+# real difere do default {listName: <recurso em lowerCamel>+"s", names: short}, que e o que o template emitia antes da secao
+# existir e vale para recurso sem entrada (uma entrada igual ao default e redundante e o teste a recusa). Medido contra
+# sdk-java f60902a:
+#   listName: o campo `public List<X> <listName>` da Page, o parametro do ctor, a lista local de page(Map, User) e o
+#             `Recurso.Page.<listName>` do Javadoc de retorno (BoletoPayment e outros 5 `payments`, DictKey `keys`...).
+#   names:    `short` escreve `Page page()` nos quatro overloads (o que o template emitia) e `qualified` `Recurso.Page`
+#             (8 de 32). O `new Page(...)` do corpo nao e comparado e compila nos dois casos, entao nao tem eixo.
+#   qualifiedOverloads: (opcional) so com `names: short`: as sobrecargas que o real qualifica com `Recurso.Page` enquanto as
+#             outras ficam `Page` (lista nao vazia, sem repeticao, de params = page(Map), user = page(User),
+#             plain = page(), paramsUser = page(Map, User)); com `names: qualified` seria redundante e e recusada.
+#             Hoje so UtilityPayment, com [params].
+# Fora da secao: o parametro `MerchantInstallments` (M maiuscula) do ctor da Page de MerchantInstallment, desvio de um so
+# ponto do real que nao e um eixo. Valida-se contra o real em tests/test_java_pages.py, nos dois sentidos.
+javaPages:
+  BoletoHolmes: {listName: holmes, names: short}
+  BoletoPayment: {listName: payments, names: short}
+  BrcodePayment: {listName: payments, names: short}
+  CorporateCard: {listName: cards, names: short}
+  CorporateHolder: {listName: holders, names: qualified}
+  CorporateInvoice: {listName: invoices, names: short}
+  CorporatePurchase: {listName: corporatePurchases, names: qualified}
+  CorporateTransaction: {listName: corporateTransactions, names: qualified}
+  CorporateWithdrawal: {listName: withdrawals, names: qualified}
+  DarfPayment: {listName: payments, names: short}
+  DictKey: {listName: keys, names: short}
+  DynamicBrcode: {listName: brcodes, names: short}
+  InvoicePullRequest: {listName: requests, names: short}
+  InvoicePullSubscription: {listName: subscriptions, names: short}
+  MerchantCard: {listName: merchantCards, names: qualified}
+  MerchantInstallment: {listName: merchantInstallments, names: qualified}
+  MerchantPurchase: {listName: merchantPurchases, names: qualified}
+  MerchantSession: {listName: merchantSessions, names: qualified}
+  PaymentRequest: {listName: requests, names: short}
+  TaxPayment: {listName: payments, names: short}
+  UtilityPayment: {listName: payments, names: short, qualifiedOverloads: [params]}
+  VerifiedAccount: {listName: verifiedAccounts, names: qualified}
+
+# Subclasses e Deserializer do Event, Recurso -> {subscriptions, gson}. O real escreve, para cada `subscription` do
+# webhook, uma classe `<Recurso>Event` (campo `log` do tipo `<Recurso>.Log`, construtor all-args e sem argumentos) e um
+# `case` no Deserializer; o dado e a lista ordenada das subscriptions em kebab-case, e o nome do recurso, da classe e do
+# tipo do log saem dela (`boleto-holmes` -> BoletoHolmes -> BoletoHolmesEvent, BoletoHolmes.Log), entao cada
+# subscription tem de dar um recurso gerado e nenhum nome se repete. A classe `Unknown<Recurso>` (log `JsonObject`) e o
+# `default` do switch sao fixos. Os parametros do construtor das subclasses sao os da base (javaConstructorOrder).
+#   subscriptions: (obrigatorio) as subscriptions na ordem do switch do real, sem repeticao.
+#   gson:          (opcional) as subscriptions que o real deserializa com `GsonEvent.getInstance().fromJson(...)` em vez de
+#                  `context.deserialize(...)`; subconjunto de subscriptions (payment-request).
+# Valida-se contra o real em tests/test_java_events.py, nos dois sentidos. O Attempt do Event e gerado a parte: classe
+# interna em javaInnerClasses.Event.Attempt, com as operacoes que a flag `x-sdk-nested` do Event pede.
+javaEvents:
+  Event:
+    subscriptions: [transfer, boleto, boleto-payment, utility-payment, boleto-holmes, invoice, deposit, brcode-payment,
+      tax-payment, darf-payment, invoice-pull-subscription, invoice-pull-request, verified-account, payment-request,
+      merchant-purchase, merchant-session, merchant-installment, merchant-card]
+    gson: [payment-request]
+
+# Recursos cujo `SubResource` importado e o legado `com.starkbank.utils.SubResource`, que o real so usa no MerchantSession
+# (medido contra sdk-java f60902a; os demais que importam SubResource usam `com.starkcore.utils.SubResource`). A classe interna estende o
+# legado e o `for` sobre `page.entities`, que sao do starkcore, escreve o nome qualificado, como o real. So vale para
+# recurso que importa SubResource. Valida-se contra o real em tests/test_java_legacy_subresource.py.
+javaLegacySubResource:
+  - MerchantSession
+
+# `create` em lista que o real escreve devolvendo `List<?>` e com o parametro de outro nome (PaymentPreview: `previews`).
+# Sem entrada o create devolve List<Recurso> e o parametro e o do recurso no plural. Vale so sem `expand`.
+javaCreateShapes:
+  PaymentPreview: {returns: wildcard, param: previews}
+
+# `query` de subrecurso que o real escreve em lista, Recurso -> {returns, classData}, as duas chaves obrigatorias. E uma
+# convencao do real, nao do sdk-python (que so tem `query`): o corpo le uma pagina com Rest.getPage, copia as entidades para
+# uma `List<Recurso>` e a devolve pelo campo da `private final static class Page`, no lugar do `Generator` do template.
+# Sem entrada o recurso segue com o `Generator<Recurso> query` e o `SubResource.ClassData`.
+#   returns:   `list` troca as quatro sobrecargas de `query` por `List<Recurso>` (ordem do real: plain, params, user,
+#              params+user), emite a Page privada e tira o import de Generator. So vale para recurso com x-sdk-subresource e
+#              x-sdk-query e sem x-sdk-page.
+#   classData: `short` escreve `ClassData` no lugar de `SubResource.ClassData` (o real herda o nome de SubResource).
+# Valida-se contra o real em tests/test_java_query_shapes.py: Institution e o unico recurso do real com essa forma.
+javaQueryShapes:
+  Institution: {returns: list, classData: short}
+
+# Parametro que o sdk-python recebe e o Java nao pode receber, Recurso -> operacao -> parametro -> nota. O java-docs nao
+# lista o parametro nos `@param` e acrescenta a nota (uma linha de Javadoc, sem `*/` nem barra invertida) ao texto de
+# descricao. O parametro tem de existir na doc da operacao e ser opcional, nunca `id` nem `user`; a operacao some das
+# regras de sobrecarga com Map (get, pdf e qrcode) como se nao o tivesse.
+# Sem entradas hoje: o sdk-java real ainda omite o `size` do Invoice.qrcode, mas o gerado o expoe como o Python o declara.
+# O mecanismo segue testado com secoes sinteticas (tests/test_java_qrcode.py); nunca o use para copiar uma
+# omissao do real.
+javaOmittedOperationParams: {}

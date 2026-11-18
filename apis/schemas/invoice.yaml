@@ -275,6 +275,25 @@ components:
               section: "optional"
           returns:
             - "Invoice pdf file"
+        qrcode:
+          summary: "Retrieve a specific Invoice QR Code png"
+          description:
+            - "Receive a single Invoice QR Code in png format generated in the Stark Bank API by the invoice ID."
+          params:
+            - name: "id"
+              type: "string"
+              description: "object unique id. ex: \"5656565656565656\""
+              section: "required"
+            - name: "size"
+              type: "integer, default 7"
+              description: "number of pixels in each \"box\" of the QR code. Minimum = 1, maximum = 50. ex: 12"
+              section: "optional"
+            - name: "user"
+              type: "Organization/Project object, default None"
+              description: "Organization or Project object. Not necessary if starkbank.user was set before function call"
+              section: "optional"
+          returns:
+            - "Invoice png blob"
         log:
           get:
             summary: "Retrieve a specific invoice.Log"

@@ -6,6 +6,7 @@ import sys
 import yaml
 import argparse
 import subprocess
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,6 +17,54 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONVENTIONS_FILE = REPO_ROOT / "apis/type-conventions.yaml"
+SCHEMAS_DIR = REPO_ROOT / "apis/schemas"
+
+# Valores aceitos do javaLogs; o default e a saida do template antes da secao existir e vale para recurso sem entrada
+JAVA_LOG_VALUES = {
+    "names": ("short", "qualified"),
+    "errors": ("String[]", "List<ErrorElement>", "none"),
+    "classData": ("short", "qualified"),
+}
+JAVA_LOG_DEFAULT = {"names": "qualified", "errors": "List<ErrorElement>", "classData": "qualified"}
+# Opcionais: ausentes, o Log e o de hoje. `data` e o ClassData estatico do Log, nome que um campo extra nao pode tomar.
+JAVA_LOG_OPTIONAL_KEYS = ("extraFields", "ctor")
+JAVA_LOG_RESERVED_FIELDS = frozenset({"created", "type", "errors", "id", "data"})
+
+# Chaves e valores do javaPages; o default (campo `<recurso>s`, retorno `Page`) e a saida do template antes da secao existir.
+# Os nomes reservados sao locais de page(Map, User) e o campo `cursor`, que um listName igual nao compilaria.
+JAVA_PAGE_KEYS = ("listName", "names")
+# Opcional: as sobrecargas de page() que o real qualifica (`Recurso.Page`) com `names: short` (params = page(Map), user =
+# page(User), plain = page(), paramsUser = page(Map, User)); a ordem e a canonica do template.
+JAVA_PAGE_OPTIONAL_KEYS = ("qualifiedOverloads",)
+JAVA_PAGE_OVERLOADS = ("params", "user", "plain", "paramsUser")
+JAVA_PAGE_NAMES = ("short", "qualified")
+JAVA_PAGE_RESERVED = frozenset({"cursor", "page", "params", "user"})
+# Palavras reservadas e literais do Java: como campo, parametro ou local so falhariam no javac, sem nomear a chave.
+JAVA_RESERVED_WORDS = frozenset({
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const", "continue", "default",
+    "do", "double", "else", "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import",
+    "instanceof", "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return",
+    "short", "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try",
+    "void", "volatile", "while", "true", "false", "null",
+})
+
+JAVA_TYPE_INFERENCE_KEYS = ("field", "from", "mapping", "message")
+
+# Valores aceitos do javaQueryShapes; a ausencia de entrada e o `query` em Generator com o ClassData qualificado do template.
+JAVA_QUERY_VALUES = {"returns": ("list",), "classData": ("short",)}
+
+# Valores aceitos do javaCreateShapes; a ausencia de entrada e o `create` em lista que devolve List<Recurso>.
+JAVA_CREATE_RETURNS = ("wildcard",)
+JAVA_CREATE_KEYS = ("returns", "param")
+
+# Parametros que a assinatura Java sempre tem, entao a secao javaOmittedOperationParams nao os omite.
+JAVA_OMITTED_PARAM_PROTECTED = frozenset({"id", "user"})
+
+# Chaves do javaEvents e o formato de uma subscription (kebab-case minusculo: dele sai o nome do recurso, `boleto-holmes`
+# -> BoletoHolmes). O default de `gson` e nenhuma subscription.
+JAVA_EVENT_KEYS = ("subscriptions", "gson")
+JAVA_EXTRA_FIELD_KEYS = frozenset({"type", "description"})
+JAVA_EVENT_SUBSCRIPTION = re.compile(r"[a-z]+(?:-[a-z]+)*")
 
 VENDORED_ROOT = Path("_references/sdk-python")
 
@@ -43,8 +92,10 @@ _OPERATION_SECTIONS = {
 _RETURN_SECTION = "## Return:"
 
 _ITEM_HEAD = re.compile(r"^-\s+(\w+)\s+\[")
-_FIELD = re.compile(r"^-\s+(\w+)\s+\[(.+)\]\s*:\s*(.*)$")
+_FIELD = re.compile(r"^-\s+(\w+(?:\s*/\s*\w+)*)\s+\[(.+)\]\s*:\s*(.*)$")
 _OPTIONS = re.compile(r"Options:\s*(.+)$")
+
+SUBRESOURCE_FLAG = "x-sdk-subresource"
 
 OPERATION_FLAGS = {
     "create": "x-sdk-create",
@@ -56,6 +107,8 @@ OPERATION_FLAGS = {
     "update": "x-sdk-update",
     "pdf": "x-sdk-pdf",
     "cancel": "x-sdk-cancel",
+    "parse": "x-sdk-parse",
+    "qrcode": "x-sdk-qrcode",
 }
 
 TYPES = {
@@ -98,6 +151,432 @@ def integerFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | Non
     return (loadConventions(Path(conventions)).get("integerFormats") or {}).get(field)
 
 
+def javaTypeOverrides(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    return (loadConventions(Path(conventions)).get("javaTypes") or {}).get(resource) or {}
+
+
+def javaOpenClass(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
+    openClasses = loadConventions(Path(conventions)).get("javaOpenClasses") or []
+    checkKnownResources("javaOpenClasses", openClasses)
+    return resource in openClasses
+
+
+def javaLegacySubResource(resource: str, conventions: Path = CONVENTIONS_FILE) -> bool:
+    legacy = loadConventions(Path(conventions)).get("javaLegacySubResource") or []
+    if not isinstance(legacy, list):
+        raise ValueError("javaLegacySubResource deve ser uma lista de recursos")
+    checkKnownResources("javaLegacySubResource", legacy)
+    return resource in legacy
+
+
+def javaConstructorOrder(resource: str, conventions: Path = CONVENTIONS_FILE) -> list | None:
+    orders = loadConventions(Path(conventions)).get("javaConstructorOrder") or {}
+    checkKnownResources("javaConstructorOrder", orders)
+    return orders.get(resource)
+
+
+def javaConstructorTypes(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    types = loadConventions(Path(conventions)).get("javaConstructorTypes") or {}
+    checkKnownResources("javaConstructorTypes", types)
+    return types.get(resource) or {}
+
+
+def javaTypeInference(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    inferences = loadConventions(Path(conventions)).get("javaTypeInference") or {}
+    if not isinstance(inferences, dict):
+        raise ValueError("javaTypeInference deve ser um mapa recurso -> {field, from, mapping, message}")
+    checkKnownResources("javaTypeInference", inferences)
+    for name, inference in inferences.items():
+        checkTypeInference(name, inference)
+    return inferences.get(resource)
+
+
+def checkTypeInference(resource: str, inference) -> None:
+    if not isinstance(inference, dict):
+        raise ValueError(f"{resource}: javaTypeInference deve ser um mapa {{field, from, mapping, message}}, veio {inference!r}")
+    unknown = sorted(str(key) for key in set(inference) - set(JAVA_TYPE_INFERENCE_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaTypeInference chave desconhecida: {unknown[0]}")
+    for key in JAVA_TYPE_INFERENCE_KEYS:
+        if key not in inference:
+            raise ValueError(f"{resource}: javaTypeInference.{key} ausente")
+    for key in ("field", "from"):
+        if not isFieldName(inference[key], JAVA_RESERVED_WORDS):
+            raise ValueError(
+                f"{resource}: javaTypeInference.{key} invalido: {inference[key]!r}, esperado um identificador lowerCamel"
+            )
+    checkTypeInferenceMapping(resource, inference["mapping"])
+    message = inference["message"]
+    if not isinstance(message, str) or not message.strip() or re.search(r'["\\\r\n]', message):
+        raise ValueError(
+            f"{resource}: javaTypeInference.message invalida: {message!r}, esperado texto de uma linha sem aspas duplas nem barra invertida"
+        )
+
+
+def checkTypeInferenceMapping(resource: str, mapping) -> None:
+    if not isinstance(mapping, dict) or not mapping:
+        raise ValueError(f"{resource}: javaTypeInference.mapping deve ser um mapa nao vazio classe -> valor, veio {mapping!r}")
+    for className, value in mapping.items():
+        if not isinstance(className, str) or not re.fullmatch(r"[A-Z][A-Za-z0-9]*", className):
+            raise ValueError(f"{resource}: javaTypeInference.mapping classe invalida: {className!r}")
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", value):
+            raise ValueError(
+                f"{resource}: javaTypeInference.mapping.{className} valor invalido: {value!r}, esperado kebab-case"
+            )
+    repeated = sorted(value for value, count in Counter(mapping.values()).items() if count > 1)
+    if repeated:
+        raise ValueError(f"{resource}: javaTypeInference.mapping repete o valor {repeated[0]!r}")
+
+
+def javaInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    classes = loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    checkKnownResources("javaInnerClasses", classes)
+    return classes.get(resource) or {}
+
+
+def javaLogShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    shapes = loadConventions(Path(conventions)).get("javaLogs") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaLogs deve ser um mapa recurso -> {names, errors, classData}")
+    checkKnownResources("javaLogs", shapes)
+    for name, shape in shapes.items():
+        checkLogShape(name, shape)
+    return shapes.get(resource) or JAVA_LOG_DEFAULT
+
+
+def checkLogShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaLogs deve ser um mapa {{names, errors, classData}}, veio {shape!r}")
+    for field, allowed in JAVA_LOG_VALUES.items():
+        if field not in shape:
+            raise ValueError(f"{resource}: javaLogs.{field} ausente")
+        if not isinstance(shape[field], str) or shape[field] not in allowed:
+            raise ValueError(f"{resource}: javaLogs.{field} invalido: {shape[field]!r}, esperado um de {list(allowed)}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_LOG_VALUES) - set(JAVA_LOG_OPTIONAL_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaLogs chave desconhecida: {unknown[0]}")
+    if "extraFields" in shape:
+        checkLogExtraFields(resource, shape["extraFields"])
+    if "ctor" in shape:
+        checkLogCtor(resource, shape["ctor"])
+
+
+def checkLogExtraFields(resource: str, extraFields) -> None:
+    if not isinstance(extraFields, dict):
+        raise ValueError(f"{resource}: javaLogs.extraFields deve ser um mapa nome -> descricao, veio {extraFields!r}")
+    reserved = JAVA_LOG_RESERVED_FIELDS | JAVA_RESERVED_WORDS
+    for name, description in extraFields.items():
+        if not isFieldName(name, reserved):
+            raise ValueError(
+                f"{resource}: javaLogs.extraFields nome invalido: {name!r}, esperado um identificador lowerCamel fora de "
+                f"{sorted(JAVA_LOG_RESERVED_FIELDS)} e das palavras reservadas do Java"
+            )
+        if not isJavadocLine(description):
+            raise ValueError(
+                f"{resource}: javaLogs.extraFields.{name} descricao invalida: {description!r}, "
+                "esperado texto de uma linha sem '*/' nem barra invertida"
+            )
+
+
+def isFieldName(name, reserved=frozenset()) -> bool:
+    """Identificador lowerCamel que o Java aceita como campo: a regex mais o conjunto de nomes proibidos do chamador."""
+    return isinstance(name, str) and bool(re.fullmatch(r"[a-z][A-Za-z0-9]*", name)) and name not in reserved
+
+
+def isJavadocLine(description) -> bool:
+    """A descricao vai para uma linha de `@param` do Javadoc: quebra de linha ou `*/` a partiria ou a fecharia, e o javac
+    traduz `*/` em `*/` antes de ler o comentario, entao a barra invertida tambem fecharia."""
+    return isinstance(description, str) and bool(description.strip()) and not re.search(r"[\r\n\\]|\*/", description)
+
+
+def checkLogCtor(resource: str, order) -> None:
+    if not isinstance(order, list) or not order:
+        raise ValueError(f"{resource}: javaLogs.ctor deve ser uma lista nao vazia de nomes de parametro, veio {order!r}")
+    seen = set()
+    for name in order:
+        if not isinstance(name, str):
+            raise ValueError(f"{resource}: javaLogs.ctor nome invalido: {name!r}, esperado texto")
+        if name in seen:
+            raise ValueError(f"{resource}: javaLogs.ctor repete {name!r}")
+        seen.add(name)
+
+
+def javaOmittedFields(resource: str, conventions: Path = CONVENTIONS_FILE) -> list:
+    omitted = loadConventions(Path(conventions)).get("javaOmittedFields") or {}
+    if not isinstance(omitted, dict):
+        raise ValueError("javaOmittedFields deve ser um mapa recurso -> lista de campos")
+    checkKnownResources("javaOmittedFields", omitted)
+    for name, fields in omitted.items():
+        checkOmittedFields(name, fields)
+    return omitted.get(resource) or []
+
+
+def checkOmittedFields(resource: str, fields) -> None:
+    if not isinstance(fields, list) or not fields:
+        raise ValueError(f"{resource}: javaOmittedFields deve ser uma lista nao vazia de campos, veio {fields!r}")
+    seen = set()
+    for field in fields:
+        if not isFieldName(field):
+            raise ValueError(f"{resource}: javaOmittedFields campo invalido: {field!r}, esperado um identificador lowerCamel")
+        if field in seen:
+            raise ValueError(f"{resource}: javaOmittedFields repete {field!r}")
+        seen.add(field)
+
+
+def javaExtraFields(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    extras = loadConventions(Path(conventions)).get("javaExtraFields") or {}
+    if not isinstance(extras, dict):
+        raise ValueError("javaExtraFields deve ser um mapa recurso -> {campo: {type, description}}")
+    checkKnownResources("javaExtraFields", extras)
+    for name, fields in extras.items():
+        checkExtraFields(name, fields)
+    return extras.get(resource) or {}
+
+
+def checkExtraFields(resource: str, fields) -> None:
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError(f"{resource}: javaExtraFields deve ser um mapa nome -> {{type, description}}, veio {fields!r}")
+    for name, spec in fields.items():
+        if not isFieldName(name, JAVA_RESERVED_WORDS):
+            raise ValueError(
+                f"{resource}: javaExtraFields nome invalido: {name!r}, esperado um identificador lowerCamel que nao "
+                "seja palavra reservada do Java"
+            )
+        checkExtraField(resource, name, spec)
+
+
+def checkExtraField(resource: str, name: str, spec) -> None:
+    if not isinstance(spec, dict):
+        raise ValueError(f"{resource}.{name}: javaExtraFields deve ser um mapa {{type, description}}, veio {spec!r}")
+    unknown = sorted(str(key) for key in set(spec) - JAVA_EXTRA_FIELD_KEYS)
+    if unknown:
+        raise ValueError(f"{resource}.{name}: javaExtraFields chave desconhecida: {unknown[0]}")
+    if "type" not in spec:
+        raise ValueError(f"{resource}.{name}: javaExtraFields.type ausente")
+    if not isinstance(spec["type"], str) or not spec["type"].strip():
+        raise ValueError(f"{resource}.{name}: javaExtraFields.type invalido: {spec['type']!r}, esperado texto")
+    if "description" in spec and not isJavadocLine(spec["description"]):
+        raise ValueError(
+            f"{resource}.{name}: javaExtraFields.description invalida: {spec['description']!r}, "
+            "esperado texto de uma linha sem '*/' nem barra invertida"
+        )
+
+
+def javaOtherInnerClasses(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    """As classes internas dos demais recursos, por nome qualificado (`Transfer.Rule`): o campo `List<Transfer.Rule>` do
+    VerifiedTransfer usa a classe sem declara-la."""
+    classes = loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    checkKnownResources("javaInnerClasses", classes)
+    return {f"{outer}.{name}": definition
+            for outer, inner in classes.items() if outer != resource
+            for name, definition in (inner or {}).items()}
+
+
+def javaEventShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    shapes = loadConventions(Path(conventions)).get("javaEvents") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaEvents deve ser um mapa recurso -> {subscriptions, gson}")
+    checkKnownResources("javaEvents", shapes)
+    normalized = {name: checkEventShape(name, shape) for name, shape in shapes.items()}
+    return normalized.get(resource)
+
+
+def checkEventShape(resource: str, shape) -> dict:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaEvents deve ser um mapa {{subscriptions, gson}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_EVENT_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaEvents chave desconhecida: {unknown[0]}")
+    if "subscriptions" not in shape:
+        raise ValueError(f"{resource}: javaEvents.subscriptions ausente")
+    subscriptions = checkEventSubscriptions(resource, "subscriptions", shape["subscriptions"], isRequired=True)
+    gson = checkEventSubscriptions(resource, "gson", shape.get("gson", []), isRequired=False)
+    outside = [subscription for subscription in gson if subscription not in subscriptions]
+    if outside:
+        raise ValueError(f"{resource}: javaEvents.gson {outside[0]!r} nao esta em subscriptions")
+    return {"subscriptions": subscriptions, "gson": gson}
+
+
+def checkEventSubscriptions(resource: str, key: str, subscriptions, isRequired: bool) -> list:
+    if not isinstance(subscriptions, list) or (isRequired and not subscriptions):
+        qualifier = "nao vazia " if isRequired else ""
+        raise ValueError(f"{resource}: javaEvents.{key} deve ser uma lista {qualifier}de subscriptions, veio {subscriptions!r}")
+    seen = set()
+    for subscription in subscriptions:
+        if not isinstance(subscription, str) or not JAVA_EVENT_SUBSCRIPTION.fullmatch(subscription):
+            raise ValueError(
+                f"{resource}: javaEvents.{key} subscription invalida: {subscription!r}, esperado kebab-case minusculo"
+            )
+        if subscription in seen:
+            raise ValueError(f"{resource}: javaEvents.{key} repete {subscription!r}")
+        seen.add(subscription)
+    return subscriptions
+
+
+def javaPageShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    shapes = loadConventions(Path(conventions)).get("javaPages") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaPages deve ser um mapa recurso -> {listName, names}")
+    checkKnownResources("javaPages", shapes)
+    for name, shape in shapes.items():
+        checkPageShape(name, shape)
+    return shapes.get(resource) or {"listName": f"{lowerFirst(resource)}s", "names": "short"}
+
+
+def checkPageShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaPages deve ser um mapa {{listName, names}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_PAGE_KEYS) - set(JAVA_PAGE_OPTIONAL_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaPages chave desconhecida: {unknown[0]}")
+    for key in JAVA_PAGE_KEYS:
+        if key not in shape:
+            raise ValueError(f"{resource}: javaPages.{key} ausente")
+    listName = shape["listName"]
+    reserved = JAVA_PAGE_RESERVED | JAVA_RESERVED_WORDS | {lowerFirst(resource)}
+    if not isinstance(listName, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", listName) or listName in reserved:
+        raise ValueError(
+            f"{resource}: javaPages.listName invalido: {listName!r}, esperado um identificador fora de "
+            f"{sorted(JAVA_PAGE_RESERVED | {lowerFirst(resource)})} e das palavras reservadas do Java"
+        )
+    if not isinstance(shape["names"], str) or shape["names"] not in JAVA_PAGE_NAMES:
+        raise ValueError(f"{resource}: javaPages.names invalido: {shape['names']!r}, esperado um de {list(JAVA_PAGE_NAMES)}")
+    if "qualifiedOverloads" in shape:
+        checkQualifiedOverloads(resource, shape)
+
+
+def checkQualifiedOverloads(resource: str, shape: dict) -> None:
+    overloads = shape["qualifiedOverloads"]
+    if not isinstance(overloads, list) or not overloads:
+        raise ValueError(f"{resource}: javaPages.qualifiedOverloads invalido: {overloads!r}, esperado uma lista nao vazia")
+    if shape["names"] == "qualified":
+        raise ValueError(f"{resource}: javaPages.qualifiedOverloads e redundante com names: qualified")
+    seen = set()
+    for overload in overloads:
+        if not isinstance(overload, str) or overload not in JAVA_PAGE_OVERLOADS:
+            raise ValueError(
+                f"{resource}: javaPages.qualifiedOverloads invalido: {overload!r}, esperado um de {list(JAVA_PAGE_OVERLOADS)}"
+            )
+        if overload in seen:
+            raise ValueError(f"{resource}: javaPages.qualifiedOverloads repete {overload!r}")
+        seen.add(overload)
+
+
+def javaQueryShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    shapes = loadConventions(Path(conventions)).get("javaQueryShapes") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaQueryShapes deve ser um mapa recurso -> {returns, classData}")
+    checkKnownResources("javaQueryShapes", shapes)
+    for name, shape in shapes.items():
+        checkQueryShape(name, shape)
+    return shapes.get(resource)
+
+
+def checkQueryShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaQueryShapes deve ser um mapa {{returns, classData}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_QUERY_VALUES))
+    if unknown:
+        raise ValueError(f"{resource}: javaQueryShapes chave desconhecida: {unknown[0]}")
+    for key, allowed in JAVA_QUERY_VALUES.items():
+        if key not in shape:
+            raise ValueError(f"{resource}: javaQueryShapes.{key} ausente")
+        if not isinstance(shape[key], str) or shape[key] not in allowed:
+            raise ValueError(f"{resource}: javaQueryShapes.{key} invalido: {shape[key]!r}, esperado um de {list(allowed)}")
+
+
+def javaCreateShape(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict | None:
+    """`{returns, param}` do create em lista que o real escreve devolvendo `List<?>` e com o parametro de outro nome."""
+    shapes = loadConventions(Path(conventions)).get("javaCreateShapes") or {}
+    if not isinstance(shapes, dict):
+        raise ValueError("javaCreateShapes deve ser um mapa recurso -> {returns, param}")
+    checkKnownResources("javaCreateShapes", shapes)
+    for name, shape in shapes.items():
+        checkCreateShape(name, shape)
+    return shapes.get(resource)
+
+
+def checkCreateShape(resource: str, shape) -> None:
+    if not isinstance(shape, dict):
+        raise ValueError(f"{resource}: javaCreateShapes deve ser um mapa {{returns, param}}, veio {shape!r}")
+    unknown = sorted(str(key) for key in set(shape) - set(JAVA_CREATE_KEYS))
+    if unknown:
+        raise ValueError(f"{resource}: javaCreateShapes chave desconhecida: {unknown[0]}")
+    for key in JAVA_CREATE_KEYS:
+        if key not in shape:
+            raise ValueError(f"{resource}: javaCreateShapes.{key} ausente")
+    if not isinstance(shape["returns"], str) or shape["returns"] not in JAVA_CREATE_RETURNS:
+        raise ValueError(
+            f"{resource}: javaCreateShapes.returns invalido: {shape['returns']!r}, esperado um de {list(JAVA_CREATE_RETURNS)}")
+    if not isinstance(shape["param"], str) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", shape["param"]):
+        raise ValueError(f"{resource}: javaCreateShapes.param invalido: {shape['param']!r}, esperado um identificador lowerCamelCase")
+
+
+def javaOmittedOperationParams(resource: str, conventions: Path = CONVENTIONS_FILE) -> dict:
+    """`{operacao: {parametro: nota}}` do recurso: o que o sdk-python recebe e o Java deixa de receber."""
+    omitted = loadConventions(Path(conventions)).get("javaOmittedOperationParams") or {}
+    if not isinstance(omitted, dict):
+        raise ValueError("javaOmittedOperationParams deve ser um mapa recurso -> operacao -> parametro -> nota")
+    checkKnownResources("javaOmittedOperationParams", omitted)
+    for name, operations in omitted.items():
+        checkOmittedOperationParams(name, operations)
+    return omitted.get(resource) or {}
+
+
+def checkOmittedOperationParams(resource: str, operations) -> None:
+    if not isinstance(operations, dict) or not operations:
+        raise ValueError(
+            f"{resource}: javaOmittedOperationParams deve ser um mapa operacao -> parametro -> nota, veio {operations!r}"
+        )
+    schemaDocs = loadFast((SCHEMAS_DIR / f"{resource.lower()}.yaml").read_text(encoding="utf-8"))
+    docs = (schemaDocs["components"]["schemas"][resource].get("x-sdk-docs")) or {}
+    for operation, parameters in operations.items():
+        key = f"{resource}.{operation}"
+        if not isinstance(operation, str) or not isinstance(docs.get(operation), dict):
+            raise ValueError(
+                f"{key}: javaOmittedOperationParams operacao sem x-sdk-docs em apis/schemas/{resource.lower()}.yaml"
+            )
+        if not isinstance(parameters, dict) or not parameters:
+            raise ValueError(f"{key}: javaOmittedOperationParams deve ser um mapa parametro -> nota, veio {parameters!r}")
+        sections = {param.get("name"): param.get("section") for param in docs[operation].get("params") or []}
+        for parameter, note in parameters.items():
+            checkOmittedParam(f"{key}.{parameter}", parameter, note, sections)
+
+
+def checkOmittedParam(key: str, parameter, note, sections: dict) -> None:
+    if parameter in JAVA_OMITTED_PARAM_PROTECTED:
+        raise ValueError(f"{key}: javaOmittedOperationParams nao omite {parameter!r}, que a assinatura Java sempre tem")
+    if parameter not in sections:
+        raise ValueError(f"{key}: javaOmittedOperationParams parametro inexistente na doc da operacao")
+    if sections[parameter] == SECTION_REQUIRED:
+        raise ValueError(f"{key}: javaOmittedOperationParams nao omite o obrigatorio {parameter!r}")
+    if not isJavadocLine(note):
+        raise ValueError(
+            f"{key}: javaOmittedOperationParams nota invalida: {note!r}, esperado texto de uma linha sem '*/' nem barra invertida"
+        )
+
+
+def lowerFirst(name: str) -> str:
+    return f"{name[:1].lower()}{name[1:]}"
+
+
+@lru_cache(maxsize=None)
+def schemaResourceNames() -> frozenset:
+    """Nomes canonicos: no arquivo ha tambem `<Recurso>Create`, e o recurso e a chave que casa com o nome do arquivo."""
+    names = set()
+    for path in SCHEMAS_DIR.glob("*.yaml"):
+        schemas = (loadFast(path.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
+        names.update(name for name in schemas if name.lower() == path.stem)
+    return frozenset(names)
+
+
+def checkKnownResources(section: str, resources) -> None:
+    known = schemaResourceNames()
+    unknown = [name for name in resources if not isinstance(name, str) or name not in known]
+    if unknown:
+        raise ValueError(f"{unknown[0]}: {section} cita recurso que nao existe em apis/schemas")
+
+
 def stringFormat(field: str, conventions: Path = CONVENTIONS_FILE) -> str | None:
     return (loadConventions(Path(conventions)).get("stringFormats") or {}).get(field)
 
@@ -133,6 +612,17 @@ def exportedNames(initSource: str) -> list[str]:
     return names
 
 
+def declaredOperationNames(initFile: Path, moduleFile: Path) -> set:
+    """O sdk-python esqueceu de exportar `CorporatePurchase.page` no __init__ embora a funcao esteja definida no modulo
+    com docstring completa; o sdk-java real e o sdk-node tem a operacao, entao a definicao no modulo basta."""
+    names = {name for name in exportedNames(initFile.read_text(encoding="utf-8")) if name in OPERATION_FLAGS}
+    if not moduleFile.is_file():
+        return names
+    defined = {node.name for node in ast.parse(moduleFile.read_text(encoding="utf-8")).body
+               if isinstance(node, ast.FunctionDef)}
+    return names | (defined & OPERATION_FLAGS.keys())
+
+
 def declaredOperations(root: Path, resource: str) -> dict:
     module = resource.lower()
     package = Path(root) / "starkbank" / module
@@ -141,7 +631,8 @@ def declaredOperations(root: Path, resource: str) -> dict:
         return {"flags": [], "unsupported": [], "missingInit": True}
 
     exported = [name for name in exportedNames(initFile.read_text(encoding="utf-8")) if name[:1].islower()]
-    flags = sorted({OPERATION_FLAGS[name] for name in exported if name in OPERATION_FLAGS})
+    declared = declaredOperationNames(initFile, modulePath(root, resource))
+    flags = sorted({OPERATION_FLAGS[name] for name in declared})
     unsupported = sorted({name for name in exported if name not in OPERATION_FLAGS and name != "log"})
 
     if (package / "log").is_dir():
@@ -150,8 +641,64 @@ def declaredOperations(root: Path, resource: str) -> dict:
     if not flags:
         flags = ["x-sdk-data-only"]
 
+    nested = nestedResource(root, resource)
     return {"flags": flags, "unsupported": unsupported, "missingInit": False,
-            "logEntity": logEntity(root, resource)}
+            "logEntity": logEntity(root, resource), "subResource": inheritsSubResource(root, resource),
+            "nested": nested[1] if nested else None}
+
+
+def nestedResource(root: Path, resource: str) -> tuple[str, str] | None:
+    """(subpacote, classe) do recurso aninhado: o subpacote cujo `__init__` exporta operacoes (`rule` e
+    `allowedinstallment` nao exportam nada, entao ficam fora) e que o `__init__` do recurso importa por
+    `from .<sub>.__<sub> import Classe`. O `log` tem flag propria. Dois aninhados, ou um sem classe exportada, o
+    template nao sabe emitir: falha nomeando o recurso em vez de gerar so um deles."""
+    package = Path(root) / "starkbank" / resource.lower()
+    initFile = package / "__init__.py"
+    if not initFile.is_file():
+        return None
+
+    resourceInit = ast.parse(initFile.read_text(encoding="utf-8"))
+    found = []
+    for subpackage in sorted(package.iterdir()):
+        subInit = subpackage / "__init__.py"
+        if subpackage.name == "log" or not subInit.is_file():
+            continue
+        exported = exportedNames(subInit.read_text(encoding="utf-8"))
+        if not any(name in OPERATION_FLAGS for name in exported):
+            continue
+        classes = [alias.name for node in resourceInit.body
+                   if isinstance(node, ast.ImportFrom) and node.module == f"{subpackage.name}.__{subpackage.name}"
+                   for alias in node.names if alias.name[:1].isupper()]
+        if len(classes) != 1:
+            raise ValueError(f"{resource}: o subpacote {subpackage.name} exporta operacoes mas o __init__ do recurso "
+                             f"nao importa exatamente uma classe de {subpackage.name}.__{subpackage.name}")
+        found.append((subpackage.name, classes[0]))
+
+    if len(found) > 1:
+        raise ValueError(f"{resource}: mais de um subpacote aninhado com operacoes: "
+                         f"{', '.join(name for name, _ in found)}")
+    return found[0] if found else None
+
+
+def inheritsSubResource(root: Path, resource: str) -> bool:
+    """Base por nome no AST: o import varia (`starkcore.utils.resource` ou `.subresource`)."""
+    source = modulePath(root, resource)
+    if not source.is_file():
+        return False
+
+    try:
+        node = resourceClass(source.read_text(encoding="utf-8"), resource)
+    except LookupError:
+        return False
+    return any(baseName(base) == "SubResource" for base in node.bases)
+
+
+def baseName(base: ast.expr) -> str | None:
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return None
 
 
 def logEntity(root: Path, resource: str) -> str | None:
@@ -189,13 +736,13 @@ def collectDocs(initFile: Path, moduleFile: Path, label: str) -> dict:
     if not initFile.is_file() or not moduleFile.is_file():
         return {}
 
-    exported = set(exportedNames(initFile.read_text(encoding="utf-8")))
+    declared = declaredOperationNames(initFile, moduleFile)
     functions = {node.name: node for node in ast.parse(moduleFile.read_text(encoding="utf-8")).body
                  if isinstance(node, ast.FunctionDef)}
 
     docs = {}
     for name in OPERATION_FLAGS:
-        if name not in exported:
+        if name not in declared:
             continue
         doc = ast.get_docstring(functions[name]) if name in functions else None
         if not doc:
@@ -212,6 +759,12 @@ def declaredDocs(root: Path, resource: str) -> dict:
 
     docs = collectDocs(package / "__init__.py", modulePath(root, resource), resource)
     logDocs = collectDocs(package / "log" / "__init__.py", package / "log" / "__log.py", f"{resource}.log")
+    nested = nestedResource(root, resource)
+    if nested:
+        subpackage = nested[0]
+        docs = {**docs, subpackage: collectDocs(package / subpackage / "__init__.py",
+                                                package / subpackage / f"__{subpackage}.py",
+                                                f"{resource}.{subpackage}")}
     if not logDocs:
         return docs
     return {**docs, "log": logDocs}
@@ -360,6 +913,31 @@ def parseType(raw: str) -> dict:
     return resolved[0]
 
 
+def documentedField(pythonName: str, rawType: str, description: str, section: str) -> dict:
+    name = camelCase(pythonName)
+    schema = parseType(rawType)
+    if schema.get("type") == "integer":
+        fmt = integerFormat(name)
+        if fmt:
+            schema["format"] = fmt
+
+    options = declaredOptions(description)
+    if options and schema.get("type") == "string":
+        schema["enum"] = options
+
+    stringFmt = stringFormat(name)
+    if stringFmt and schema.get("type") == "string" and "format" not in schema:
+        schema["format"] = stringFmt
+
+    return {
+        "name": name,
+        "pythonName": pythonName,
+        "schema": schema,
+        "description": description.strip(),
+        "section": section,
+    }
+
+
 def parseDocstring(doc: str) -> tuple[str, list[dict]]:
     summary: list[str] = []
     fields: list[dict] = []
@@ -376,31 +954,10 @@ def parseDocstring(doc: str) -> tuple[str, list[dict]]:
                 summary.append(cleaned)
             continue
         match = _FIELD.match(line)
-        if match:
-            name = camelCase(match.group(1))
-            schema = parseType(match.group(2))
-            if schema.get("type") == "integer":
-                fmt = integerFormat(name)
-                if fmt:
-                    schema["format"] = fmt
-
-            options = declaredOptions(match.group(3))
-            if options and schema.get("type") == "string":
-                schema["enum"] = options
-
-            stringFmt = stringFormat(name)
-            if stringFmt and schema.get("type") == "string" and "format" not in schema:
-                schema["format"] = stringFmt
-
-            fields.append(
-                {
-                    "name": name,
-                    "pythonName": match.group(1),
-                    "schema": schema,
-                    "description": match.group(3).strip(),
-                    "section": section,
-                }
-            )
+        if not match:
+            continue
+        for pythonName in re.split(r"\s*/\s*", match.group(1)):
+            fields.append(documentedField(pythonName, match.group(2), match.group(3), section))
 
     return (" ".join(summary), fields)
 
@@ -542,10 +1099,10 @@ def renderDocs(docs: dict, indent: int) -> list[str]:
     pad = " " * indent
     lines = [f"{pad}x-sdk-docs:"]
     for name, parsed in docs.items():
-        if name == "log":
-            lines.append(f"{pad}  log:")
-            for logName, logParsed in parsed.items():
-                lines.extend(renderOperationDocs(logName, logParsed, indent + 4))
+        if "summary" not in parsed:
+            lines.append(f"{pad}  {name}:")
+            for innerName, innerParsed in parsed.items():
+                lines.extend(renderOperationDocs(innerName, innerParsed, indent + 4))
             continue
         lines.extend(renderOperationDocs(name, parsed, indent + 2))
     return lines
@@ -617,8 +1174,12 @@ def reportOperations(root: Path, resource: str) -> int:
 
     for flag in operations["flags"]:
         emit(f"{flag}: true")
+    if operations["subResource"]:
+        emit(f"{SUBRESOURCE_FLAG}: true")
     if operations["logEntity"]:
         emit(f"x-sdk-log-entity: {operations['logEntity']}")
+    if operations["nested"]:
+        emit(f"x-sdk-nested: {operations['nested']}")
     return 0
 
 
@@ -642,6 +1203,12 @@ def main() -> int:
     if not source.is_file():
         emit(f"[ERROR] módulo não encontrado: {source}")
         return 2
+
+    try:
+        declaredOperations(root, args.resource)
+    except ValueError as error:
+        emit(f"[ERROR] {error}")
+        return 1
 
     if args.operations:
         return reportOperations(root, args.resource)

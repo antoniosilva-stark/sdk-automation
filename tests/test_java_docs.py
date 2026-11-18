@@ -9,8 +9,6 @@ ALL_FLAGS = {"x-sdk-create", "x-sdk-get", "x-sdk-query", "x-sdk-page", "x-sdk-lo
              "x-sdk-update", "x-sdk-cancel", "x-sdk-pdf"}
 RESIDUE = (r"datetime\.\w", r"timedelta", r"\bNone\b", r"\bTrue\b", r"\bFalse\b", r'\\"', r"starkbank\.user\b",
            r"User\.defaultUser")
-SINGULAR_CREATES = ("Webhook", "Workspace", "CorporateCard", "CorporateInvoice", "CorporateWithdrawal",
-                    "MerchantPurchase", "MerchantSession")
 
 
 def _specResources() -> list:
@@ -126,8 +124,9 @@ def test_titleFollowsTheVerbPhrase(javaDocs, operation, expected):
 
 def test_createAndDeleteTitlesUseTheVerbPhrase(javaDocs):
     lines = _rendered(javaDocs, "Webhook", "webhook")["lines"]
+    listLines = _rendered(javaDocs, "Boleto", "boleto")["lines"]
 
-    assert lines["createPlain"][0] == "Create Webhooks"
+    assert listLines["createPlain"][0] == "Create Boletos"
     assert lines["deletePlain"][0] == "Delete a Webhook entity"
 
 
@@ -253,10 +252,11 @@ def test_constructorAllArgsDocHasOneParamTagPerField(javaDocs):
 
 
 def test_createListParameterIsDocumentedEvenWhenPythonTakesTheFieldsApart(javaDocs):
-    lines = _rendered(javaDocs, "Webhook", "webhook")["lines"]["createPlain"]
+    lines = _rendered(javaDocs, "CorporateCard", "corporatecard")["lines"]["createPlain"]
 
-    assert "@param webhooks [list of Webhook objects or HashMaps]: list of Webhook objects to be created in the API" in lines
-    assert not any(line.startswith(("@param url", "@param subscriptions")) for line in lines)
+    assert ("@param corporateCards [list of CorporateCard objects or HashMaps]:"
+            " list of CorporateCard objects to be created in the API") in lines
+    assert not any(line.startswith("@param card ") for line in lines)
 
 
 def test_createDocFromPythonKeepsItsListDescription(javaDocs):
@@ -337,17 +337,61 @@ def test_renderedDocsUseTheCamelNamesOfTheResourceAndLeaveTheOthersAlone(javaDoc
     assert any("is_delivered=false" in line for lines in webhook.values() for line in lines)
 
 
-@pytest.mark.parametrize("resource", SINGULAR_CREATES)
-def test_createDocNeverContradictsTheListSignature(javaDocs, resource):
-    schemas = _schemas(resource.lower())
-    entity = javaDocs.describeEntity(schemas[resource], schemas.get(f"{resource}Create"))
-    docs = schemas[resource]["x-sdk-docs"]
+def test_createDocOfAnUnsupportedSingleObjectStillMatchesTheListSignature(javaDocs):
+    schemas = _schemas("corporatecard")
+    entity = javaDocs.describeEntity(schemas["CorporateCard"], schemas.get("CorporateCardCreate"))
+    docs = schemas["CorporateCard"]["x-sdk-docs"]
 
-    lines = javaDocs.renderDocs(resource, docs, {"x-sdk-create"}, entity)["lines"]["createUser"]
+    lines = javaDocs.renderDocs("CorporateCard", docs, {"x-sdk-create"}, entity)["lines"]["createUser"]
 
-    assert f"Send a list of {resource} objects for creation in the Stark Bank API" in lines
-    assert f"@return list of {resource} objects with updated attributes" in lines
+    assert "Send a list of CorporateCard objects for creation in the Stark Bank API" in lines
+    assert "@return list of CorporateCard objects with updated attributes" in lines
     assert not any("single" in line.lower() for line in lines)
+
+
+LOG_PDF_DOC = {"log": {"pdf": {
+    "summary": "Retrieve a reversed Widget.Log pdf file",
+    "description": ["Receive a reversed Widget.Log pdf receipt file by its id."],
+    "params": [{"name": "id", "type": "string", "description": "object unique id", "section": "required"},
+               {"name": "user", "type": "Organization/Project object, default None", "description": "d",
+                "section": "optional"}],
+    "returns": ["Widget pdf file"],
+}}}
+WIDGET = {"description": "", "fields": []}
+
+
+def test_logPdfIsRenderedFromTheSpecDocsAsAnIdOperationWithAndWithoutUser(javaDocs):
+    lines = javaDocs.renderDocs("Widget", LOG_PDF_DOC, {"x-sdk-log"}, WIDGET)["lines"]
+
+    assert lines["logPdfPlain"][0] == "Retrieve a reversed Widget Log pdf file"
+    assert "@param id [string]: object unique id" in lines["logPdfPlain"]
+    assert not any(line.startswith("@param user") for line in lines["logPdfPlain"])
+    assert any(line.startswith("@param user [") for line in lines["logPdfUser"])
+    assert "@return Widget pdf file" in lines["logPdfUser"]
+
+
+def test_logPdfIsNotRenderedWithoutItsSpecDocsAndIsNotAFallback(javaDocs):
+    rendered = javaDocs.renderDocs("Widget", {"log": {}}, {"x-sdk-log"}, WIDGET)
+
+    assert not [key for key in rendered["lines"] if key.startswith("logPdf")]
+    assert "log.pdf" not in rendered["fallbacks"]
+
+
+def test_logPdfDocsOfAResourceWithoutTheLogFlagRenderNothing(javaDocs):
+    rendered = javaDocs.renderDocs("Widget", LOG_PDF_DOC, {"x-sdk-get"}, WIDGET)
+
+    assert not [key for key in rendered["lines"] if key.startswith("logPdf")]
+
+
+def test_logPdfTextPassesTheCommentGuard(javaDocs):
+    docs = {"log": {"pdf": {"summary": "s*/", "description": ["d*/ \\u0041"], "returns": ["r*/"],
+                            "params": [{"name": "id", "type": "string*/", "description": "x\\u0041",
+                                        "section": "required"}]}}}
+
+    lines = javaDocs.renderDocs("Widget", docs, {"x-sdk-log"}, WIDGET)["lines"]
+
+    for key in ("logPdfPlain", "logPdfUser"):
+        assert not any("*/" in line or "\\u" in line for line in lines[key]), key
 
 
 def test_everyTextFromTheSchemaPassesTheCommentGuard(javaDocs):
@@ -394,3 +438,205 @@ def test_aCreateWithoutReturnsOrReturningAListIsTheListForm(javaDocs):
 
 def test_aCreateReturningASingleObjectIsNotTheListForm(javaDocs):
     assert javaDocs.returnsList({"returns": ["Widget object with updated attributes"]}) is False
+
+
+def test_constructorMapDocParamFollowsTheClassDataName(javaDocs):
+    entity = {"fields": [{"name": "data", "type": "Map of String: Object", "description": "extra", "isId": False,
+                          "returnOnly": False}], "summary": "", "description": ""}
+    plain = {"fields": [{"name": "amount", "type": "integer", "description": "x", "isId": False,
+                         "returnOnly": False}], "summary": "", "description": ""}
+
+    assert javaDocs.classDataName(["amount", "data"]) == "classData"
+    assert javaDocs.classDataName(["amount"]) == "data"
+    renamed = javaDocs.renderDocs("Widget", {}, set(), entity)["lines"]["ctorMapDoc"]
+    kept = javaDocs.renderDocs("Widget", {}, set(), plain)["lines"]["ctorMapDoc"]
+    assert "@param classData map of properties for the creation of the Widget" in renamed
+    assert "@param data map of properties for the creation of the Widget" in kept
+
+
+def _createDoc(returns: list | None, params: list | None = None) -> dict:
+    return {"returns": returns, "params": params or []}
+
+
+def _param(name: str, type: str, section: str = "required") -> dict:
+    return {"name": name, "type": type, "description": f"{name} text", "section": section}
+
+
+USER_PARAM = _param("user", "Organization/Project object, default None", "optional")
+EXPAND_PARAM = _param("expand", "list of strings, default None", "optional")
+SINGLE_RETURN = ["Widget object with updated attributes"]
+OBJECT_DOC = _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), USER_PARAM])
+MAP_DOC = _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("subscriptions", "list of strings"), USER_PARAM])
+
+
+@pytest.mark.parametrize("doc", [
+    None,
+    {},
+    _createDoc(None),
+    _createDoc([]),
+    _createDoc(["list of Widget objects with updated attributes"], [_param("widgets", "list of Widget objects")]),
+    _createDoc(["list of Widget objects with updated attributes"],
+               [_param("widgets", "list of Widget objects"), EXPAND_PARAM]),
+])
+def test_createFormIsListWhenTheDocIsAbsentEmptyOrReturnsAList(javaDocs, doc):
+    assert javaDocs.createForm("Widget", doc) == "list"
+
+
+def test_createFormIsObjectWhenTheOnlyRequiredParamIsAnObjectOfTheClass(javaDocs):
+    assert javaDocs.createForm("Widget", OBJECT_DOC) == "object"
+
+
+def test_createFormIsMapWhenTheRequiredParamsAreScalars(javaDocs):
+    assert javaDocs.createForm("Widget", MAP_DOC) == "map"
+
+
+def test_createFormKeepsTheMapFormWhenOnlyTheOptionalParamsBeyondTheUserAreListed(javaDocs):
+    doc = _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("tags", "list of strings", "optional"),
+                                     USER_PARAM])
+
+    assert javaDocs.createForm("Widget", doc) == "map"
+
+
+@pytest.mark.parametrize("doc", [
+    _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), EXPAND_PARAM, USER_PARAM]),
+    _createDoc(SINGLE_RETURN, [_param("url", "string"), EXPAND_PARAM]),
+    _createDoc(SINGLE_RETURN, [USER_PARAM]),
+    _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("widget", "Widget object")]),
+    _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), _param("count", "integer")]),
+    _createDoc(SINGLE_RETURN, [_param("other", "Other object"), USER_PARAM]),
+    _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), _param("tags", "list of strings", "optional")]),
+    _createDoc(SINGLE_RETURN, [_param("url", "string"), _param("widgets", "list of Widget objects")]),
+])
+def test_createFormIsUnsupportedForASingleReturnThatMatchesNoForm(javaDocs, doc):
+    assert javaDocs.createForm("Widget", doc) == "unsupported"
+
+
+@pytest.mark.parametrize("resource,expected", [
+    ("MerchantPurchase", "object"), ("MerchantSession", "object"), ("CorporateWithdrawal", "object"),
+    ("CorporateInvoice", "object"), ("Webhook", "map"), ("Workspace", "map"), ("CorporateCard", "unsupported"),
+    ("CorporateHolder", "list"), ("Boleto", "list"),
+])
+def test_createFormOfTheRealDocstrings(javaDocs, buildResource, resource, expected):
+    spec = buildResource.loadFast((REPO_ROOT / buildResource.SPEC_FILE).read_text(encoding="utf-8"))
+    docs = buildResource.resolveRef(spec, resource, REPO_ROOT / "apis").get("x-sdk-docs") or {}
+
+    assert javaDocs.createForm(resource, docs.get("create")) == expected
+
+
+def test_userLineOfAnObjectCreateStaysUserEvenWhenTheDocstringSaysOrganization(javaDocs):
+    organizationUser = _param("user", "Organization object, default None", "optional")
+    doc = _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), organizationUser])
+    entity = {"description": "", "fields": []}
+
+    lines = javaDocs.renderDocs("Widget", {"create": doc}, {"x-sdk-create"}, entity)["lines"]["createUser"]
+
+    assert javaDocs.createPlan("Widget", doc)["userType"] == "Organization"
+    userLines = [line for line in lines if line.startswith("@param user")]
+    assert len(userLines) == 1 and userLines[0].startswith("@param user [Organization/Project object")
+
+
+def test_createPlanOfAListWithExpandAsksForTheParamsOverloads(javaDocs):
+    doc = _createDoc(["list of Widget objects"], [_param("widgets", "list of Widget objects"), EXPAND_PARAM])
+
+    plan = javaDocs.createPlan("Widget", doc)
+
+    assert plan["isList"] is True and plan["hasExpand"] is True
+    assert plan["isObject"] is False and plan["isMap"] is False
+
+
+def test_createPlanOfAListWithoutExpandKeepsTheSingleListOverload(javaDocs):
+    plan = javaDocs.createPlan("Widget", _createDoc(["list of Widget objects"], [_param("widgets", "list")]))
+
+    assert plan["isList"] is True and plan["hasExpand"] is False
+
+
+def test_createPlanOfAnObjectNamesTheParamAfterTheDocstring(javaDocs):
+    plan = javaDocs.createPlan("Widget", OBJECT_DOC)
+
+    assert plan["isObject"] is True and plan["isList"] is False
+    assert plan["paramName"] == "widget"
+    assert plan["userType"] == "User"
+
+
+def test_createPlanOfAMapNamesTheParamAfterTheClass(javaDocs):
+    plan = javaDocs.createPlan("MerchantWidget", MAP_DOC)
+
+    assert plan["isMap"] is True and plan["isList"] is False
+    assert plan["paramName"] == "merchantWidgetData"
+
+
+def test_createPlanUsesOrganizationOnlyWhenTheUserParamIsAnOrganizationObject(javaDocs):
+    organizationUser = _param("user", "Organization object, default None", "optional")
+    organization = _createDoc(SINGLE_RETURN, [_param("url", "string"), organizationUser])
+
+    assert javaDocs.createPlan("Widget", organization)["userType"] == "Organization"
+    assert javaDocs.createPlan("Widget", MAP_DOC)["userType"] == "User"
+
+
+def test_createPlanOfAnUnsupportedShapeFallsBackToTheListForm(javaDocs):
+    doc = _createDoc(SINGLE_RETURN, [_param("widget", "Widget object"), EXPAND_PARAM])
+
+    plan = javaDocs.createPlan("Widget", doc)
+
+    assert plan["isList"] is True and plan["hasExpand"] is False
+    assert plan["isObject"] is False and plan["isMap"] is False
+
+
+def test_renderDocsCarriesTheCreatePlanOnlyWhenTheResourceCreates(javaDocs):
+    entity = {"description": "", "fields": []}
+
+    assert "create" not in javaDocs.renderDocs("Widget", {"create": OBJECT_DOC}, {"x-sdk-get"}, entity)
+    assert javaDocs.renderDocs("Widget", {"create": OBJECT_DOC}, {"x-sdk-create"}, entity)["create"]["isObject"]
+    assert javaDocs.renderDocs("Widget", {}, {"x-sdk-create"}, entity)["create"]["isList"]
+
+
+def test_objectCreateDocKeepsThePythonTextAndTheSingleReturn(javaDocs):
+    lines = _rendered(javaDocs, "MerchantPurchase", "merchantpurchase")["lines"]["createPlain"]
+
+    assert lines[0] == "Create a MerchantPurchase"
+    assert "Send a MerchantPurchase object for creation in the Stark Bank API" in lines
+    assert ("@param merchantPurchase [MerchantPurchase object]:"
+            " MerchantPurchase object to be created in the API") in lines
+    assert "@return MerchantPurchase object with updated attributes" in lines
+    assert not any("list of" in line for line in lines)
+
+
+def test_mapCreateDocListsTheDocstringParamsUnderTheDataParam(javaDocs):
+    lines = _rendered(javaDocs, "Webhook", "webhook")["lines"]["createPlain"]
+
+    assert lines[0] == "Create Webhook subscription"
+    assert "@param webhookData parameters for the creation of the webhook" in lines
+    assert any(line.startswith("url [string]: url to which notification events") for line in lines)
+    assert any(line.startswith("subscriptions [list of strings]: list of any non-empty") for line in lines)
+    assert not any(line.startswith("@param user") for line in lines)
+    assert "@return Webhook object with updated attributes" in lines
+
+
+def test_organizationUserLineIsOnlyTheWorkspaceCreate(javaDocs):
+    lines = _rendered(javaDocs, "Workspace", "workspace")["lines"]
+    userLines = {key: [line for line in block if line.startswith("@param user")] for key, block in lines.items()}
+
+    assert userLines["createUser"] == [
+        "@param user [Organization object, default null]: Organization object."
+        " Not necessary if starkbank.Settings.user was set before function call"]
+    assert all("Organization/Project" in line for key in ("getUser", "deleteUser", "updateUser")
+               for line in userLines.get(key, []))
+
+
+def test_listCreateWithExpandDocumentsTheParamsOverloads(javaDocs):
+    lines = _rendered(javaDocs, "CorporateHolder", "corporateholder")["lines"]
+
+    assert not any(line.startswith(("@param params", "expand")) for line in lines["createPlain"])
+    for key in ("createParams", "createParamsUser"):
+        assert "@param params map of parameters" in lines[key]
+        assert any(line.startswith("expand [list of strings, default null]: fields to expand") for line in lines[key])
+        assert ("@param corporateHolders [list of CorporateHolder objects or HashMaps]:"
+                " list of CorporateHolder objects to be created in the API") in lines[key]
+    assert any(line.startswith("@param user") for line in lines["createParamsUser"])
+    assert not any(line.startswith("@param user") for line in lines["createParams"])
+
+
+def test_listCreateWithoutExpandRendersOnlyThePlainAndUserDocs(javaDocs):
+    lines = _rendered(javaDocs, "Boleto", "boleto")["lines"]
+
+    assert "createParams" not in lines and "createParamsUser" not in lines

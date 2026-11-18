@@ -52,29 +52,58 @@ GENERATORS = {
 }
 
 
+SINGLE_CREATE_FORMS = ("object", "map")
 GENERATOR_USERS = ("x-sdk-query", "x-sdk-log")
 LIST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-page", "x-sdk-log")
-SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log")
+SUBRESOURCE_USERS = ("x-sdk-page", "x-sdk-log", "x-sdk-subresource")
 REST_USERS = ("x-sdk-create", "x-sdk-put", "x-sdk-get", "x-sdk-query", "x-sdk-page",
-              "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-log")
+              "x-sdk-update", "x-sdk-delete", "x-sdk-cancel", "x-sdk-pdf", "x-sdk-qrcode", "x-sdk-log")
 
 
-def declaredFlags(resource: str) -> set[str]:
-    spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
+def declaredFlags(resource: str, specFile: str = SPEC_FILE) -> set[str]:
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
     schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
     return {key for key in schema if key.startswith("x-sdk-")}
 
 
-def hasObjectArray(resource: str) -> bool:
+def hasObjectArray(resource: str, specFile: str = SPEC_FILE) -> bool:
     """Array de objeto sai como List<Object> no template; array de string sai como String[]."""
     lint = loadTool("lint-spec")
-    specPath = REPO_ROOT / SPEC_FILE
+    specPath = REPO_ROOT / specFile
     schemas = (loadFast(specPath.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
     props = lint.schemaProps(schemas.get(resource), specPath)
     return any(
         prop.get("type") == "array" and (prop.get("items") or {}).get("type") != "string"
         for prop in props.values()
     )
+
+
+def hasParsers(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O Map-ctor emite `parseX` (que monta um ArrayList) quando a spec preparada traz o auxiliar do recurso."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool((schema.get("x-sdk-java-code") or {}).get("ctorMapParsers"))
+
+
+def hasLogPdf(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O Log do recurso emite o `pdf` quando a spec preparada traz o Javadoc dele: o doc do Python e quem o declara."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool(((schema.get("x-sdk-java-code") or {}).get("log") or {}).get("hasPdf"))
+
+
+def hasSingletonGet(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O get do recurso le o stream e devolve o primeiro quando a spec preparada traz `singletonGet`."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool((schema.get("x-sdk-java-code") or {}).get("singletonGet"))
+
+
+def hasQueryList(resource: str, specFile: str = SPEC_FILE) -> bool:
+    """O `query` devolve List (sem Generator) quando a spec preparada traz `query.returnsList`."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    schema = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    return bool(((schema.get("x-sdk-java-code") or {}).get("query") or {}).get("returnsList"))
 
 
 def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
@@ -89,7 +118,39 @@ def resolveRef(spec: dict, name: str, apisDir: Path) -> dict | None:
     return node
 
 
-def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
+def logResourceNames(spec: dict, conventions: Path) -> frozenset:
+    """Recursos com Log: a flag `x-sdk-log` da spec (Log gerado por javaLogs) ou um `Log` em javaInnerClasses (o Log
+    de PaymentRequest, sem operacoes, que o real escreve como classe interna)."""
+    extractSchema = loadTool("extract-schema")
+    flagged = {name for name, entry in spec["components"]["schemas"].items() if "x-sdk-log" in entry}
+    innerClasses = extractSchema.loadConventions(Path(conventions)).get("javaInnerClasses") or {}
+    return frozenset(flagged | {name for name, classes in innerClasses.items() if "Log" in classes})
+
+
+def renderNested(entry: dict, schema: dict, javaDocs) -> tuple[dict | None, list]:
+    """Operacoes do recurso aninhado (`x-sdk-nested`): as que o `x-sdk-docs.<subpacote>` documenta, com o Javadoc de
+    cada sobrecarga renderizado para a classe aninhada. O que o template nao emite falha em java-code."""
+    className = entry.get("x-sdk-nested")
+    if not className:
+        return (None, [])
+
+    docs = (schema.get("x-sdk-docs") or {}).get(className.lower()) or {}
+    if not docs:
+        raise ValueError(f"{className}: x-sdk-nested sem x-sdk-docs.{className.lower()}, a classe sairia sem operacoes")
+    flags = {f"x-sdk-{operation}" for operation in docs}
+    rendered = javaDocs.renderDocs(className, docs, flags, {"description": "", "fields": []})
+    return ({"className": className, "operations": list(docs), "docs": rendered["lines"]}, rendered["warnings"])
+
+
+def nestedFlags(resource: str, specFile: str = SPEC_FILE) -> set[str]:
+    """As flags que as operacoes aninhadas usam: os imports (Generator, Rest, List...) saem delas, nao so das do recurso."""
+    spec = loadFast((REPO_ROOT / specFile).read_text(encoding="utf-8"))
+    entry = ((spec.get("components") or {}).get("schemas") or {}).get(resource) or {}
+    nested, _ = renderNested(entry, resolveRef(spec, resource, REPO_ROOT / "apis") or {}, loadTool("java-docs"))
+    return {f"x-sdk-{operation}" for operation in (nested or {}).get("operations", [])}
+
+
+def stageJavaDocs(resource: str, stagedDir: Path, conventions: Path | None = None) -> dict:
     """Copia `apis/` para `stagedDir` e injeta o Javadoc e o corpo do Map-ctor pre-renderizados na entrada do
     recurso da copia.
 
@@ -98,46 +159,138 @@ def stageJavaDocs(resource: str, stagedDir: Path) -> dict:
     copiada. O `x-sdk-docs` original segue no schema copiado e a spec e os schemas do repo nao sao tocados."""
     javaDocs = loadTool("java-docs")
     javaCode = loadTool("java-code")
+    extractSchema = loadTool("extract-schema")
     apisDir = REPO_ROOT / "apis"
     specPath = REPO_ROOT / SPEC_FILE
     specText = specPath.read_text(encoding="utf-8")
     spec = loadFast(specText)
-    schema = resolveRef(spec, resource, apisDir)
+    conventionsFile = conventions or extractSchema.CONVENTIONS_FILE
+    schema = javaCode.omitFields(
+        resolveRef(spec, resource, apisDir),
+        resource,
+        extractSchema.javaOmittedFields(resource, conventionsFile),
+    )
     createSchema = resolveRef(spec, f"{resource}Create", apisDir)
+    schema, createSchema = javaCode.addExtraFields(
+        schema,
+        createSchema,
+        resource,
+        extractSchema.javaExtraFields(resource, conventionsFile),
+    )
     flags = {key for key in spec["components"]["schemas"][resource] if key.startswith("x-sdk-")}
     entity = javaDocs.describeEntity(schema, createSchema)
-    rendered = javaDocs.renderDocs(resource, schema.get("x-sdk-docs") or {}, flags, entity)
-    code = javaCode.renderMapConstructor(schema, entity)
+    pageShape = extractSchema.javaPageShape(resource, conventionsFile) if "x-sdk-page" in flags else None
+    omittedParams = extractSchema.javaOmittedOperationParams(resource, conventionsFile)
+    createShape = extractSchema.javaCreateShape(resource, conventionsFile)
+    rendered = javaDocs.renderDocs(
+        resource,
+        schema.get("x-sdk-docs") or {},
+        flags,
+        entity,
+        pageListName=pageShape["listName"] if pageShape else None,
+        omittedParams=omittedParams,
+        listParam=createShape["param"] if createShape else None,
+    )
+    nested, nestedWarnings = renderNested(spec["components"]["schemas"][resource], schema, javaDocs)
+    overrides = extractSchema.javaTypeOverrides(resource, conventionsFile)
+    isOpen = extractSchema.javaOpenClass(resource, conventionsFile)
+    logShape = extractSchema.javaLogShape(resource, conventionsFile)
+    eventShape = extractSchema.javaEventShape(resource, conventionsFile)
+    code = javaCode.renderJavaCode(
+        schema,
+        entity,
+        resource,
+        overrides,
+        isOpen=isOpen,
+        ctorOrder=extractSchema.javaConstructorOrder(resource, conventionsFile),
+        ctorTypes=extractSchema.javaConstructorTypes(resource, conventionsFile),
+        innerClasses=extractSchema.javaInnerClasses(resource, conventionsFile),
+        otherInnerClasses=extractSchema.javaOtherInnerClasses(resource, conventionsFile),
+        resourceNames=extractSchema.schemaResourceNames(),
+        logShape=logShape if "x-sdk-log" in flags else None,
+        pageShape=pageShape,
+        logEntity=spec["components"]["schemas"][resource].get("x-sdk-log-entity"),
+        eventShape=eventShape,
+        logResources=logResourceNames(spec, conventionsFile) if eventShape else frozenset(),
+        hasParse="x-sdk-parse" in flags,
+        nested=nested,
+        typeInference=extractSchema.javaTypeInference(resource, conventionsFile),
+    )
 
     shutil.copytree(apisDir, stagedDir / "apis")
     entryLine = f"\n    {resource}:\n"
     if specText.count(entryLine) != 1:
         raise ValueError(f"entrada de {resource} ausente ou repetida na spec")
+    if "log" in code:
+        code["log"]["hasPdf"] = "logPdfPlain" in rendered["lines"]
+    if javaDocs.hasSingletonGet(flags, schema.get("x-sdk-docs") or {}):
+        code["singletonGet"] = True
+    if extractSchema.javaLegacySubResource(resource, conventionsFile):
+        if not flags & set(SUBRESOURCE_USERS):
+            raise ValueError(f"{resource}: javaLegacySubResource cita um recurso que nao importa SubResource")
+        code["legacySubResource"] = True
+    queryShape = extractSchema.javaQueryShape(resource, conventionsFile)
+    if queryShape is not None:
+        code["query"] = javaCode.renderQuery(resource, queryShape, flags)
+    for operation in ("get", "pdf", "qrcode"):
+        hasMap = "x-sdk-" + operation in flags and javaDocs.hasMapOverloads(
+            schema.get("x-sdk-docs") or {}, operation, omittedParams)
+        if hasMap:
+            code[f"{operation}Params"] = True
+    if createShape is not None:
+        rendered["create"] = javaCode.renderCreateShape(resource, createShape, rendered.get("create"))
     docsLine = (f"      x-sdk-java-docs: {json.dumps(rendered['lines'])}\n"
                 f"      x-sdk-java-code: {json.dumps(code)}\n")
+    docsLine += f"      x-sdk-java-create: {json.dumps(rendered['create'])}\n" if "create" in rendered else ""
     stagedSpec = stagedDir / SPEC_FILE
     stagedSpec.write_text(specText.replace(entryLine, f"{entryLine}{docsLine}", 1), encoding="utf-8")
-    return {"spec": stagedSpec, "warnings": rendered["warnings"], "fallbacks": rendered["fallbacks"]}
+    return {"spec": stagedSpec, "warnings": rendered["warnings"] + nestedWarnings, "fallbacks": rendered["fallbacks"]}
 
 
-def javaImports(flags: set[str], objectArray: bool = False) -> list[str]:
+def javaImports(
+    flags: set[str],
+    objectArray: bool = False,
+    createForm: str = "list",
+    hasParsers: bool = False,
+    hasLogPdf: bool = False,
+    hasSingletonGet: bool = False,
+    hasQueryList: bool = False,
+) -> list[str]:
     """Quais imports o template Java pode emitir sem virar import morto.
 
     Só o que vale entra: additional-property chega como string, e "false" é
-    verdadeiro no Mustache.
+    verdadeiro no Mustache. O create de objeto único (`object`/`map`) não monta lista.
     """
     properties = []
-    if flags & set(GENERATOR_USERS):
+    generatorUsers = set(GENERATOR_USERS) - ({"x-sdk-query"} if hasQueryList else set())
+    if flags & generatorUsers or hasSingletonGet:
         properties.append("usesGenerator=true")
     if objectArray:
         properties.append("usesObjectList=true")
-    if flags & set(LIST_USERS):
+    listUsers = set(LIST_USERS) - ({"x-sdk-create"} if createForm in SINGLE_CREATE_FORMS else set())
+    if flags & listUsers or hasSingletonGet or hasQueryList:
         properties.append("usesList=true")
     if flags & set(SUBRESOURCE_USERS):
         properties.append("usesSubResource=true")
     if flags & set(REST_USERS):
         properties.append("usesRest=true")
+    if hasParsers:
+        properties.append("usesParsers=true")
+    if flags & {"x-sdk-pdf", "x-sdk-qrcode"} or hasLogPdf:
+        properties.append("usesInputStream=true")
+    if "x-sdk-parse" in flags:
+        properties.append("usesParse=true")
     return properties
+
+
+def classDataProperty(resource: str, specFile: str = SPEC_FILE) -> str:
+    """Nome do ClassData estatico como propriedade do gerador: o Mustache le "false" como verdadeiro,
+    entao vai o nome e nao um booleano."""
+    lint = loadTool("lint-spec")
+    specPath = REPO_ROOT / specFile
+    schemas = (loadFast(specPath.read_text(encoding="utf-8")).get("components") or {}).get("schemas") or {}
+    names = lint.schemaProps(schemas.get(resource), specPath)
+    return f"classDataName={loadTool('java-docs').classDataName(names)}"
 
 
 def loadFast(text: str):
@@ -196,7 +349,18 @@ def plannedPairs(resource: str, language: str) -> dict[str, tuple[str, str]]:
 
 def generate(resource: str, run: dict, outputDir: Path, specFile: str = SPEC_FILE) -> int:
     extra = list(run["extra"])
-    properties = javaImports(declaredFlags(resource), hasObjectArray(resource)) if run["generator"] == "java" else []
+    properties = []
+    if run["generator"] == "java":
+        properties = javaImports(
+            declaredFlags(resource, specFile) | nestedFlags(resource, specFile),
+            hasObjectArray(resource, specFile),
+            createForm=createFormOf(resource),
+            hasParsers=hasParsers(resource, specFile),
+            hasLogPdf=hasLogPdf(resource, specFile),
+            hasSingletonGet=hasSingletonGet(resource, specFile),
+            hasQueryList=hasQueryList(resource, specFile),
+        )
+        properties.append(classDataProperty(resource, specFile))
     if properties:
         extra.extend(["--additional-properties", ",".join(properties)])
 
@@ -244,21 +408,33 @@ def gapBucket(resource: str) -> str | None:
     return None
 
 
-def unsupportedShape(resource: str) -> str | None:
-    """Formato que o template Java nao sabe emitir: create de objeto unico (sai create(List) com Rest.post) e get
-    sem id (singleton, sai get(String id)). Quem decide e o docstring, o mesmo predicado da documentacao."""
-    javaDocs = loadTool("java-docs")
+def docstrings(resource: str) -> dict:
     spec = loadFast((REPO_ROOT / SPEC_FILE).read_text(encoding="utf-8"))
-    docs = resolveRef(spec, resource, REPO_ROOT / "apis").get("x-sdk-docs") or {}
+    return (resolveRef(spec, resource, REPO_ROOT / "apis") or {}).get("x-sdk-docs") or {}
+
+
+def createFormOf(resource: str) -> str:
+    return loadTool("java-docs").createForm(resource, docstrings(resource).get("create"))
+
+
+def unsupportedShape(resource: str) -> str | None:
+    """Formato que o template Java nao sabe emitir: put de objeto unico (sai put(List) com Rest.post), create de
+    objeto unico que nao casa com `object`/`map`. Quem decide e o docstring: `createForm` para o create e
+    `returnsList` para o put, o mesmo predicado da documentacao."""
+    javaDocs = loadTool("java-docs")
+    docs = docstrings(resource)
     flags = declaredFlags(resource)
-    for operation in ("create", "put"):
-        if f"x-sdk-{operation}" in flags and not javaDocs.returnsList(docs.get(operation) or {}):
-            return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
-    getDoc = docs.get("get")
-    # `uuid` (DynamicBrcode) tambem identifica: singleton e o get que so recebe `user`
-    if "x-sdk-get" in flags and getDoc and {param["name"] for param in getDoc.get("params") or []} <= {"user"}:
-        return f"get sem id (singleton) ({resource})"
+    if "x-sdk-put" in flags and not javaDocs.returnsList(docs.get("put") or {}):
+        return f"create de objeto unico ({resource}): o template emite create(List) com Rest.post"
+    if "x-sdk-create" in flags and javaDocs.createForm(resource, docs.get("create")) == "unsupported":
+        return unsupportedCreateMotive(resource, docs["create"])
     return None
+
+
+def unsupportedCreateMotive(resource: str, createDoc: dict) -> str:
+    if loadTool("java-docs").hasParam(createDoc, "expand"):
+        return f"create de objeto unico com expand ({resource}): corpo manuscrito, ME 9.8"
+    return f"create de objeto unico ({resource}): o docstring nao casa com create(X) nem create(Map)"
 
 
 def announceIntent(resource: str, language: str, absent: int, total: int) -> None:

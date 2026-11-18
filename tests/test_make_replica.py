@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import TOOLS_DIR, REPO_ROOT, M2_REPOSITORY, requiresJavaSdk, requiresPythonSdk
+from conftest import TOOLS_DIR, REPO_ROOT, M2_REPOSITORY, runWithClosedStdout, requiresJavaSdk, requiresPythonSdk
 
 
 def loadMakeReplica():
@@ -42,7 +42,9 @@ public class GsonAdapters {
 """
 
 REST = "package com.starkbank.utils;\r\n\r\npublic class Rest {\r\n    int x = 1;\r\n}\r\n"
-COMMENT_ONLY_TEST = "// uses Event somewhere\n/** Javadoc: Transfer */\nclass TestKey { String s = \"Event Transfer\"; }\n"
+COMMENT_ONLY_TEST = (
+    "// uses Event somewhere\n/** Javadoc: Transfer */\nclass TestKey { String s = \"Event Transfer\"; }\n"
+)
 HELPER_TEST = "package utils;\nimport com.starkbank.Event;\npublic class Helper { Event event; }\n"
 FAKE_RESOURCES = ["Event", "PaymentRequest", "Transfer"]
 
@@ -412,6 +414,31 @@ def test_runCommandReturnsExitCodeAndOutput(tmpPath):
     assert "oi" in output
 
 
+def test_runCommandInvalidUtf8OutputDoesNotRaise(tmpPath):
+    code, output = replica.runCommand(command=["sh", "-c", "printf '\\377'"], cwd=tmpPath, timeout=10)
+    assert code == 0
+    assert output
+
+
+def test_runCommandPassesEnvOnlyToTheChild(tmpPath, monkeypatch):
+    monkeypatch.delenv("REPLICA_ENV_PROBE", raising=False)
+    code, output = replica.runCommand(
+        command=["sh", "-c", "echo $REPLICA_ENV_PROBE"],
+        cwd=tmpPath,
+        timeout=10,
+        env={"REPLICA_ENV_PROBE": "so-no-filho"},
+    )
+    assert code == 0
+    assert output.strip() == "so-no-filho"
+    assert "REPLICA_ENV_PROBE" not in os.environ
+
+
+def test_runCommandWithoutEnvInheritsTheProcessEnvironment(tmpPath, monkeypatch):
+    monkeypatch.setenv("REPLICA_ENV_PROBE", "herdado")
+    code, output = replica.runCommand(command=["sh", "-c", "echo $REPLICA_ENV_PROBE"], cwd=tmpPath, timeout=10)
+    assert output.strip() == "herdado"
+
+
 JAVA_REPO = REPO_ROOT / "_references/sdk-java"
 EXPECTED_DEPENDENTS = {"TestTypeAdapter.java", "utils/MerchantPurchase.java", "utils/MerchantSession.java"}
 
@@ -494,3 +521,22 @@ def test_realReplicaListsFortyTwoGaps(realReplica):
     )
     assert result.returncode == 0
     assert len(json.loads(result.stdout)["gaps"]) == 42
+
+
+@pytest.mark.parametrize("environment", [{}, {"PYTHONUNBUFFERED": "1"}])
+def test_programWithTheStdoutReaderClosedExitsWithTheRealCode(sdk, tmpPath, environment):
+    # antes do redirecionamento para o devnull: exit 120 (buffered) ou traceback no primeiro emit (unbuffered)
+    out = tmpPath / "out"
+    arguments = [str(TOOLS_DIR / "make-replica.py"), "--out", str(out), "--from", str(sdk), "--skip-compile"]
+    result = runWithClosedStdout(arguments, environment)
+    assert result.returncode == 0, result.stderr
+    assert "BrokenPipeError" not in result.stderr
+    assert (out / MAIN / "utils/Rest.java").is_file()
+
+
+def test_programUsageErrorWithTheStdoutReaderClosedStillExitsWith2(sdk, tmpPath):
+    out = tmpPath / "out"
+    writeFile(out, "junk.txt", "x")
+    result = runWithClosedStdout([str(TOOLS_DIR / "make-replica.py"), "--out", str(out), "--from", str(sdk)], {})
+    assert result.returncode == 2, result.stderr
+    assert "BrokenPipeError" not in result.stderr

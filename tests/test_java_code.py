@@ -17,7 +17,7 @@ def _entity(properties: dict, creatable: tuple) -> tuple:
 
 def _render(javaCode, properties: dict, creatable: tuple) -> dict:
     schema, entity = _entity(properties, creatable)
-    return javaCode.renderMapConstructor(schema, entity)
+    return javaCode.renderJavaCode(schema, entity, "Widget", {})
 
 
 def test_integerIsReadAsNumberAndConvertedWithoutCast(javaCode):
@@ -111,14 +111,14 @@ def test_aGenericFieldThatIsReturnOnlyIsNotCastSoItNeedsNoSuppress(javaCode):
 def test_theProfileIsData(javaCode):
     profile = {**javaCode.JAVA_CODE_PROFILE, "numericGetters": {"Integer": "shortValue"}}
     schema, entity = _entity({"delay": {"type": "integer"}}, ("delay",))
-    body = javaCode.renderMapConstructor(schema, entity, profile)["ctorMapBody"]
+    body = javaCode.renderJavaCode(schema, entity, "Widget", {}, profile)["ctorMapBody"]
     assert body[1].endswith("delay.shortValue();")
 
 
 def test_splitProfileFromTheRepositorySchema(javaCode, javaDocs):
     schemas = yaml.safe_load((SCHEMAS / "splitprofile.yaml").read_text(encoding="utf-8"))["components"]["schemas"]
     entity = javaDocs.describeEntity(schemas["SplitProfile"], schemas["SplitProfileCreate"])
-    body = javaCode.renderMapConstructor(schemas["SplitProfile"], entity)["ctorMapBody"]
+    body = javaCode.renderJavaCode(schemas["SplitProfile"], entity, "SplitProfile", {})["ctorMapBody"]
     assert body == [
         'this.interval = (String) dataCopy.remove("interval");',
         'Number delay = (Number) dataCopy.remove("delay");',
@@ -146,7 +146,7 @@ def test_aTypeTheProfileDoesNotCoverFailsClosedNamingTheField(javaCode, prop):
     schema, entity = _entity({"widget": prop}, ("widget",))
 
     with pytest.raises(ValueError, match="widget"):
-        javaCode.renderMapConstructor(schema, entity)
+        javaCode.renderJavaCode(schema, entity, "Widget", {})
 
 
 def _everySchemaProperty() -> list:
@@ -179,3 +179,306 @@ def test_theSweepNoticesACaseRemovedFromTheProfile(javaCode):
     with pytest.raises(ValueError, match="int64"):
         for _, prop in _everySchemaProperty():
             javaCode.javaTypeOf(prop, profile)
+
+
+def _fields(javaCode, properties: dict, overrides: dict | None = None) -> list:
+    return javaCode.renderFields({"properties": properties}, "Widget", overrides or {}, javaCode.JAVA_CODE_PROFILE)
+
+
+@pytest.mark.parametrize("prop, expected", [
+    ({"type": "integer"}, "Integer"),
+    ({"type": "integer", "format": "int64"}, "Long"),
+    ({"type": "number"}, "Number"),
+    ({"type": "number", "format": "double"}, "Double"),
+    ({"type": "boolean"}, "Boolean"),
+    ({"type": "string", "format": "date-time"}, "String"),
+    ({"type": "object"}, "Object"),
+    ({"type": "array", "items": {"type": "string"}}, "String[]"),
+    ({"type": "array", "items": {"type": "object"}}, "List<Object>"),
+])
+def test_fieldTypeDefaultsToTheProfileRule(javaCode, prop, expected):
+    assert _fields(javaCode, {"value": prop}) == [{"name": "value", "javaType": expected, "isId": False}]
+
+
+def test_fieldsKeepSchemaOrderAndMarkTheId(javaCode):
+    fields = _fields(javaCode, {
+        "id": {"type": "string", "x-sdk-id": True},
+        "amount": {"type": "integer", "format": "int64"},
+        "status": {"type": "string", "readOnly": True},
+    })
+
+    assert [(field["name"], field["javaType"], field["isId"]) for field in fields] == [
+        ("id", "String", True),
+        ("amount", "Long", False),
+        ("status", "String", False),
+    ]
+
+
+def test_resourceOverrideBeatsTheProfileDefault(javaCode):
+    fields = _fields(javaCode, {"amount": {"type": "integer", "format": "int64"}}, {"amount": "Integer"})
+
+    assert fields[0]["javaType"] == "Integer"
+
+
+def test_overrideOfAFieldTheSchemaDoesNotHaveFailsInsteadOfBeingIgnored(javaCode):
+    with pytest.raises(ValueError, match="Widget.amout"):
+        _fields(javaCode, {"amount": {"type": "integer"}}, {"amout": "Long"})
+
+
+def test_fieldWithoutProfileRuleFailsNamingResourceAndField(javaCode):
+    with pytest.raises(ValueError, match="Widget.blob: tipo sem regra no perfil"):
+        _fields(javaCode, {"blob": {"type": "string", "format": "binary"}})
+
+
+def test_overrideReachesTheMapConstructorCastAndTheFieldsOfTheSameRender(javaCode):
+    schema, entity = _entity({"amount": {"type": "integer", "format": "int64"}}, ("amount",))
+
+    rendered = javaCode.renderJavaCode(schema, entity, "Widget", {"amount": "Integer"})
+
+    assert rendered["ctorMapBody"][1] == "this.amount = amount == null ? null : amount.intValue();"
+    assert [field["javaType"] for field in rendered["fields"]] == ["Integer"]
+
+
+def _overridden(javaCode, prop: dict, javaType: str, creatable: bool = True) -> dict:
+    schema, entity = _entity({"value": prop}, ("value",) if creatable else ())
+    return javaCode.renderJavaCode(schema, entity, "Widget", {"value": javaType})
+
+
+@pytest.mark.parametrize("javaType, getter", [("long", "longValue"), ("int", "intValue")])
+def test_primitiveIsReadThroughNumberWithoutANullBranch(javaCode, javaType, getter):
+    rendered = _overridden(javaCode, {"type": "integer"}, javaType)
+
+    assert rendered["ctorMapBody"] == [f'this.value = ((Number) dataCopy.remove("value")).{getter}();']
+    assert rendered["ctorMapSuppress"] is False
+
+
+@pytest.mark.parametrize("javaType", ["long", "int"])
+def test_returnOnlyPrimitiveGetsZeroBecausePrimitiveCannotBeNull(javaCode, javaType):
+    rendered = _overridden(javaCode, {"type": "integer"}, javaType, creatable=False)
+
+    assert rendered["ctorMapBody"] == ["this.value = 0;"]
+
+
+def test_returnOnlyBoxedFieldStillGetsNull(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "Long", creatable=False)
+
+    assert rendered["ctorMapBody"] == ["this.value = null;"]
+
+
+def test_numberOverrideIsReadWithADirectCast(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "Number")
+
+    assert rendered["ctorMapBody"] == ['this.value = (Number) dataCopy.remove("value");']
+
+
+def test_stringOverrideOnANumericFieldIsReadWithADirectCast(javaCode):
+    rendered = _overridden(javaCode, {"type": "integer"}, "String")
+
+    assert rendered["ctorMapBody"] == ['this.value = (String) dataCopy.remove("value");']
+    assert rendered["ctorMapSuppress"] is False
+
+
+@pytest.mark.parametrize("javaType", ["Map<String, Object>", "HashMap<String, Object>", "List<String>"])
+def test_genericOverrideIsCastDirectlyAndTurnsOnSuppress(javaCode, javaType):
+    rendered = _overridden(javaCode, {"type": "object"}, javaType)
+
+    assert rendered["ctorMapBody"] == [f'this.value = ({javaType}) dataCopy.remove("value");']
+    assert rendered["ctorMapSuppress"] is True
+
+
+@pytest.mark.parametrize("override", ["Lon", "BigDecimal", "float", "", 5, ["a"], None])
+def test_overrideTypeOutsideWhatTheMapConstructorReadsFails(javaCode, override):
+    with pytest.raises(ValueError, match="Widget.amount: tipo de override"):
+        _fields(javaCode, {"amount": {"type": "integer"}}, {"amount": override})
+
+
+def test_overrideOfTheIdFieldFailsInsteadOfBeingIgnored(javaCode):
+    with pytest.raises(ValueError, match="Widget.id: override de campo id"):
+        _fields(javaCode, {"id": {"type": "string", "x-sdk-id": True}}, {"id": "Long"})
+
+
+@pytest.mark.parametrize("javaType", [
+    "String", "Integer", "Long", "Number", "Float", "Double", "Boolean", "Object", "long", "int",
+    "String[]", "List<Object>", "Map<String, Object>", "HashMap<String, Object>", "List<String>",
+])
+def test_overrideTypeTheMapConstructorReadsIsAccepted(javaCode, javaType):
+    assert _fields(javaCode, {"amount": {"type": "integer"}}, {"amount": javaType})[0]["javaType"] == javaType
+
+
+_RULE_FIELDS = {"key": "String", "value": "Number"}
+_MAP_RULE = {"fields": _RULE_FIELDS, "constructors": [["key", "value"]], "map": ["key", "value"]}
+_ARRAY = {"type": "array", "items": {"type": "object"}}
+
+
+def _renderList(javaCode, javaType, innerClasses=None, resourceNames=frozenset(), properties=None):
+    schema, entity = _entity(properties or {"rules": _ARRAY}, tuple(properties or ["rules"]))
+    return javaCode.renderJavaCode(
+        schema,
+        entity,
+        "Widget",
+        {"rules": javaType},
+        innerClasses=innerClasses,
+        resourceNames=resourceNames,
+    )
+
+
+def test_listOfAnInnerClassIsReadThroughItsParseHelperAndTypedInTheFieldAndTheConstructor(javaCode):
+    rendered = _renderList(javaCode, "List<Widget.Rule>", {"Rule": _MAP_RULE})
+
+    assert rendered["fields"][0]["javaType"] == "List<Widget.Rule>"
+    assert rendered["ctorFields"][0]["javaType"] == "List<Widget.Rule>"
+    assert rendered["ctorMapBody"] == ['this.rules = parseRules((List<Object>) dataCopy.remove("rules"));']
+    assert rendered["ctorMapSuppress"] is True
+
+
+def test_theParseHelperOfAnInnerClassWithAMapConstructorBuildsItFromTheMap(javaCode):
+    helper = _renderList(javaCode, "List<Widget.Rule>", {"Rule": _MAP_RULE})["ctorMapParsers"]
+
+    assert [item["signature"] for item in helper] == [
+        "private static List<Widget.Rule> parseRules(List<Object> items) throws Exception",
+    ]
+    assert helper[0]["body"] == [
+        "if (items == null) {",
+        "    return null;",
+        "}",
+        "List<Widget.Rule> parsed = new ArrayList<>();",
+        "for (Object item : items) {",
+        "    if (item instanceof Widget.Rule) {",
+        "        parsed.add((Widget.Rule) item);",
+        "        continue;",
+        "    }",
+        "    if (item instanceof Map) {",
+        "        parsed.add(new Widget.Rule((Map<String, Object>) item));",
+        "        continue;",
+        "    }",
+        '    throw new Exception("Unknown type \\"" + item.getClass() + "\\", use Widget.Rule or HashMap");',
+        "}",
+        "return parsed;",
+    ]
+
+
+def test_theParseHelperOfAnInnerClassWithoutAMapConstructorReadsEachArgumentByItsFieldType(javaCode):
+    fields = {"text": "String", "amount": "Integer", "ratio": "Number", "size": "long", "count": "int", "tags": "String[]"}
+    inner = {"Rule": {"fields": fields, "constructors": [list(fields)]}}
+
+    body = _renderList(javaCode, "List<Rule>", inner)["ctorMapParsers"][0]["body"]
+
+    assert "    if (item instanceof Rule) {" in body
+    assert "        Map<String, Object> map = (Map<String, Object>) item;" in body
+    assert [line for line in body if line.startswith("            ")] == [
+        '            (String) map.get("text"),',
+        '            map.get("amount") == null ? null : ((Number) map.get("amount")).intValue(),',
+        '            (Number) map.get("ratio"),',
+        '            ((Number) map.get("size")).longValue(),',
+        '            ((Number) map.get("count")).intValue(),',
+        '            (String[]) map.get("tags")',
+    ]
+    assert "        parsed.add(new Rule(" in body
+    assert "        ));" in body
+
+
+def test_theParseHelperOfAGeneratedResourceBuildsItFromTheMapConstructor(javaCode):
+    helper = _renderList(javaCode, "List<Split>", {}, frozenset({"Split"}))["ctorMapParsers"][0]
+
+    assert helper["signature"] == "private static List<Split> parseRules(List<Object> items) throws Exception"
+    assert "        parsed.add(new Split((Map<String, Object>) item));" in helper["body"]
+
+
+def test_aResourceTypeIsAPlainCastWithoutHelper(javaCode):
+    rendered = _renderList(javaCode, "Resource")
+
+    assert rendered["ctorMapBody"] == ['this.rules = (Resource) dataCopy.remove("rules");']
+    assert rendered["ctorMapParsers"] == []
+    assert rendered["ctorMapSuppress"] is False
+
+
+@pytest.mark.parametrize("javaType", ["List<String>", "List<Object>"])
+def test_theListTypesTheProfileAlreadyKnowsGetNoHelper(javaCode, javaType):
+    rendered = _renderList(javaCode, javaType)
+
+    assert rendered["ctorMapParsers"] == []
+    assert rendered["ctorMapBody"] == [f'this.rules = ({javaType}) dataCopy.remove("rules");']
+
+
+def test_aReturnOnlyListOfInnerClassesIsNullAndGetsNoHelper(javaCode):
+    schema, entity = _entity({"rules": _ARRAY}, ())
+    rendered = javaCode.renderJavaCode(schema, entity, "Widget", {"rules": "List<Widget.Rule>"},
+                                       innerClasses={"Rule": _MAP_RULE})
+
+    assert rendered["ctorMapBody"] == ["this.rules = null;"]
+    assert rendered["ctorMapParsers"] == []
+
+
+def test_withoutOverrideTheListOfObjectIsStillCastRawAndThereIsNoHelper(javaCode):
+    rendered = _render(javaCode, {"rules": _ARRAY}, ("rules",))
+
+    assert rendered["ctorMapBody"] == ['this.rules = (List<Object>) dataCopy.remove("rules");']
+    assert rendered["ctorMapParsers"] == []
+
+
+@pytest.mark.parametrize("javaType, inner, resourceNames, message", [
+    ("List<Foo>", {"Rule": _MAP_RULE}, {"Split"}, "Widget.rules: elemento 'Foo' de List nao e classe interna nem recurso gerado"),
+    ("List<Other.Rule>", {"Rule": _MAP_RULE}, {"Other"}, "Widget.rules: qualificador 'Other' de 'Other.Rule' nao e o proprio recurso"),
+    ("List<widget.Rule>", {"Rule": _MAP_RULE}, set(), "Widget.rules: qualificador 'widget' de 'widget.Rule' nao e o proprio recurso"),
+    ("List<Widget.Nope>", {"Rule": _MAP_RULE}, set(), "Widget.rules: classe interna 'Nope' nao esta em javaInnerClasses"),
+    ("List<rule>", {"Rule": _MAP_RULE}, set(), "Widget.rules: elemento 'rule' de List nao e classe interna nem recurso gerado"),
+    ("List<Integer>", {}, {"Split"}, "Widget.rules: elemento 'Integer' de List nao e classe interna nem recurso gerado"),
+    ("list<Rule>", {"Rule": _MAP_RULE}, set(), "Widget.rules: tipo de override"),
+    ("List<>", {}, set(), "Widget.rules: tipo de override"),
+    ("List<Widget.Rule.Sub>", {"Rule": _MAP_RULE}, set(), "Widget.rules: tipo de override"),
+])
+def test_invalidListOfSubObjectsFailsNamingTheFieldAndTheProblem(javaCode, javaType, inner, resourceNames, message):
+    with pytest.raises(ValueError, match=message):
+        _renderList(javaCode, javaType, inner, frozenset(resourceNames))
+
+
+def _renderOtherList(javaCode, javaType, otherInnerClasses):
+    schema, entity = _entity({"rules": _ARRAY}, ("rules",))
+    return javaCode.renderJavaCode(
+        schema,
+        entity,
+        "Widget",
+        {"rules": javaType},
+        resourceNames=frozenset({"Other"}),
+        otherInnerClasses=otherInnerClasses,
+    )
+
+
+def test_listOfAnInnerClassOfAnotherResourceIsTypedQualifiedAndBuiltThroughItsMapConstructor(javaCode):
+    rendered = _renderOtherList(javaCode, "List<Other.Rule>", {"Other.Rule": _MAP_RULE})
+
+    assert rendered["fields"][0]["javaType"] == "List<Other.Rule>"
+    assert rendered["ctorMapBody"] == ['this.rules = parseRules((List<Object>) dataCopy.remove("rules"));']
+    assert "        parsed.add(new Other.Rule((Map<String, Object>) item));" in rendered["ctorMapParsers"][0]["body"]
+    assert rendered["innerClasses"] == []
+
+
+def test_listOfAnInnerClassOfAnotherResourceWithoutAMapConstructorReadsEachArgumentByItsFieldType(javaCode):
+    inner = {"Other.Rule": {"fields": {"key": "String", "size": "long"}, "constructors": [["key", "size"]]}}
+
+    body = _renderOtherList(javaCode, "List<Other.Rule>", inner)["ctorMapParsers"][0]["body"]
+
+    assert "        parsed.add(new Other.Rule(" in body
+    assert '            ((Number) map.get("size")).longValue()' in body
+
+
+@pytest.mark.parametrize("javaType, inner, message", [
+    ("List<Other.Nope>", {"Other.Rule": _MAP_RULE}, "Widget.rules: qualificador 'Other' de 'Other.Nope' nao e o proprio recurso"),
+    ("List<Third.Rule>", {"Other.Rule": _MAP_RULE}, "Widget.rules: qualificador 'Third' de 'Third.Rule' nao e o proprio recurso"),
+    ("List<Other.Rule>", {"Other.Rule": {"fields": _RULE_FIELDS, "constructors": [[]]}},
+     "Widget.rules: classe interna 'Rule' nao tem construtor que receba campos"),
+    ("List<Other.Rule>", {"Other.Rule": {**_MAP_RULE, "extends": "Resource"}},
+     "Widget.rules: classe interna 'Rule' estende Resource, que o parseX nao constroi"),
+])
+def test_listOfAnInnerClassOfAnotherResourceThatIsUnknownOrCannotBeBuiltFailsNamingTheField(
+    javaCode, javaType, inner, message
+):
+    with pytest.raises(ValueError, match=message):
+        _renderOtherList(javaCode, javaType, inner)
+
+
+def test_anInnerClassThatCannotBeBuiltFromAMapFailsNamingTheField(javaCode):
+    inner = {"Rule": {"fields": _RULE_FIELDS, "constructors": [[]]}}
+
+    with pytest.raises(ValueError, match="Widget.rules: classe interna 'Rule' nao tem construtor que receba campos"):
+        _renderList(javaCode, "List<Widget.Rule>", inner)

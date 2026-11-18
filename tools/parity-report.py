@@ -25,6 +25,8 @@ STATE_BLOCKED = "barrado pelo lint-spec"
 STATE_ABSENT = "ausente no SDK"
 STATE_ERROR = "erro"
 
+NO_OUTPUT = "sem saída"
+
 _GAP_LINE = re.compile(r"^\s*\[ERROR\] .*? CONTRACT_GAP (\w+) (.+)$")
 _PARITY_LINE = re.compile(r"paridade medida pelo gate estrito: (\d+) passaram, (\d+) reprovaram")
 _LINT_BLOCKED = re.compile(r"^\[ERROR\] lint-spec \(exit")
@@ -78,7 +80,7 @@ def parseGaps(output: str) -> dict:
         codes = [match.group(1) for match in map(_LINT_CODE.match, lines) if match]
         return {"state": STATE_BLOCKED, "gaps": [], "detail": codes[0] if codes else ""}
 
-    return {"state": STATE_ERROR, "gaps": [], "detail": errors[-1] if errors else "sem saída"}
+    return {"state": STATE_ERROR, "gaps": [], "detail": errors[-1] if errors else NO_OUTPUT}
 
 
 def aggregate(results: list[dict]) -> dict:

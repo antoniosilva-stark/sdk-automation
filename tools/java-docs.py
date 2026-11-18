@@ -16,13 +16,25 @@ JAVA_PROFILE = {
     },
     # after/before sem ":" apos o colchete: 244 contra 124 (eixo E2)
     "noColonParams": ("after", "before"),
+    # Workspace e o unico create que o Java real tipa como Organization; o Javadoc diz o mesmo que a assinatura
+    "organizationUser": {
+        "name": "user",
+        "type": "Organization object, default null",
+        "description": "Organization object. Not necessary if starkbank.Settings.user was set before function call",
+    },
     "mapParamText": {
+        "create": "map of parameters",
         "query": "map of parameters for the query",
         "page": "parameters of the query",
+        "get": "map of parameters",
+        "pdf": "[Map of String: Object]: PDF generation options",
+        "qrcode": "[Map of String: Object]: QR code generation options",
         "log.query": "map of parameters for the query",
         "log.page": "parameters of the query",
     },
+    "mapParamName": {"pdf": "options", "qrcode": "options"},
     "patchText": "map of parameters to patch",
+    "createMapText": "parameters for the creation of the {x}",
     "ctorMapText": "map of properties for the creation of the {X}",
     "titles": {
         "get": "Retrieve a specific {X}",
@@ -47,10 +59,14 @@ OPERATION_KINDS = {
     "create": "list", "put": "list",
     "get": "id", "delete": "id", "cancel": "id", "pdf": "id",
     "update": "patch",
+    "parse": "parse",
+    "qrcode": "id",
     "query": "filters", "page": "filters",
-    "log.get": "id", "log.query": "filters", "log.page": "filters",
+    "log.get": "id", "log.query": "filters", "log.page": "filters", "log.pdf": "id",
 }
+OBJECT_LIST_TYPE = re.compile(r"^list of \w+ objects$")
 LOG_OPERATIONS = ("log.get", "log.query", "log.page")
+LOG_PDF = "log.pdf"
 PAGE_OPERATIONS = ("page", "log.page")
 VARIANTS_PLAIN = (("Plain", False, False), ("User", False, True))
 VARIANTS_FILTERS = (("Plain", False, False), ("User", False, True),
@@ -68,26 +84,43 @@ SETTINGS_REFERENCE = re.compile(r"starkbank\.(?:User\.defaultUser|user)\b")
 TYPE_DEFAULT = re.compile(r"^(?P<base>.*?)(?:,\s*default\s+(?P<default>.*))?$")
 
 
-def renderDocs(className: str, docs: dict, flags: set, entity: dict, profile: dict = JAVA_PROFILE) -> dict:
+def renderDocs(
+    className: str,
+    docs: dict,
+    flags: set,
+    entity: dict,
+    profile: dict = JAVA_PROFILE,
+    pageListName: str | None = None,
+    omittedParams: dict | None = None,
+    listParam: str | None = None,
+) -> dict:
     """Linhas de Javadoc ja prontas, por chave plana; o Mustache so as emoldura.
 
     Chaves planas (`getPlain`, `queryParamsUser`, `logPageParams`...) porque o Mustache resolve nome ausente
-    no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo."""
+    no contexto pai: um `get` ou `user` aninhado poderia cair em outro campo do modelo.
+
+    `omittedParams` (`{operacao: {parametro: nota}}`, javaOmittedOperationParams): o parametro que o Java nao recebe sai da
+    doc da operacao e a nota entra no fim da descricao. `listParam` (javaCreateShapes.param) e o nome que o real da ao
+    parametro-lista do create, o mesmo que o `@param` cita."""
     context = {"className": className, "profile": profile, "warnings": [], "fallbacks": [],
-               "snakeNames": snakeNames(docs, entity)}
+               "snakeNames": snakeNames(docs, entity), "pageListName": pageListName, "listParam": listParam,
+               "singletonGet": hasSingletonGet(flags, docs)}
     lines = {
         "dataDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"]),
         "ctorAllDoc": entityHeader(context, entity) + fieldSection(context, entity["fields"], atParam=True),
         "ctorMapDoc": ctorMapLines(context, entity),
     }
-    for operation in flaggedOperations(flags):
+    for operation in flaggedOperations(flags, docs):
         doc = operationDoc(docs, operation)
         if doc is None:
             context["fallbacks"].append(operation)
             doc = genericDoc(operation, className)
-        lines.update(renderOperation(context, operation, doc))
+        lines.update(renderOperation(context, operation, doc, (omittedParams or {}).get(operation) or {}))
     lines = {key: [neutralizeComment(line) for line in block] for key, block in lines.items()}
-    return {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
+    rendered = {"lines": lines, "warnings": context["warnings"], "fallbacks": context["fallbacks"]}
+    if "x-sdk-create" in flags:
+        rendered["create"] = createPlan(className, operationDoc(docs, "create") or genericDoc("create", className))
+    return rendered
 
 
 def describeEntity(schema: dict, createSchema: dict | None, profile: dict = JAVA_PROFILE) -> dict:
@@ -201,9 +234,30 @@ def article(name: str) -> str:
     return "an" if name[:1].lower() in "aeiou" else "a"
 
 
-def flaggedOperations(flags: set) -> list:
+def flaggedOperations(flags: set, docs: dict) -> list:
+    """O `log.pdf` so existe onde o Python o documenta: so Deposit e Invoice tem esse metodo no Log, e nao ha flag
+    para ele, entao o proprio doc e o que o declara."""
     operations = [flag[len("x-sdk-"):] for flag in sorted(flags) if flag[len("x-sdk-"):] in OPERATION_KINDS]
-    return operations + (list(LOG_OPERATIONS) if "x-sdk-log" in flags else [])
+    if "x-sdk-log" not in flags:
+        return operations
+    logPdf = [LOG_PDF] if operationDoc(docs, LOG_PDF) else []
+    return operations + list(LOG_OPERATIONS) + logPdf
+
+
+def hasSingletonGet(flags: set, docs: dict) -> bool:
+    """O get documentado so recebe `user`: o recurso e unico por workspace e nao tem id (Balance). `uuid`
+    (DynamicBrcode) e `expand` tambem identificam ou alteram a busca, entao so o `user` conta. Sem doc nao ha
+    singleton: o bloco generico do get leva o id."""
+    getDoc = operationDoc(docs, "get")
+    if "x-sdk-get" not in flags or not getDoc:
+        return False
+    return {param["name"] for param in getDoc.get("params") or []} <= {"user"}
+
+
+def hasOptionalParamOverloads(operation: str, doc: dict | None) -> bool:
+    """Um `get`, `pdf` ou `qrcode` documentado com opcional alem de `user` (`expand`, `layout`, `size`...) ganha as
+    sobrecargas com Map; so o `user` (ou o id) nao conta, para o resto do SDK sair como antes."""
+    return operation in ("get", "pdf", "qrcode") and bool(optionalParams(doc or {}))
 
 
 def operationDoc(docs: dict, operation: str) -> dict | None:
@@ -217,17 +271,36 @@ def operationKey(operation: str, variant: str) -> str:
     return f"{head}{tail.capitalize()}{variant}"
 
 
-def renderOperation(context: dict, operation: str, doc: dict) -> dict:
+def withoutOmittedParams(doc: dict, omitted: dict) -> dict:
+    """A doc sem os parametros omitidos e com as notas no fim da descricao; sem omissao, a mesma doc."""
+    if not omitted:
+        return doc
+    params = [param for param in doc.get("params") or [] if param.get("name") not in omitted]
+    return {**doc, "params": params, "description": [*(doc.get("description") or []), *omitted.values()]}
+
+
+def hasMapOverloads(docs: dict, operation: str, omitted: dict) -> bool:
+    """A decisao do codigo (build-resource) sobre as sobrecargas com Map, tomada sobre o mesmo doc que o renderOperation
+    ve: depois de tirar os parametros omitidos."""
+    doc = withoutOmittedParams(operationDoc(docs, operation) or {}, (omitted or {}).get(operation) or {})
+    return hasOptionalParamOverloads(operation, doc)
+
+
+def renderOperation(context: dict, operation: str, doc: dict, omitted: dict | None = None) -> dict:
     kind = OPERATION_KINDS[operation]
-    doc = listFormDoc(operation, context["className"], doc) if kind == "list" else doc
-    variants = VARIANTS_FILTERS if kind == "filters" else VARIANTS_PLAIN
+    doc = withoutOmittedParams(doc, omitted or {})
+    plan = createPlan(context["className"], doc) if operation == "create" else None
+    doc = listFormDoc(operation, context["className"], doc) if kind == "list" and not isSingle(plan) else doc
+    hasParamsOverloads = (kind == "filters" or bool(plan and plan["hasExpand"])
+                          or hasOptionalParamOverloads(operation, doc))
+    variants = VARIANTS_FILTERS if hasParamsOverloads else VARIANTS_PLAIN
     description = [contextText(context, line) for line in doc.get("description") or []]
-    title = operationTitle(context, operation, doc)
+    title = singleTitle(context, doc) if isSingle(plan) else operationTitle(context, operation, doc)
     returns = returnLines(context, operation, doc)
     rendered = {}
     for variant, withParams, withUser in variants:
-        parameters = parameterLines(context, operation, kind, doc, withParams)
-        parameters += [userLine(context["profile"])] if withUser else []
+        parameters = parameterLines(context, operation, kind, doc, withParams, plan)
+        parameters += [userLine(context["profile"], plan)] if withUser else []
         rendered[operationKey(operation, variant)] = blockLines(context["profile"], title, description,
                                                                 parameters, returns)
     return rendered
@@ -237,6 +310,68 @@ def returnsList(doc: dict) -> bool:
     """O create/put documentado devolve lista (ou nao diz): a forma que o template Java emite."""
     returns = doc.get("returns") or []
     return not returns or returns[0].startswith("list of")
+
+
+def createForm(className: str, doc: dict | None) -> str:
+    """Forma do create no Java, decidida so pelo docstring: `list` (devolve lista ou nao diz), `object` (devolve
+    um objeto e recebe so um `X object`, sem opcional alem de `user`), `map` (devolve um objeto e recebe escalares)
+    ou `unsupported` (o que nao casa, ou tem `expand`: o real escreve o corpo a mao). O que a assinatura nao
+    carrega nao vira forma: um campo descartado em silencio compilaria e chamaria a API errado."""
+    doc = doc or {}
+    if returnsList(doc):
+        return "list"
+    if hasParam(doc, "expand"):
+        return "unsupported"
+    required = requiredParams(doc)
+    if len(required) == 1 and required[0].get("type") == f"{className} object":
+        return "object" if not optionalParams(doc) else "unsupported"
+    return "map" if required and all(isScalarType(param.get("type") or "") for param in required) else "unsupported"
+
+
+def createPlan(className: str, doc: dict | None) -> dict:
+    """O que o Mustache precisa para escolher o create: booleanos por forma e os dois nomes que o corpo usa.
+    `unsupported` cai na forma lista (so o modo advisory a emite; a guarda de build-resource a barra)."""
+    doc = doc or {}
+    form = createForm(className, doc)
+    paramName = ""
+    if form == "object":
+        paramName = requiredParams(doc)[0]["name"]
+    if form == "map":
+        paramName = f"{className[:1].lower()}{className[1:]}Data"
+    return {
+        "isList": form in ("list", "unsupported"),
+        "isObject": form == "object",
+        "isMap": form == "map",
+        "hasExpand": form == "list" and hasParam(doc, "expand"),
+        "paramName": paramName,
+        "userType": "Organization" if isOrganizationUser(doc) else "User",
+    }
+
+
+def isScalarType(docType: str) -> bool:
+    return not docType.endswith(" object") and not OBJECT_LIST_TYPE.match(docType)
+
+
+def isSingle(plan: dict | None) -> bool:
+    return bool(plan) and (plan["isObject"] or plan["isMap"])
+
+
+def hasParam(doc: dict, name: str) -> bool:
+    return any(param.get("name") == name for param in doc.get("params") or [])
+
+
+def requiredParams(doc: dict) -> list:
+    return [param for param in doc.get("params") or [] if param.get("section") == "required"]
+
+
+def optionalParams(doc: dict) -> list:
+    return [param for param in doc.get("params") or []
+            if param.get("section") != "required" and param.get("name") != "user"]
+
+
+def isOrganizationUser(doc: dict) -> bool:
+    user = next((param for param in doc.get("params") or [] if param.get("name") == "user"), {})
+    return (user.get("type") or "").startswith("Organization object")
 
 
 def listFormDoc(operation: str, className: str, doc: dict) -> dict:
@@ -254,24 +389,47 @@ def blockLines(profile: dict, title: str, description: list, parameters: list, r
     return lines + ["<p>", profile["returnTitle"], *returns, profile["throwsLine"]]
 
 
+def singleTitle(context: dict, doc: dict) -> str:
+    return contextText(context, doc.get("summary") or f"Create {context['className']}")
+
+
 def operationTitle(context: dict, operation: str, doc: dict) -> str:
     className, profile = context["className"], context["profile"]
     template = profile["titles"].get(operation)
     plural = pluralize(className)
+    if operation == "get" and context["singletonGet"]:
+        return summaryTitle(context, operation, doc)
     if template is None or ("{Xs}" in template and plural is None):
         if template is not None:
             context["warnings"].append(f"plural irregular nao suportado: {className}; titulo de {operation}"
                                        " vem do resumo do Python")
-        summary = doc.get("summary") or genericDoc(operation, className)["summary"]
-        return contextText(context, summary)
+        return summaryTitle(context, operation, doc)
     return template.replace("{Xs}", plural or "").replace("{X}", className).replace("{a}", article(className))
 
 
-def parameterLines(context: dict, operation: str, kind: str, doc: dict, withParams: bool) -> list:
+def summaryTitle(context: dict, operation: str, doc: dict) -> str:
+    summary = doc.get("summary") or genericDoc(operation, context["className"])["summary"]
+    return contextText(context, summary)
+
+
+def parameterLines(context: dict, operation: str, kind: str, doc: dict, withParams: bool,
+                   plan: dict | None = None) -> list:
     profile = context["profile"]
     pythonParams = [param for param in doc.get("params") or [] if param.get("name") != "user"]
+    if kind == "list" and plan and plan["isObject"]:
+        return [f"@param {paramText(context, pythonParams[0])}"]
+    if kind == "list" and plan and plan["isMap"]:
+        return mapCreateLines(context, plan, pythonParams)
     if kind == "list":
-        return [entityListLine(context, operation, pythonParams)]
+        return listLines(context, operation, pythonParams, withParams)
+    if operation == "get" and context["singletonGet"]:
+        return []
+    if kind == "parse":
+        return [f"@param {paramText(context, param)}" for param in pythonParams]
+    if kind == "id" and withParams:
+        name = profile["mapParamName"].get(operation, "params")
+        return [idLine(context, pythonParams), f"@param {name} {profile['mapParamText'][operation]}",
+                *[paramText(context, param) for param in optionalParams(doc)]]
     if kind == "id":
         return [idLine(context, pythonParams)]
     if kind == "patch":
@@ -284,10 +442,26 @@ def parameterLines(context: dict, operation: str, kind: str, doc: dict, withPara
             *[paramText(context, param) for param in pythonParams]]
 
 
+def listLines(context: dict, operation: str, pythonParams: list, withParams: bool) -> list:
+    lines = [entityListLine(context, operation, pythonParams)]
+    if not withParams:
+        return lines
+    expand = [param for param in pythonParams if param["name"] == "expand"]
+    return lines + [f"@param params {context['profile']['mapParamText'][operation]}",
+                    *[paramText(context, param) for param in expand]]
+
+
+def mapCreateLines(context: dict, plan: dict, pythonParams: list) -> list:
+    className = context["className"]
+    text = context["profile"]["createMapText"].replace("{x}", f"{className[:1].lower()}{className[1:]}")
+    return [f"@param {plan['paramName']} {text}", *[paramText(context, param) for param in pythonParams]]
+
+
 def entityListLine(context: dict, operation: str, pythonParams: list) -> str:
     """O Java recebe a lista (`{{classVarName}}s`); o Python as vezes recebe os campos soltos (Webhook)."""
     className = context["className"]
-    name = f"{className[:1].lower()}{className[1:]}s"
+    # o nome do javaCreateShapes e do create; o put em lista segue o parametro do template (`{{classVarName}}s`)
+    name = (context.get("listParam") if operation == "create" else None) or f"{className[:1].lower()}{className[1:]}s"
     first = pythonParams[0] if pythonParams else {}
     isList = first.get("type", "").startswith("list of")
     verb = "created/updated" if operation == "put" else "created"
@@ -312,8 +486,9 @@ def paramText(context: dict, param: dict) -> str:
     return f"{head}{separator}{description}"
 
 
-def userLine(profile: dict) -> str:
-    user = profile["user"]
+def userLine(profile: dict, plan: dict | None = None) -> str:
+    isOrganization = bool(plan) and plan["isMap"] and plan["userType"] == "Organization"
+    user = profile["organizationUser"] if isOrganization else profile["user"]
     return f"@param {user['name']} [{user['type']}]: {user['description']}"
 
 
@@ -325,7 +500,7 @@ def returnLines(context: dict, operation: str, doc: dict) -> list:
     returns = returns if len(returns) == 2 else genericReturns(operation, className)
     isLog = operation == "log.page"
     prefix = f"{className}.Log.Page" if isLog else f"{className}.Page"
-    field = "logs" if isLog else f"{className[:1].lower()}{className[1:]}s"
+    field = "logs" if isLog else context["pageListName"] or f"{className[:1].lower()}{className[1:]}s"
     return [f"@return {prefix} object:", f"{prefix}.{field}: {returns[0]}", f"{prefix}.cursor: {returns[1]}"]
 
 
@@ -347,6 +522,11 @@ def fieldLine(context: dict, field: dict, prefix: str = "") -> str:
     return f"{head}: {description}" if description else head
 
 
+def classDataName(propertyNames) -> str:
+    """O SDK real renomeia o ClassData estatico quando a classe tem uma propriedade `data`."""
+    return "classData" if "data" in propertyNames else "data"
+
+
 def ctorMapLines(context: dict, entity: dict) -> list:
     """`X(Map)`: parametros criaveis, depois os somente de retorno (que o construtor deixa null)."""
     className, profile = context["className"], context["profile"]
@@ -354,7 +534,13 @@ def ctorMapLines(context: dict, entity: dict) -> list:
     creatable = [fieldLine(context, field) for field in fields if not field["returnOnly"]]
     returnOnly = [fieldLine(context, field) for field in fields if field["returnOnly"]]
     dataText = profile["ctorMapText"].replace("{X}", className)
-    lines = entityHeader(context, entity) + ["<p>", profile["parametersTitle"], f"@param data {dataText}", *creatable]
+    paramName = classDataName(field["name"] for field in entity["fields"])
+    lines = entityHeader(context, entity) + [
+        "<p>",
+        profile["parametersTitle"],
+        f"@param {paramName} {dataText}",
+        *creatable,
+    ]
     lines += ["<p>", profile["attributesTitle"], *returnOnly] if returnOnly else []
     return lines + [profile["throwsLine"]]
 
@@ -371,7 +557,10 @@ def genericReturns(operation: str, className: str) -> list:
         "delete": [f"deleted {className} object"],
         "cancel": [f"canceled {className} object"],
         "pdf": [f"{className} pdf file content"],
+        "parse": [f"Parsed {className} object"],
+        "qrcode": [f"{className} png blob"],
         "log.get": [f"{className} Log object with updated attributes"],
+        "log.pdf": [f"{className} Log pdf file"],
         "log.query": [f"generator of {className} Log objects with updated attributes"],
         "log.page": [f"list of {className} Log objects with updated attributes",
                      f"cursor to retrieve the next page of {className} Log objects"],
@@ -385,6 +574,9 @@ def genericDoc(operation: str, className: str) -> dict:
         "update": f"Update {className} entity",
         "cancel": f"Cancel {article(className)} {className} entity",
         "pdf": f"Retrieve a specific {className} pdf file",
+        "parse": f"Create a single verified {className} from a content string",
+        "qrcode": f"Retrieve a specific {className} QR Code png",
+        "log.pdf": f"Retrieve a specific {className} Log pdf file",
     }
     descriptions = {
         "create": [f"Send a list of {className} objects for creation in the Stark Bank API"],
