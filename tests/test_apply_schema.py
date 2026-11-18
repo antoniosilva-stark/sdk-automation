@@ -322,3 +322,18 @@ def test_reapplyingOnlyAddsTheDocsToAnExistingSchema(tmpPath):
     assert set(after["Widget"].pop("x-sdk-docs")) == {"get", "query", "page"}
     assert after == before
     assert spec.read_text(encoding="utf-8") == specBefore
+
+
+def test_subresourceFlagIsWrittenNextToTheOperationsInSortedOrder(tmpPath):
+    root = _sdk(tmpPath, "query")
+    module = root / "starkbank" / "widget" / "__widget.py"
+    module.write_text(module.read_text(encoding="utf-8").replace("(Resource)", "(SubResource)"), encoding="utf-8")
+    spec, schemas = _workspace(tmpPath)
+
+    code, out = runTool("apply-schema.py", "Widget", "--from", str(root),
+                        "--spec", str(spec), "--schemas", str(schemas))
+
+    assert code == 0, out
+    assert "suprimido" not in out
+    written = spec.read_text(encoding="utf-8")
+    assert "      x-sdk-query: true\n      x-sdk-subresource: true\n" in written

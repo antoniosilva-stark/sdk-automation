@@ -3085,6 +3085,7 @@ components:
       $ref: ./schemas/verifiedaccount.yaml#/components/schemas/VerifiedAccountCreate
     MerchantCategory:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategory
     MerchantCategoryCreate:
       $ref: ./schemas/merchantcategory.yaml#/components/schemas/MerchantCategoryCreate
@@ -3158,6 +3159,7 @@ components:
       $ref: ./schemas/merchantinstallment.yaml#/components/schemas/MerchantInstallmentCreate
     MerchantCountry:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountry
     MerchantCountryCreate:
       $ref: ./schemas/merchantcountry.yaml#/components/schemas/MerchantCountryCreate
@@ -3194,6 +3196,7 @@ components:
       $ref: ./schemas/invoicepullrequest.yaml#/components/schemas/InvoicePullRequestCreate
     Institution:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/institution.yaml#/components/schemas/Institution
     InstitutionCreate:
       $ref: ./schemas/institution.yaml#/components/schemas/InstitutionCreate
@@ -3241,6 +3244,7 @@ components:
       x-sdk-log: true
       x-sdk-page: true
       x-sdk-pdf: true
+      x-sdk-qrcode: true
       x-sdk-query: true
       x-sdk-update: true
       x-sdk-log-entity: invoice
@@ -3308,8 +3312,10 @@ components:
       x-sdk-delete: true
       x-sdk-get: true
       x-sdk-page: true
+      x-sdk-parse: true
       x-sdk-query: true
       x-sdk-update: true
+      x-sdk-nested: Attempt
       $ref: ./schemas/event.yaml#/components/schemas/Event
     EventCreate:
       $ref: ./schemas/event.yaml#/components/schemas/EventCreate
@@ -3345,6 +3351,8 @@ components:
     CorporatePurchase:
       x-sdk-get: true
       x-sdk-log: true
+      x-sdk-page: true
+      x-sdk-parse: true
       x-sdk-query: true
       x-sdk-log-entity: purchase
       $ref: ./schemas/corporatepurchase.yaml#/components/schemas/CorporatePurchase
@@ -3410,6 +3418,7 @@ components:
       $ref: ./schemas/darfpayment.yaml#/components/schemas/DarfPaymentCreate
     CardMethod:
       x-sdk-query: true
+      x-sdk-subresource: true
       $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethod
     CardMethodCreate:
       $ref: ./schemas/cardmethod.yaml#/components/schemas/CardMethodCreate

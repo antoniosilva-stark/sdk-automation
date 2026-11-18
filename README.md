@@ -61,6 +61,8 @@ the App secret: the jobs that hold the token only run this repo's tools and pinn
 - `tools/coverage-report.py` — how far each resource is from full parity
 - `tools/parity-report.py` — scoreboard: how many generated Java resources pass the strict gate against sdk-java (`make parity`)
 - `tools/make-replica.py` — base de replicação: sdk-java sem os 42 recursos, `make replica`
+- `tools/replicate-all.py` — replica os recursos Java da spec num alvo sem eles e mede o que o pipeline gera, `make replicate`
+- `tools/compare-with-real.py` — compara o Java gerado pelo `make replicate` com o sdk-java real (gaps, similaridade, imports, ordem, Javadoc), `make compare`; `apis/java-handwritten.yaml` dispensa, a parte e com razao, so os membros que o real escreve a mao, e `apis/java-unused-imports.yaml` dispensa, a parte, so os imports que o real declara e nunca usa (`--no-waivers` desliga os dois e mostra os gaps brutos)
 
 **Node.js 18+ locally, 22 in CI** — generation engine and JS tests
 - OpenAPI Generator CLI: npm wrapper `^2.41.0`, core JAR pinned to `7.0.1` in
@@ -110,6 +112,8 @@ make test             # jest + pytest
 make check            # validate + check-bc + test                  — alias: make check-all
 make parity           # N of 42 Java resources pass the strict gate (ARGS="--json out.json --jobs 2 Event")
 make replica          # replication base: sdk-java without the 42 resources, compiled (REPLICA_DIR=..., ARGS="--skip-compile"); `--out` must be empty or nonexistent.
+make replicate        # regenerate the 42 resources into a replica target and report what generates and compiles (REPLICATED_DIR=..., ARGS="--json out.json"); `--out` must be empty or nonexistent; takes ~4 min
+make compare          # compare the Java from `make replicate` with the real sdk-java: gaps, similarity, imports, member order, Javadoc (REPLICATED_DIR=..., ARGS="--json out.json --source DIR Split"); read-only
 make generate         # generate with the paused Node config (needs Java 11+ JRE) — alias: make gen
 make generate-all     # generate all 7 configured languages, sequentially
 make status           # prerequisites, spec presence, generated count
@@ -182,10 +186,10 @@ files for six resources and keeps a closed registry of divergences.
 ### Shapes the template cannot emit
 
 Creating these is refused with `formato nao suportado` instead of emitting code that compiles and
-calls the API wrongly: a `create` that returns a single object (Webhook, MerchantSession,
-MerchantPurchase, CorporateCard, CorporateWithdrawal, CorporateInvoice, Workspace) and a singleton
-`get` without an id (Balance, CorporateBalance). Sub-objects such as `Transfer.Rule`, untyped
-`metadata` and a qualified `Transfer.Log` are known limits reported by the golden by severity.
+calls the API wrongly: a `create` that returns a single object and takes `expand` (CorporateCard). The
+singleton `get` without an id (Balance, CorporateBalance) is generated. Webhook, MerchantSession, MerchantPurchase,
+CorporateWithdrawal, CorporateInvoice and Workspace are generated. Sub-objects such as `Transfer.Rule` and untyped
+`metadata` are known limits reported by the golden by severity.
 All of this is the scope of the next phase (full-Java parity).
 
 ## Spec status — read this before trusting resource counts

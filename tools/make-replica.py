@@ -22,7 +22,24 @@ KILL_DRAIN_SECONDS = 5
 
 
 def emit(text: str) -> None:
-    sys.stdout.write(f"{text}\n")
+    try:
+        sys.stdout.write(f"{text}\n")
+        # em pipe (CI, tee) o Python faz block-buffering: sem flush o progresso só aparece no fim
+        sys.stdout.flush()
+    except BrokenPipeError:
+        silenceStdout()
+
+
+def silenceStdout() -> None:
+    # a saída é só informativa (| head): o texto pendente e o que vier depois vão para o devnull, senão o flush
+    # final do interpretador falha de novo e força o exit 120 no lugar do código real
+    try:
+        descriptor = sys.stdout.fileno()
+    except (AttributeError, ValueError):
+        return
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, descriptor)
+    os.close(devnull)
 
 
 @functools.cache
@@ -152,15 +169,17 @@ def adaptGsonFile(out: Path, resources: list[str]) -> list[str]:
     return [str(GSON_ADAPTERS)]
 
 
-def runCommand(command: list[str], cwd: Path, timeout: int) -> tuple[int, str]:
+def runCommand(command: list[str], cwd: Path, timeout: int, env: dict | None = None) -> tuple[int, str]:
     # grupo próprio: o mvn forka a JVM, e matar só o mvn deixaria o filho vivo segurando o pipe
     try:
         process = subprocess.Popen(
             command,
             cwd=cwd,
+            env={**os.environ, **env} if env else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            errors="replace",
             start_new_session=True,
         )
     except OSError as error:
