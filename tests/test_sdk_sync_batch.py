@@ -33,14 +33,50 @@ def testAHumanDispatchOfTheSyncCannotSkipTheTests():
     assert "skipTests" not in dispatched
 
 
-def testOnlyTheTestStepOfValidateIsSkippedAndTheJobStillRuns():
+SKIP_TESTS = "${{ !inputs.skipTests }}"
+CACHE_ACTION = "actions/cache@5a3ec84eff668545956fd18022155c47e93e2684"  # v4.2.3
+
+
+def servesOnlyTheTestSuite(step):
+    run = step.get("run") or ""
+    key = str((step.get("with") or {}).get("key", ""))
+    return run == "make test" or "dependency:build-classpath" in run or key.startswith(("m2-validate-", "generator-validate-"))
+
+
+def testOnlyTheStepsThatServeTheSuiteAreSkippedAndTheJobStillRuns():
     validate = load(SYNC)["jobs"]["validate"]
     steps = validate["steps"]
-    runTests = next(step for step in steps if step.get("run") == "make test")
+    serving = [step for step in steps if servesOnlyTheTestSuite(step)]
 
     assert "skipTests" not in (validate.get("if") or "")
-    assert runTests["if"] == "${{ !inputs.skipTests }}"
-    assert all("skipTests" not in str(step) for step in steps if step is not runTests)
+    assert len(serving) == 4, "suite, classpath do Maven e os dois caches que so ela usa"
+    assert all(step["if"] == SKIP_TESTS for step in serving)
+    assert all("skipTests" not in str(step) for step in steps if step not in serving)
+
+
+def testTheCachesUseOnePinnedActionAndKeysDerivedOnlyFromFiles():
+    jobs = load(SYNC)["jobs"]
+    found = 0
+    for name in ("validate", "build", "compile"):
+        for step in jobs[name]["steps"]:
+            if "actions/cache" not in (step.get("uses") or ""):
+                continue
+            found += 1
+            assert step["uses"].startswith(CACHE_ACTION), step["uses"]
+            key = step["with"]["key"]
+            assert "hashFiles(" in key and "inputs." not in key and "secrets." not in key, key
+    assert found == 4
+
+
+def testNoCacheReachesTheJobsThatHoldTheTokenAndEachJobKeepsItsOwnKeys():
+    jobs = load(SYNC)["jobs"]
+    keys = {name: [step["with"]["key"] for step in jobs[name]["steps"]
+                   if "actions/cache" in (step.get("uses") or "")] for name in jobs}
+
+    assert keys["deliver"] == [] and keys["drift-pr"] == [] and keys["drift"] == []
+    assert len(keys["build"]) == 1 and "generator-build" in keys["build"][0], "o build nao roda maven"
+    assert [key.split("-")[0] for key in keys["compile"]] == ["m2"] and "m2-compile-" in keys["compile"][0]
+    assert not any("m2-compile-" in key for key in keys["validate"]), "chave do compile nao entra no validate"
 
 
 def testTheBatchIsStartedOnlyByAHumanAndOnlyFromTheDefaultBranch():

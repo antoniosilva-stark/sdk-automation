@@ -72,6 +72,19 @@ jobs:
       - name: Resolve the SDK references at the pinned commits
         run: make clone-sdk-ref-pinned
 
+      - name: Cache the generator jar
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: node_modules/@openapitools/openapi-generator-cli/versions
+          key: generator-validate-${{ runner.os }}-${{ hashFiles('openapitools.json') }}
+
+      - name: Cache the Maven repository
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.m2/repository
+          key: m2-validate-${{ runner.os }}-${{ hashFiles('_references/sdk-java/pom.xml') }}
+          restore-keys: m2-validate-${{ runner.os }}-
+
       - name: Populate the Maven cache with the reference SDK dependencies
         # os testes de runtime do construtor leem este cache com `mvn -o`; mesmo goal, para o cache bater
         run: mvn -q -B --no-transfer-progress -f _references/sdk-java/pom.xml dependency:build-classpath -Dmdep.outputFile="$RUNNER_TEMP/classpath.txt"

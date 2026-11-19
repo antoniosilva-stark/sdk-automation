@@ -587,13 +587,13 @@ def main() -> int:
 
         announceIntent(args.resource, args.lang, absent, len(runs))
 
+        if args.rewrite and absent == len(runs):
+            emit(f"[ERROR] update exige recurso existente: {args.resource} não existe em sdk-{args.lang}")
+            return 1
+
         unsupported = unsupportedShape(args.resource) if args.lang == "java" and absent == len(runs) else None
         if unsupported and not args.advisory:
             emit(f"[ERROR] formato nao suportado: {unsupported}")
-            return 1
-
-        if args.rewrite and absent == len(runs):
-            emit(f"[ERROR] update exige recurso existente: {args.resource} não existe em sdk-{args.lang}")
             return 1
 
         artifacts = {}

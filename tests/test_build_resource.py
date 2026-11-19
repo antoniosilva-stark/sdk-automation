@@ -73,8 +73,9 @@ def test_workflowDefaultIsAnOfferedLanguage():
     assert language["default"] in language["options"]
 
 
-def test_dispatchAsksOnlyForResourceAndLanguage():
-    assert set(_dispatchInputs()) == {"resource", "language"}
+def test_dispatchAsksOnlyForResourceLanguageAndMode():
+    # o modo e politica (create ou update), nunca alvo nem base
+    assert set(_dispatchInputs()) == {"resource", "language", "mode"}
 
 
 def test_dispatchAsksForNeitherTargetNorBase():
@@ -701,6 +702,20 @@ def test_rewriteOfAnAbsentResourceFailsAndPlacesNothing(tmpPath, referenceWithou
 
     assert code == 1, out
     assert "update exige recurso existente" in out
+    assert list(target.rglob("*")) == []
+
+
+@requiresGenerator
+def test_rewriteOfAnAbsentResourceWithAnUnsupportedShapeStillSaysItNeedsAnExistingOne(tmpPath, referenceWithout):
+    # sem isto, o update de CorporateCard diria "formato nao suportado" e esconderia a regra do modo
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "CorporateCard", "--lang", "java", "--into", str(target),
+                        "--rewrite", env=referenceWithout("java", "CorporateCard"))
+
+    assert code == 1, out
+    assert "update exige recurso existente" in out
+    assert "formato nao suportado" not in out
     assert list(target.rglob("*")) == []
 
 
