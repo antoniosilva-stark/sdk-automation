@@ -1,0 +1,135 @@
+name: SDK Sync Batch
+
+# Roda a suite uma vez e depois o SDK Sync de cada recurso, em ordem de dependencia. Cada recurso
+# segue o mesmo caminho do SDK Sync (drift, build, compile, deliver); este workflow nao mergeia nada.
+# Recurso ausente no alvo abre a PR dele sobre a base atual: um recurso que depende de outro ainda
+# nao mergeado nao compila, entao a criacao em massa pede os PRs mergeados na ordem.
+
+on:
+  workflow_dispatch:
+    inputs:
+      resources:
+        description: 'Recursos separados por virgula (vazio = todos)'
+        required: false
+        default: ''
+      exclude:
+        description: 'Recursos a tirar do lote (CorporateCard: formato que o gerador recusa de proposito)'
+        required: false
+        default: CorporateCard
+      language:
+        description: 'Linguagem do SDK — define o repositorio alvo'
+        type: choice
+        options: [java]
+        default: java
+
+run-name: "batch (${{ inputs.language }}) → ${{ github.repository_owner }}"
+
+concurrency:
+  group: sdk-sync-batch-${{ github.ref }}-${{ inputs.language }}
+  cancel-in-progress: false
+
+jobs:
+  wrong-ref:
+    if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: |
+          echo "O SDK Sync Batch so roda a partir da branch default do repositorio."
+          exit 1
+
+  # mesmos passos do validate do sdk-sync: um teste confere que continuam iguais
+  validate:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - run: pip install -r requirements.txt
+      - run: npm ci
+
+      - name: Validate OpenAPI spec
+        run: openapi-spec-validator apis/spec-v2.openapi.yaml
+
+      - name: Resolve the SDK references at the pinned commits
+        run: make clone-sdk-ref-pinned
+
+      - name: Populate the Maven cache with the reference SDK dependencies
+        # os testes de runtime do construtor leem este cache com `mvn -o`; mesmo goal, para o cache bater
+        run: mvn -q -B --no-transfer-progress -f _references/sdk-java/pom.xml dependency:build-classpath -Dmdep.outputFile="$RUNNER_TEMP/classpath.txt"
+
+      - name: Run tests
+        env:
+          # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o gate fica verde
+          REQUIRE_TEST_DEPENDENCIES: '1'
+        run: make test
+
+  # Sem secret: so le o schema versionado e o sdk-java de referencia para ordenar os recursos.
+  plan:
+    needs: validate
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      resources: ${{ steps.order.outputs.resources }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Resolve the SDK references at the pinned commits
+        run: make clone-sdk-ref-pinned
+
+      - name: Order the resources by dependency
+        id: order
+        env:
+          LANGUAGE: ${{ inputs.language }}
+          RESOURCES: ${{ inputs.resources }}
+          EXCLUDE: ${{ inputs.exclude }}
+        run: |
+          LIST=$(python3 tools/plan-batch.py --lang "$LANGUAGE" --resources "$RESOURCES" --exclude "$EXCLUDE")
+          echo "resources=$LIST" >> "$GITHUB_OUTPUT"
+          echo "Lote: $LIST" >> "$GITHUB_STEP_SUMMARY"
+
+  # Um recurso por vez, na ordem do plano; a falha de um nao cancela os outros.
+  sync:
+    needs: [validate, plan]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        resource: ${{ fromJSON(needs.plan.outputs.resources) }}
+    uses: ./.github/workflows/sdk-sync.yaml
+    with:
+      resource: ${{ matrix.resource }}
+      language: ${{ inputs.language }}
+      skipTests: true
+    secrets: inherit

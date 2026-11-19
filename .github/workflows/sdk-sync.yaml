@@ -12,6 +12,18 @@ on:
         type: choice
         options: [java]
         default: java
+  # chamado pelo sdk-sync-batch, que roda a suite uma vez e a pula nos recursos
+  workflow_call:
+    inputs:
+      resource:
+        type: string
+        required: true
+      language:
+        type: string
+        default: java
+      skipTests:
+        type: boolean
+        default: false
 
 run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
 
@@ -69,6 +81,8 @@ jobs:
         run: mvn -q -B --no-transfer-progress -f _references/sdk-java/pom.xml dependency:build-classpath -Dmdep.outputFile="$RUNNER_TEMP/classpath.txt"
 
       - name: Run tests
+        # so o sdk-sync-batch passa skipTests, e depois de rodar a mesma suite no job dele; no disparo manual o input nao existe
+        if: ${{ !inputs.skipTests }}
         env:
           # sem isto, gerador, javac ou SDK de referencia ausentes viram skip e o gate fica verde
           REQUIRE_TEST_DEPENDENCIES: '1'
