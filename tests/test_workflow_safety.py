@@ -1,3 +1,4 @@
+import json
 import re
 import yaml
 import subprocess
@@ -741,18 +742,20 @@ def test_theStrayFileGuardFailsClosedWhenTheComparisonItselfFails(tmpPath, mode,
 
 
 FIXED_BUILD_SUMMARIES = {
-    "0": ("intent=create", "recurso ausente no SDK de referencia: gerado e verificado"),
-    "4": ("intent=exists", "recurso ja existe no SDK de referencia: relatorio de paridade no log, nada entregue"),
+    ("create", "0"): ("intent=create", "recurso ausente no SDK de referencia: gerado e verificado"),
+    ("create", "4"): ("intent=exists", "recurso ja existe no SDK de referencia: relatorio de paridade no log, nada entregue"),
+    ("update", "5"): ("intent=update", "recurso ja existe no SDK de referencia: regenerado e verificado (update)"),
 }
+CREATE_OR_UPDATE = "contains(fromJSON('[\"create\",\"update\"]'), needs.build.outputs.intent)"
 
 
-def test_theBuildExposesTheIntentAndOnlyCreateFingerprintsAndUploads():
+def test_theBuildExposesTheIntentAndOnlyCreateOrUpdateFingerprintsAndUploads():
     jobs = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"]
     steps = jobs["build"]["steps"]
     built = steps[stepIndex(steps, "build-resource.py", "run")]
     upload = next(step for step in steps if "upload-artifact" in (step.get("uses") or ""))
     fingerprint = steps[stepIndex(steps, "artifact-digest.py", "run")]
-    condition = f"steps.{built['id']}.outputs.intent == 'create'"
+    condition = f"contains(fromJSON('[\"create\",\"update\"]'), steps.{built['id']}.outputs.intent)"
 
     assert jobs["build"]["outputs"]["intent"] == f"${{{{ steps.{built['id']}.outputs.intent }}}}"
     assert fingerprint.get("if") == condition
@@ -760,58 +763,120 @@ def test_theBuildExposesTheIntentAndOnlyCreateFingerprintsAndUploads():
 
 
 @pytest.mark.parametrize("name", ["compile", "deliver"])
-def test_compileAndDeliverOnlyRunWhenTheBuildIntentIsCreate(name):
+def test_compileAndDeliverOnlyRunWhenTheBuildIntentIsCreateOrUpdate(name):
     condition = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["jobs"][name]["if"]
 
-    assert "needs.build.outputs.intent == 'create'" in condition
+    assert CREATE_OR_UPDATE in condition
+    allowed = re.search(r"fromJSON\('(\[.*?\])'\)", condition).group(1)
+    assert json.loads(allowed) == ["create", "update"], "exists nunca entrega"
     assert "github.event.repository.default_branch" in condition
     assert not re.search(r"always\(|cancelled\(|failure\(|success\(", condition)
 
 
-@pytest.mark.parametrize("code", ["0", "4", "1"])
-def test_theBuildStepTurnsTheExitCodeIntoAnIntentAndFailsOnAnythingElse(tmpPath, code):
+def _runBuildStep(tmpPath, mode, code):
     steps = buildSteps()
     script = steps[stepIndex(steps, "build-resource.py", "run")]["run"]
     binario = tmpPath / "bin"
     binario.mkdir()
-    (binario / "python3").write_text(f"#!/bin/sh\necho LOG-DO-BUILD-NAO-COPIAR\nexit {code}\n", encoding="utf-8")
+    arguments = tmpPath / "arguments.txt"
+    (binario / "python3").write_text(
+        f'#!/bin/sh\necho LOG-DO-BUILD-NAO-COPIAR\necho "$*" > {arguments}\nexit {code}\n', encoding="utf-8")
     (binario / "python3").chmod(0o755)
     output = tmpPath / "output.txt"
     summary = tmpPath / "summary.txt"
 
     resultado = subprocess.run(["/bin/bash", "-e", "-c", script], capture_output=True, text=True, cwd=tmpPath,
                                env={"PATH": f"{binario}:/usr/bin:/bin", "RESOURCE": "SplitProfile",
-                                    "LANGUAGE": "java", "GITHUB_OUTPUT": str(output),
+                                    "LANGUAGE": "java", "MODE": mode, "GITHUB_OUTPUT": str(output),
                                     "GITHUB_STEP_SUMMARY": str(summary)})
 
     written = output.read_text(encoding="utf-8") if output.exists() else ""
     text = summary.read_text(encoding="utf-8") if summary.exists() else ""
+    passed = arguments.read_text(encoding="utf-8") if arguments.exists() else ""
+    return resultado, written, text, passed
+
+
+@pytest.mark.parametrize("mode,code", [("create", "0"), ("create", "4"), ("update", "5")])
+def test_theBuildStepTurnsTheExitCodeOfTheRequestedModeIntoAnIntent(tmpPath, mode, code):
+    resultado, written, text, passed = _runBuildStep(tmpPath, mode, code)
+
+    intent, fixedText = FIXED_BUILD_SUMMARIES[(mode, code)]
     assert "LOG-DO-BUILD-NAO-COPIAR" not in text, "o resumo copiou log do build"
-    if code not in FIXED_BUILD_SUMMARIES:
-        assert resultado.returncode == int(code), resultado.stdout
-        assert "intent=" not in written
-        return
-    intent, fixedText = FIXED_BUILD_SUMMARIES[code]
     assert resultado.returncode == 0, resultado.stderr
     assert written.strip() == intent
     assert text.strip() == fixedText
 
 
-def test_noStepNamesAnUpdateAndTheCreationGuardIsOnTheBranchPreparation():
-    raw = yaml.safe_dump(yaml.safe_load(SYNC.read_text(encoding="utf-8")))
+@pytest.mark.parametrize("mode,code", [("create", "5"), ("update", "0"), ("update", "4"), ("create", "1"),
+                                       ("update", "1"), ("create", "3"), ("bogus", "0"), ("", "0")])
+def test_theBuildStepFailsOnAnyCombinationOfModeAndExitCodeThatIsNotCreateZeroCreateFourOrUpdateFive(
+        tmpPath, mode, code):
+    # Mutacao: aceitar update com exit 0 deixaria um recurso ausente seguir como se fosse atualizacao.
+    resultado, written, text, _ = _runBuildStep(tmpPath, mode, code)
+
+    assert resultado.returncode != 0, resultado.stdout
+    assert "intent=" not in written
+    assert "LOG-DO-BUILD-NAO-COPIAR" not in text
+
+
+@pytest.mark.parametrize("mode,flag", [("create", False), ("update", True)])
+def test_theBuildStepAsksForTheRewriteOnlyInUpdateMode(tmpPath, mode, flag):
+    code = "5" if flag else "0"
+
+    _, _, _, passed = _runBuildStep(tmpPath, mode, code)
+
+    assert ("--rewrite" in passed.split()) is flag, passed
+
+
+def test_theModeReachesEveryJobOnlyThroughEnv():
+    raw = SYNC.read_text(encoding="utf-8")
+    jobs = yaml.safe_load(raw)["jobs"]
+
+    for name in ("build", "compile", "deliver"):
+        for step in jobs[name]["steps"]:
+            assert "inputs.mode" not in (step.get("run") or ""), f"{name}: mode interpolado em run"
+    assert jobs["build"]["steps"][stepIndex(jobs["build"]["steps"], "build-resource.py", "run")]["env"]["MODE"] \
+        == "${{ inputs.mode }}"
+
+
+@pytest.mark.parametrize("mode,intent,ok", [("create", "create", True), ("update", "update", True),
+                                            ("create", "update", False), ("update", "create", False),
+                                            ("update", "exists", False), ("create", "", False),
+                                            ("bogus", "bogus", False)])
+def test_deliverRefusesAnIntentThatDoesNotMatchTheRequestedMode(tmpPath, mode, intent, ok):
+    # Mutacao: remover o passo deixaria o deliver confiar so no que o build calculou.
     steps = deliverSteps()
-    prepare = steps[stepIndex(steps, "prepare-branch.py", "run")]["run"]
-    commit = steps[stepIndex(steps, "git -c core.hooksPath=/dev/null commit", "run")]
-    pullRequest = steps[stepIndex(steps, "gh pr create", "run")]
+    step = steps[stepIndex(steps, "MODE:$INTENT", "run")]
 
-    assert "Update" not in raw
-    assert "steps.verb" not in raw and "VERB" not in raw
-    assert "--create-only" in prepare
-    assert 'commit -m "Add $RESOURCE resource"' in commit["run"]
-    assert '--title "Add $RESOURCE resource"' in pullRequest["run"]
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True,
+                               env={"PATH": "/usr/bin:/bin", "MODE": mode, "INTENT": intent})
+
+    assert (resultado.returncode == 0) is ok, resultado.stdout + resultado.stderr
+    assert step["env"]["MODE"] == "${{ inputs.mode }}"
+    assert step["env"]["INTENT"] == "${{ needs.build.outputs.intent }}"
+    assert stepIndex(steps, "MODE:$INTENT", "run") < stepIndex(steps, "create-github-app-token", "uses")
 
 
-def _runOpenPullRequest(tmpPath, changed, open_):
+def test_theBranchPreparationUsesTheGuardOfTheIntentAndANameThatNeverCollidesWithCreate():
+    steps = deliverSteps()
+    prepare = steps[stepIndex(steps, "prepare-branch.py", "run")]
+
+    assert "--create-only" in prepare["run"]
+    assert "--update-only" in prepare["run"]
+    assert 'BRANCH="sdk-automation/update-$SLUG"' in prepare["run"]
+    assert 'BRANCH="sdk-automation/$SLUG"' in prepare["run"]
+    assert prepare["env"]["INTENT"] == "${{ needs.build.outputs.intent }}"
+
+
+def test_theCompileJobPositionsTheSameBranchTheDeliverUses():
+    steps = jobSteps("compile")
+    position = steps[stepIndex(steps, "prepare-branch.py", "run")]
+
+    assert 'sdk-automation/update-$SLUG' in position["run"]
+    assert position["env"]["INTENT"] == "${{ needs.build.outputs.intent }}"
+
+
+def _runOpenPullRequest(tmpPath, changed, open_, intent="create"):
     steps = deliverSteps()
     step = steps[stepIndex(steps, "gh pr create", "run")]
     binario = tmpPath / "bin"
@@ -823,7 +888,7 @@ def _runOpenPullRequest(tmpPath, changed, open_):
         encoding="utf-8")
     (binario / "gh").chmod(0o755)
     resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True,
-                               env={"PATH": f"{binario}:/usr/bin:/bin", "OPEN": open_, "CHANGED": changed,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "OPEN": open_, "CHANGED": changed, "INTENT": intent,
                                     "RESOURCE": "SplitProfile", "LANGUAGE": "java", "SHA": "abc123",
                                     "RUN_URL": "https://github.com/dono/repo/actions/runs/9",
                                     "OWNER": "dono", "TARGET_REPO": "sdk-java", "BRANCH": "sdk-automation/x",
@@ -859,3 +924,36 @@ def test_theCreationPullRequestBodyIsFixedAndBuiltOnlyFromTrustedEnv(tmpPath):
     assert step["env"]["SHA"] == "${{ github.sha }}"
     assert step["env"]["RUN_URL"] == "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
     assert step["env"]["LANGUAGE"] == "${{ inputs.language }}"
+
+
+def test_theUpdatePullRequestBodyIsFixedSaysItReplacesAnExistingResourceAndIsNeverMerged(tmpPath):
+    step, resultado, chamadas = _runOpenPullRequest(tmpPath, "true", "0", intent="update")
+
+    assert resultado.returncode == 0, resultado.stderr
+    assert "--title Update SplitProfile resource" in chamadas
+    assert ("--body Atualizacao do recurso SplitProfile (java), que ja existe neste SDK, regerado a partir de "
+            "apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@abc123, run "
+            "https://github.com/dono/repo/actions/runs/9. Verificacao: lint-spec e assert-generated estrito contra "
+            "a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Esta PR substitui "
+            "o arquivo existente: revise o diff completo, pois retoques manuais do SDK podem ser sobrescritos. "
+            "O workflow nunca faz o merge.") in chamadas
+    assert "--head sdk-automation/x" in chamadas
+    assert "merge" not in chamadas.replace("nunca faz o merge", "")
+    assert step["env"]["INTENT"] == "${{ needs.build.outputs.intent }}"
+    assert "${{" not in step["run"]
+
+
+def test_theCommitMessageFollowsTheIntent():
+    steps = deliverSteps()
+    commit = steps[stepIndex(steps, "git -c core.hooksPath=/dev/null commit", "run")]
+
+    assert 'commit -m "Add $RESOURCE resource"' in commit["run"]
+    assert 'commit -m "Update $RESOURCE resource"' in commit["run"]
+    assert commit["env"]["INTENT"] == "${{ needs.build.outputs.intent }}"
+
+
+def test_noStepOfTheWorkflowMergesAPullRequest():
+    raw = SYNC.read_text(encoding="utf-8")
+
+    assert "gh pr merge" not in raw
+    assert "--auto" not in raw

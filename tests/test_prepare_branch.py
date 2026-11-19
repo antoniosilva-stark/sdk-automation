@@ -353,3 +353,83 @@ def test_createOnlyWithoutAllowedPathsFileIsAnArgumentError(remote):
     assert outputs == {}
     assert "--allowed-paths-file" in log
     assert _localBranches(target) == ""
+
+
+def test_updateOnlyWithEveryDeclaredPathOnTheBasePositionsTheBranch(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "base-1"), "--update-only")
+
+    assert code == 0, log
+    assert outputs == {"exists": "false", "old": ""}
+    assert _git(target, "rev-parse", "--abbrev-ref", "HEAD") == BRANCH
+
+
+def test_updateOnlyFailsWhenADeclaredPathIsAbsentFromTheBase(remote):
+    target = _checkout(remote)
+    headBefore = _git(target, "symbolic-ref", "-q", "--short", "HEAD")
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "Widget.java"), "--update-only")
+
+    assert code == 5
+    assert outputs == {}
+    assert "Widget.java" in log
+    assert "update-only" in log
+    assert _localBranches(target) == ""
+    assert _git(target, "symbolic-ref", "-q", "--short", "HEAD") == headBefore
+
+
+def test_updateOnlyNamesOnlyTheDeclaredPathsThatAreMissing(remote):
+    target = _checkout(remote)
+
+    code, _, log = _run(target, "--allowed-paths-file", _allowed(remote, "base-1", "Missing.java"),
+                        "--update-only")
+
+    assert code == 5
+    assert "Missing.java" in log
+    assert "base-1" not in log
+
+
+def test_updateOnlyFailsWhenAReusedBotBranchHidesAFileMissingFromTheBase(remote):
+    # o ramo do bot tem o arquivo, a base nao: update nao pode "criar" por tras da politica
+    branchTip = _pushBranch(remote)
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "generated"), "--update-only")
+
+    assert code == 5, log
+    assert outputs == {}
+    assert _localBranches(target) == ""
+    assert _git(remote["root"] / "remote.git", "rev-parse", f"refs/heads/{BRANCH}") == branchTip
+
+
+def test_updateOnlyFailsClosedWhenTheBaseTreeCannotBeListed(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "../escape"), "--update-only")
+
+    assert code == 2, log
+    assert outputs == {}
+    assert _localBranches(target) == ""
+
+
+def test_updateOnlyWithoutAllowedPathsFileIsAnArgumentError(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--update-only")
+
+    assert code == 2
+    assert outputs == {}
+    assert "--allowed-paths-file" in log
+    assert _localBranches(target) == ""
+
+
+def test_createOnlyAndUpdateOnlyTogetherAreAnArgumentError(remote):
+    target = _checkout(remote)
+
+    code, outputs, log = _run(target, "--allowed-paths-file", _allowed(remote, "base-1"),
+                              "--create-only", "--update-only")
+
+    assert code == 2
+    assert outputs == {}
+    assert _localBranches(target) == ""

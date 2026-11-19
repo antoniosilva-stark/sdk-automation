@@ -29,6 +29,7 @@ def loadTool(name: str):
 EXIT_ABSENT_UPSTREAM = loadTool("derive-contract").EXIT_ABSENT_UPSTREAM
 EXIT_NO_EXECUTABLE = 127
 EXIT_EXISTS = 4  # recurso já existe no SDK de referência: relatório emitido, nada entregue
+EXIT_REWRITTEN = 5  # --rewrite: recurso existente regenerado, aprovado no gate estrito e colocado
 
 SCOPE = "supportingFiles=false,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false"
 
@@ -509,11 +510,27 @@ def reportParity(language: str, runs: list[dict], artifacts: dict[str, Path],
          f" {len(failed)} reprovaram, {len(runs) - len(present)} ausentes no SDK de referência")
 
 
+def rewriteExisting(args, runs, artifacts, rulers, generatedDir, targetDir) -> int:
+    # mesmo gate estrito do create: o update nao relaxa nada, so troca o que fazer quando o recurso existe
+    for run in runs:
+        if assertGenerated(artifacts[run["role"]], args.lang, run["role"], rulers[run["role"]],
+                           True, False, style=True) != 0:
+            return 1
+
+    if place(args.resource, args.lang, generatedDir, targetDir) != 0:
+        return 1
+
+    emit(f"[OK] {args.resource} regenerado e verificado em {targetDir} (update)")
+    return EXIT_REWRITTEN
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gera um recurso, verifica e posiciona no layout do SDK")
     parser.add_argument("resource", help="nome do recurso, ex: SplitProfile")
     parser.add_argument("--lang", required=True, help=f"linguagem ({', '.join(sorted(GENERATORS))})")
     parser.add_argument("--into", required=True, help="raiz do repositório do SDK alvo")
+    parser.add_argument("--rewrite", action="store_true",
+                        help="modo update: regenera um recurso que ja existe no SDK de referencia (falha se ausente)")
     parser.add_argument("--advisory", action="store_true",
                         help="mede sem bloquear; para desenvolvimento de template, nunca no pipeline")
     args = parser.parse_args()
@@ -575,6 +592,10 @@ def main() -> int:
             emit(f"[ERROR] formato nao suportado: {unsupported}")
             return 1
 
+        if args.rewrite and absent == len(runs):
+            emit(f"[ERROR] update exige recurso existente: {args.resource} não existe em sdk-{args.lang}")
+            return 1
+
         artifacts = {}
         for run in runs:
             source, _ = pairs[run["role"]]
@@ -582,6 +603,9 @@ def main() -> int:
             if not artifacts[run["role"]].is_file():
                 emit(f"[ERROR] gerador {run['role']} retornou 0 mas não produziu o artefato: {source}")
                 return 1
+
+        if args.rewrite and absent == 0:
+            return rewriteExisting(args, runs, artifacts, rulers, generatedDir, targetDir)
 
         if absent < len(runs):
             reportParity(args.lang, runs, artifacts, rulers)

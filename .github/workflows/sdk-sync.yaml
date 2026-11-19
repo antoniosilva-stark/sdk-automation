@@ -12,6 +12,11 @@ on:
         type: choice
         options: [java]
         default: java
+      mode:
+        description: 'create: so cria recurso ausente. update: regenera um recurso que ja existe e abre PR de atualizacao para revisao'
+        type: choice
+        options: [create, update]
+        default: create
   # chamado pelo sdk-sync-batch, que roda a suite uma vez e a pula nos recursos
   workflow_call:
     inputs:
@@ -21,11 +26,14 @@ on:
       language:
         type: string
         default: java
+      mode:
+        type: string
+        default: create
       skipTests:
         type: boolean
         default: false
 
-run-name: "${{ inputs.resource }} (${{ inputs.language }}) → ${{ github.repository_owner }}"
+run-name: "${{ inputs.resource }} (${{ inputs.language }})${{ inputs.mode == 'update' && ' [update]' || '' }} → ${{ github.repository_owner }}"
 
 concurrency:
   group: sdk-sync-${{ github.ref }}-${{ inputs.language }}-${{ inputs.resource }}
@@ -324,22 +332,40 @@ jobs:
         env:
           RESOURCE: ${{ inputs.resource }}
           LANGUAGE: ${{ inputs.language }}
+          MODE: ${{ inputs.mode }}
         run: |
           mkdir -p staging
-          # 0 gerou, 4 ja existe no SDK de referencia; outro codigo e falha e nao escreve intent
+          # create: 0 gerou, 4 ja existe no SDK de referencia. update: 5 regenerou o que ja existe.
+          # Qualquer outra combinacao de modo e codigo e falha e nao escreve intent.
           CODE=0
-          python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging || CODE=$?
-          case "$CODE" in
-            0)
+          if [ "$MODE" = "update" ]; then
+            python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging --rewrite || CODE=$?
+          else
+            python3 tools/build-resource.py "$RESOURCE" --lang "$LANGUAGE" --into staging || CODE=$?
+          fi
+          case "$MODE:$CODE" in
+            create:0)
               echo "intent=create" >> "$GITHUB_OUTPUT"
               echo "recurso ausente no SDK de referencia: gerado e verificado" >> "$GITHUB_STEP_SUMMARY"
               ;;
-            4)
+            create:4)
               echo "intent=exists" >> "$GITHUB_OUTPUT"
               echo "recurso ja existe no SDK de referencia: relatorio de paridade no log, nada entregue" >> "$GITHUB_STEP_SUMMARY"
               ;;
+            update:5)
+              echo "intent=update" >> "$GITHUB_OUTPUT"
+              echo "recurso ja existe no SDK de referencia: regenerado e verificado (update)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
             *)
-              echo "build-resource terminou com codigo $CODE."
+              echo "build-resource terminou com codigo $CODE no modo '$MODE'."
+              if [ "$MODE" != "create" ] && [ "$MODE" != "update" ]; then
+                echo "modo desconhecido."
+                exit 1
+              fi
+              if [ "$CODE" -eq 0 ] || [ "$CODE" -eq 4 ] || [ "$CODE" -eq 5 ]; then
+                echo "combinacao de modo e codigo nao permitida."
+                exit 1
+              fi
               exit "$CODE"
               ;;
           esac
@@ -347,12 +373,12 @@ jobs:
       # o resumo e calculado aqui, logo antes do upload: o job com o token confere o que baixa
       - name: Fingerprint the verified artifact
         id: fingerprint
-        if: steps.built.outputs.intent == 'create'
+        if: contains(fromJSON('["create","update"]'), steps.built.outputs.intent)
         run: echo "digest=$(python3 tools/artifact-digest.py staging)" >> "$GITHUB_OUTPUT"
 
       # o artefato sai daqui, antes de existir qualquer codigo do alvo neste job
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: steps.built.outputs.intent == 'create'
+        if: contains(fromJSON('["create","update"]'), steps.built.outputs.intent)
         with:
           name: staging
           path: staging
@@ -363,7 +389,7 @@ jobs:
   # sobre o artefato: este job so le o que o build verificou.
   compile:
     needs: build
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && contains(fromJSON('["create","update"]'), needs.build.outputs.intent)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -416,11 +442,17 @@ jobs:
         working-directory: target
         env:
           SLUG: ${{ steps.resource.outputs.slug }}
+          INTENT: ${{ needs.build.outputs.intent }}
         run: |
           BASE=$(git rev-parse --abbrev-ref HEAD)
+          if [ "$INTENT" = "update" ]; then
+            BRANCH="sdk-automation/update-$SLUG"
+          else
+            BRANCH="sdk-automation/$SLUG"
+          fi
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
-          python3 ../tools/prepare-branch.py "sdk-automation/$SLUG" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" > /dev/null
+          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" > /dev/null
 
       - name: Copy verified artifacts into the target
         run: cp -R staging/. target/
@@ -434,7 +466,7 @@ jobs:
   # nenhum pip, npm ou maven. Copia apenas os caminhos declarados, nunca a arvore inteira.
   deliver:
     needs: [build, compile]
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build.outputs.intent == 'create'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && contains(fromJSON('["create","update"]'), needs.build.outputs.intent)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -478,6 +510,20 @@ jobs:
           RESOURCE: ${{ inputs.resource }}
           LANGUAGE: ${{ inputs.language }}
         run: python3 tools/place-generated.py "$RESOURCE" --lang "$LANGUAGE" --targets > "$RUNNER_TEMP/paths.txt"
+
+      # o intent vem do build e o modo vem do disparo: so create+create e update+update seguem
+      - name: Require the build intent to match the requested mode
+        env:
+          MODE: ${{ inputs.mode }}
+          INTENT: ${{ needs.build.outputs.intent }}
+        run: |
+          case "$MODE:$INTENT" in
+            create:create|update:update) ;;
+            *)
+              echo "modo '$MODE' nao corresponde ao intent '$INTENT' calculado pelo build."
+              exit 1
+              ;;
+          esac
 
       - name: Require GitHub App credentials
         env:
@@ -535,16 +581,24 @@ jobs:
         env:
           SLUG: ${{ steps.resource.outputs.slug }}
           BASE: ${{ steps.base.outputs.base }}
+          INTENT: ${{ needs.build.outputs.intent }}
         run: |
-          BRANCH="sdk-automation/$SLUG"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-
           git config user.name "sdk-automation-bot"
           git config user.email "sdk-automation@starkbank.com"
 
           # a branch existente so e reaproveitada se contem a base atual; senao e regerada sobre ela.
-          # --create-only: se o recurso apareceu na base depois do build, sai com 4 em vez de sobrescrever
-          python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" --create-only >> "$GITHUB_OUTPUT"
+          # create: --create-only sai com 4 se o recurso apareceu na base depois do build, em vez de sobrescrever.
+          # update: --update-only sai com 5 se o recurso sumiu da base. O update tem branch propria, para nunca
+          # reaproveitar a de uma criacao antiga.
+          if [ "$INTENT" = "update" ]; then
+            BRANCH="sdk-automation/update-$SLUG"
+            echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+            python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" --update-only >> "$GITHUB_OUTPUT"
+          else
+            BRANCH="sdk-automation/$SLUG"
+            echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+            python3 ../tools/prepare-branch.py "$BRANCH" "$BASE" --allowed-paths-file "$RUNNER_TEMP/paths.txt" --create-only >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Copy only the declared paths into the target
         run: python3 tools/apply-artifacts.py --staging staging --target target --paths-file "$RUNNER_TEMP/paths.txt"
@@ -554,6 +608,7 @@ jobs:
         working-directory: target
         env:
           RESOURCE: ${{ inputs.resource }}
+          INTENT: ${{ needs.build.outputs.intent }}
         run: |
           test -s "$RUNNER_TEMP/paths.txt" || { echo "lista de caminhos ausente ou vazia."; exit 1; }
           while IFS= read -r declared; do
@@ -567,7 +622,11 @@ jobs:
           fi
 
           git diff --cached --name-only
-          git -c core.hooksPath=/dev/null commit -m "Add $RESOURCE resource"
+          if [ "$INTENT" = "update" ]; then
+            git -c core.hooksPath=/dev/null commit -m "Update $RESOURCE resource"
+          else
+            git -c core.hooksPath=/dev/null commit -m "Add $RESOURCE resource"
+          fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push branch
@@ -598,6 +657,7 @@ jobs:
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CHANGED: ${{ steps.commit.outputs.changed }}
+          INTENT: ${{ needs.build.outputs.intent }}
           OWNER: ${{ github.repository_owner }}
           TARGET_REPO: ${{ steps.target.outputs.repo }}
           BRANCH: ${{ steps.branch.outputs.branch }}
@@ -622,9 +682,17 @@ jobs:
             exit 0
           fi
 
+          if [ "$INTENT" = "update" ]; then
+            TITLE="Update $RESOURCE resource"
+            BODY="Atualizacao do recurso $RESOURCE ($LANGUAGE), que ja existe neste SDK, regerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Esta PR substitui o arquivo existente: revise o diff completo, pois retoques manuais do SDK podem ser sobrescritos. O workflow nunca faz o merge."
+          else
+            TITLE="Add $RESOURCE resource"
+            BODY="Criacao do recurso $RESOURCE ($LANGUAGE), ausente neste SDK, gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos."
+          fi
+
           gh pr create \
             --repo "$TARGET" \
-            --title "Add $RESOURCE resource" \
-            --body "Criacao do recurso $RESOURCE ($LANGUAGE), ausente neste SDK, gerado a partir de apis/spec-v2.openapi.yaml pelo sdk-automation. Origem: sdk-automation@$SHA, run $RUN_URL. Verificacao: lint-spec e assert-generated estrito contra a regua derivada deste SDK e compilacao contra o SDK real passaram antes do commit. Este repositorio nao roda testes em PR alem do CodeQL: revise o arquivo contra o padrao dos demais recursos." \
+            --title "$TITLE" \
+            --body "$BODY" \
             --base "$BASE" \
             --head "$BRANCH"

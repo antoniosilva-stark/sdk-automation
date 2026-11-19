@@ -654,6 +654,85 @@ def test_existsCodeDoesNotCollideWithTheOtherExitCodes(buildResource):
     assert buildResource.EXIT_EXISTS not in taken
 
 
+def test_rewrittenCodeDoesNotCollideWithTheOtherExitCodes(buildResource):
+    taken = {0, 1, 2, buildResource.EXIT_EXISTS, buildResource.EXIT_ABSENT_UPSTREAM,
+             buildResource.EXIT_NO_EXECUTABLE}
+
+    assert buildResource.EXIT_REWRITTEN == 5
+    assert buildResource.EXIT_REWRITTEN not in taken
+
+
+@requiresGenerator
+def test_rewriteOfAnExistingResourceRegeneratesAndPlacesIt(builtOnce, tmpPath):
+    # Mutacao: ignorar --rewrite devolve 4 e nada e colocado; este teste passa a falhar.
+    code, out, built = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    generated = (built / ARTIFACT).read_text(encoding="utf-8")
+    sdk = _forgedJavaSdk(tmpPath, generated)
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        "--rewrite", env={"SDK_JAVA": str(sdk)})
+
+    assert code == 5, out
+    assert (target / ARTIFACT).read_text(encoding="utf-8") == generated
+
+
+@requiresGenerator
+def test_withoutRewriteAnExistingResourceStillExitsWithTheExistsCode(builtOnce, tmpPath):
+    code, out, built = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    sdk = _forgedJavaSdk(tmpPath, (built / ARTIFACT).read_text(encoding="utf-8"))
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        env={"SDK_JAVA": str(sdk)})
+
+    assert code == 4, out
+    assert list(target.rglob("*")) == []
+
+
+@requiresGenerator
+def test_rewriteOfAnAbsentResourceFailsAndPlacesNothing(tmpPath, referenceWithout):
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        "--rewrite", env=referenceWithout("java", "SplitProfile"))
+
+    assert code == 1, out
+    assert "update exige recurso existente" in out
+    assert list(target.rglob("*")) == []
+
+
+@requiresGenerator
+def test_rewriteStillFailsTheStrictGateOfAnExistingResource(builtOnce, tmpPath):
+    code, out, built = builtOnce("SplitProfile", "java")
+    assert code == 0, out
+    generated = (built / ARTIFACT).read_text(encoding="utf-8")
+    sdk = _forgedJavaSdk(tmpPath, generated, extra="\n    public static String onlyInProduction() { return null; }\n")
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "SplitProfile", "--lang", "java", "--into", str(target),
+                        "--rewrite", env={"SDK_JAVA": str(sdk)})
+
+    assert code == 1, out
+    assert "onlyInProduction" in out
+    assert list(target.rglob("*")) == [], "o que reprovou no gate nao pode ter sido colocado"
+
+
+@requiresGenerator
+def test_rewriteOfAPartiallyExistingResourceKeepsTodaysBehaviour(tmpPath, referenceWithout):
+    # Fixa o comportamento atual da ausencia parcial entre papeis (pendencia 18): fora do escopo do update.
+    target = _target(tmpPath)
+
+    code, out = runTool("build-resource.py", "Transaction", "--lang", "node", "--into", str(target),
+                        "--rewrite", env=referenceWithout("node", "Transaction", keepRoles=("impl",)))
+
+    assert code == 4, out
+    assert "existe parcialmente" in out
+    assert list(target.rglob("*")) == []
+
+
 def _stagedSpec(buildResource, tmpPath: Path, resource: str) -> dict:
     staged = buildResource.stageJavaDocs(resource, tmpPath)
     return yaml.safe_load(Path(staged["spec"]).read_text(encoding="utf-8"))["components"]["schemas"][resource]

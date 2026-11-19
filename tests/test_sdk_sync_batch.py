@@ -106,3 +106,24 @@ def testTheBatchNeverMergesAnything():
 
     assert "gh pr merge" not in text
     assert "--auto" not in text
+
+
+def testTheSyncOffersTheModeWithCreateAsTheDefaultInBothTriggers():
+    triggered = triggers(load(SYNC))
+
+    dispatched = triggered["workflow_dispatch"]["inputs"]["mode"]
+    called = triggered["workflow_call"]["inputs"]["mode"]
+    assert dispatched["options"] == ["create", "update"]
+    assert dispatched["default"] == "create"
+    assert called["default"] == "create"
+
+
+def testTheBatchNeverAsksForAnUpdate():
+    # Mutacao: repassar `mode: update` (ou um input mode no lote) faria a reescrita em massa sem decisao.
+    batch = load(BATCH)
+    call = batch["jobs"]["sync"]
+
+    assert "mode" not in triggers(batch)["workflow_dispatch"]["inputs"]
+    assert "mode" not in call["with"], "sem mode explicito, o sync usa o padrao create"
+    assert "update" not in str(call)
+    assert "inputs.mode" not in BATCH.read_text(encoding="utf-8")

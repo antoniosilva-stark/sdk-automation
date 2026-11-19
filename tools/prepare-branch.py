@@ -7,6 +7,7 @@ EXIT_OK = 0
 EXIT_UNREACHABLE = 2
 EXIT_FOREIGN_COMMITS = 3
 EXIT_ALREADY_EXISTS = 4
+EXIT_MISSING_ON_BASE = 5
 
 BOT_EMAIL = "sdk-automation@starkbank.com"
 
@@ -107,7 +108,7 @@ def existingPaths(baseRef: str, allowedPaths: set[str]) -> list[str] | None:
 
 
 def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: set[str] | None = None,
-            createOnly: bool = False) -> int:
+            createOnly: bool = False, updateOnly: bool = False) -> int:
     present = remoteHasBranch(remote, branch)
     if present is None:
         log(f"nao foi possivel consultar o remoto {remote}.")
@@ -118,15 +119,19 @@ def prepare(remote: str, branch: str, base: str, botEmail: str, allowedPaths: se
         return EXIT_UNREACHABLE
     baseRef = f"{remote}/{base}"
 
-    if createOnly:
-        # antes de qualquer checkout: a branch reaproveitada nao pode mascarar um recurso criado a mao na base
+    if createOnly or updateOnly:
+        # antes de qualquer checkout: a branch reaproveitada nao pode mascarar o estado real da base
         existing = existingPaths(baseRef, allowedPaths)
         if existing is None:
             log(f"nao foi possivel listar a arvore de {baseRef}.")
             return EXIT_UNREACHABLE
-        if existing:
+        if createOnly and existing:
             log(f"{', '.join(existing)} ja existe em {baseRef}; a politica e create-only, nada foi alterado.")
             return EXIT_ALREADY_EXISTS
+        missing = sorted(allowedPaths - set(existing))
+        if updateOnly and missing:
+            log(f"{', '.join(missing)} nao existe em {baseRef}; a politica e update-only, nada foi alterado.")
+            return EXIT_MISSING_ON_BASE
 
     if not present:
         if not checkout(branch, baseRef):
@@ -193,14 +198,18 @@ def main() -> int:
     parser.add_argument("--bot-email", default=BOT_EMAIL, help="autor dos commits que podem ser regerados")
     parser.add_argument("--create-only", action="store_true",
                         help="falha se algum caminho declarado ja existe na base; exige --allowed-paths-file")
+    parser.add_argument("--update-only", action="store_true",
+                        help="falha se algum caminho declarado nao existe na base; exige --allowed-paths-file")
     args = parser.parse_args()
-    if args.create_only and not args.allowed_paths_file:
-        parser.error("--create-only exige --allowed-paths-file")
+    if args.create_only and args.update_only:
+        parser.error("--create-only e --update-only sao excludentes")
+    if (args.create_only or args.update_only) and not args.allowed_paths_file:
+        parser.error("--create-only e --update-only exigem --allowed-paths-file")
     allowed = None
     if args.allowed_paths_file:
         lines = Path(args.allowed_paths_file).read_text(encoding="utf-8").splitlines()
         allowed = {line.strip() for line in lines if line.strip()}
-    return prepare(args.remote, args.branch, args.base, args.bot_email, allowed, args.create_only)
+    return prepare(args.remote, args.branch, args.base, args.bot_email, allowed, args.create_only, args.update_only)
 
 
 if __name__ == "__main__":
