@@ -36,7 +36,7 @@ on:
 run-name: "${{ inputs.resource }} (${{ inputs.language }})${{ inputs.mode == 'update' && ' [update]' || '' }} → ${{ github.repository_owner }}"
 
 concurrency:
-  group: sdk-sync-${{ github.ref }}-${{ inputs.language }}-${{ inputs.resource }}
+  group: sdk-sync-${{ github.ref }}-${{ inputs.language }}-${{ inputs.resource }}-${{ inputs.mode }}
   cancel-in-progress: false
 
 jobs:

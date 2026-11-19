@@ -957,3 +957,105 @@ def test_noStepOfTheWorkflowMergesAPullRequest():
 
     assert "gh pr merge" not in raw
     assert "--auto" not in raw
+
+
+def _runStepWithFakeTools(tmpPath, step, env):
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    chamadas = tmpPath / "chamadas.txt"
+    for tool in ("python3", "git"):
+        (binario / tool).write_text(f'#!/bin/sh\necho "{tool} $*" >> {chamadas}\nexit ${{FAKE_EXIT_{tool}:-0}}\n',
+                                    encoding="utf-8")
+        (binario / tool).chmod(0o755)
+    output = tmpPath / "output.txt"
+    (tmpPath / "paths.txt").write_text("src/main/java/com/starkbank/MerchantCountry.java\n", encoding="utf-8")
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True, cwd=tmpPath,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "RUNNER_TEMP": str(tmpPath),
+                                    "GITHUB_OUTPUT": str(output), **env})
+    written = output.read_text(encoding="utf-8") if output.exists() else ""
+    return resultado, chamadas.read_text(encoding="utf-8") if chamadas.exists() else "", written
+
+
+@pytest.mark.parametrize("intent,flag,other,branch", [
+    ("update", "--update-only", "--create-only", "sdk-automation/update-merchant-country"),
+    ("create", "--create-only", "--update-only", "sdk-automation/merchant-country"),
+])
+def test_deliverPreparesTheBranchWithTheGuardAndNameOfTheIntent(tmpPath, intent, flag, other, branch):
+    # Mutacao: trocar o flag ou inverter os ramos do if deixa as checagens de texto verdes e quebra este.
+    steps = deliverSteps()
+    step = steps[stepIndex(steps, "prepare-branch.py", "run")]
+
+    resultado, chamadas, written = _runStepWithFakeTools(
+        tmpPath, step, {"INTENT": intent, "SLUG": "merchant-country", "BASE": "master"})
+
+    assert resultado.returncode == 0, resultado.stderr
+    assert f"python3 ../tools/prepare-branch.py {branch} master" in chamadas
+    assert flag in chamadas and other not in chamadas
+    assert f"branch={branch}" in written
+
+
+@pytest.mark.parametrize("intent,branch", [("update", "sdk-automation/update-merchant-country"),
+                                           ("create", "sdk-automation/merchant-country")])
+def test_compilePositionsTheBranchOfTheIntentWithoutAnyOnlyGuard(tmpPath, intent, branch):
+    steps = jobSteps("compile")
+    step = steps[stepIndex(steps, "prepare-branch.py", "run")]
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    chamadas = tmpPath / "chamadas.txt"
+    (binario / "git").write_text(f'#!/bin/sh\n[ "$1" = rev-parse ] && echo master\nexit 0\n', encoding="utf-8")
+    (binario / "python3").write_text(f'#!/bin/sh\necho "$*" >> {chamadas}\n', encoding="utf-8")
+    for tool in ("git", "python3"):
+        (binario / tool).chmod(0o755)
+
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True,
+                               cwd=tmpPath, env={"PATH": f"{binario}:/usr/bin:/bin", "RUNNER_TEMP": str(tmpPath),
+                                                 "INTENT": intent, "SLUG": "merchant-country"})
+
+    assert resultado.returncode == 0, resultado.stderr
+    recorded = chamadas.read_text(encoding="utf-8")
+    assert f"prepare-branch.py {branch} master" in recorded
+    assert "-only" not in recorded
+
+
+@pytest.mark.parametrize("intent,message", [("update", "Update SplitProfile resource"),
+                                            ("create", "Add SplitProfile resource")])
+def test_deliverCommitsWithTheMessageOfTheIntent(tmpPath, intent, message):
+    steps = deliverSteps()
+    step = steps[stepIndex(steps, "git -c core.hooksPath=/dev/null commit", "run")]
+    binario = tmpPath / "bin"
+    binario.mkdir()
+    chamadas = tmpPath / "chamadas.txt"
+    # `git diff --cached --quiet` devolve 1: ha o que commitar
+    (binario / "git").write_text(f'#!/bin/sh\necho "$*" >> {chamadas}\ncase "$*" in *"diff --cached --quiet"*) exit 1;; esac\nexit 0\n',
+                                 encoding="utf-8")
+    (binario / "git").chmod(0o755)
+    (tmpPath / "paths.txt").write_text("a/B.java\n", encoding="utf-8")
+    output = tmpPath / "output.txt"
+
+    resultado = subprocess.run(["/bin/bash", "-e", "-c", step["run"]], capture_output=True, text=True, cwd=tmpPath,
+                               env={"PATH": f"{binario}:/usr/bin:/bin", "RUNNER_TEMP": str(tmpPath),
+                                    "GITHUB_OUTPUT": str(output), "RESOURCE": "SplitProfile", "INTENT": intent})
+
+    assert resultado.returncode == 0, resultado.stderr
+    recorded = chamadas.read_text(encoding="utf-8")
+    assert f'commit -m {message}' in recorded
+    assert ("Add SplitProfile" in recorded) is (intent == "create")
+    assert "changed=true" in output.read_text(encoding="utf-8")
+
+
+def test_theConcurrencyGroupKeepsAnUpdateApartFromACreateOfTheSameResource():
+    # sem o modo no grupo, um create posterior substitui o update que esperava na fila, sem erro visivel
+    group = yaml.safe_load(SYNC.read_text(encoding="utf-8"))["concurrency"]["group"]
+
+    assert "inputs.mode" in group
+    assert "inputs.resource" in group and "inputs.language" in group
+    assert yaml.safe_load(SYNC.read_text(encoding="utf-8"))["concurrency"]["cancel-in-progress"] is False
+
+
+def test_noResourceSlugCollidesWithTheBranchOfAnUpdate():
+    # `Foo` em update e `UpdateFoo` em create dariam a mesma branch (sdk-automation/update-foo): se um recurso
+    # Update* aparecer no spec, o nome da branch do update precisa mudar antes.
+    spec = yaml.safe_load((REPO_ROOT / "apis/spec-v2.openapi.yaml").read_text(encoding="utf-8"))
+    slugs = [re.sub(r"(?<!^)(?=[A-Z])", "-", name).lower() for name in spec["components"]["schemas"]]
+
+    assert [slug for slug in slugs if slug.startswith("update-") or slug == "update"] == []
